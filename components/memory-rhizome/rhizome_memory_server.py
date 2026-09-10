@@ -47,6 +47,10 @@ def main():
     index_path = os.environ.get("RHIZOME_INDEX", os.path.join(base_dir, "memory.index"))
     texts_path = os.environ.get("RHIZOME_TEXTS", os.path.join(base_dir, "memory_texts.npy"))
     meta_path = os.environ.get("RHIZOME_META", os.path.join(base_dir, "memory_metadata.pkl"))
+    snapshot_dir = os.path.realpath(base_dir)
+    def snapshot_path(value):
+        return os.path.join(snapshot_dir, os.path.basename(value)) if os.path.dirname(value) == base_dir else value
+    index_path, texts_path, meta_path = map(snapshot_path, (index_path, texts_path, meta_path))
     model_name = os.environ.get("RHIZOME_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     device = os.environ.get("RHIZOME_DEVICE", "cpu")
     usefulness_state_path = os.environ.get(
@@ -87,8 +91,14 @@ def main():
     with open(meta_path, "rb") as f:
         meta = pickle.load(f)
 
-    if len(texts) != len(meta):
-        eprint(f"WARN: texts len {len(texts)} != meta len {len(meta)}")
+    if index.ntotal != len(texts) or len(texts) != len(meta):
+        raise ValueError(f"memory count mismatch: index={index.ntotal}, texts={len(texts)}, metadata={len(meta)}")
+    manifest_path = os.path.join(snapshot_dir, "manifest.json")
+    if os.path.isfile(manifest_path):
+        with open(manifest_path) as stream:
+            archive_model = json.load(stream).get("model")
+        if archive_model and archive_model != model_name:
+            raise ValueError(f"memory embedding model mismatch: archive={archive_model}, configured={model_name}")
 
     # Determine device
     st_device = device

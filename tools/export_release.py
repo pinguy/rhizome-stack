@@ -13,20 +13,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-EXCLUDES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".git", "node_modules", ".rhizome-stack-patch-backup"}
-
-
 def digest(path: Path) -> str:
     value = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             value.update(block)
     return value.hexdigest()
-
-
-def allowed(path: Path, root: Path) -> bool:
-    relative = path.relative_to(root)
-    return not any(part in EXCLUDES for part in relative.parts) and not path.name.endswith(("~", ".tmp", ".pyc"))
 
 
 def main() -> int:
@@ -38,6 +30,16 @@ def main() -> int:
     if (source / "rhizome-stack").is_dir():
         source = source / "rhizome-stack"
     output = args.output.resolve()
+    release_list = json.loads((source / "manifests/release-files.json").read_text())
+    approved = []
+    for name in release_list["files"]:
+        relative = Path(name)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"unsafe release path: {name}")
+        path = source / relative
+        if not path.is_file() or path.is_symlink() or path.resolve() != path:
+            raise ValueError(f"release file missing or symlinked: {name}")
+        approved.append(path)
     if output.exists():
         print(f"refusing to overwrite existing output: {output}", file=sys.stderr)
         return 2
@@ -45,9 +47,7 @@ def main() -> int:
         print("output must be outside the source tree", file=sys.stderr)
         return 2
     output.mkdir(parents=True)
-    for path in sorted(source.rglob("*")):
-        if not path.is_file() or path.is_symlink() or not allowed(path, source):
-            continue
+    for path in sorted(approved):
         target = output / path.relative_to(source)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, target)

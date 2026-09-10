@@ -240,6 +240,7 @@ def _archive_paths(archive: str) -> dict[str, Path]:
     config = ARCHIVES[archive]
     root_override = os.environ.get(f"RHIZOME_{archive.upper()}_PATH")
     root = Path(root_override).expanduser() if root_override else config["path"]
+    root = root.resolve()  # Pin one complete generation for this query.
     return {
         "root": root,
         "index": root / config["index"],
@@ -306,10 +307,12 @@ def _memory_uri(meta: dict[str, Any], index: int, archive: str) -> str:
         return f"bookrag://{source}#word-{word_offset}"
 
     source = str(meta.get("source") or "conversation")
-    if source == "pdf":
-        document_id = quote(str(meta.get("document_id") or "unknown"), safe="._-")
+    if source in {"pdf", "document"}:
+        document_id = quote(str(meta.get("document_id") or meta.get("filename") or "unknown"), safe="._-")
         chunk_id = meta.get("chunk_id", 0)
-        return f"rhizome://pdf/{document_id}#chunk-{chunk_id}"
+        page = meta.get("page")
+        suffix = f"page-{page}-chunk-{chunk_id}" if page is not None else f"chunk-{chunk_id}"
+        return f"rhizome://{source}/{document_id}#{suffix}"
     conversation_id = quote(str(meta.get("conversation_id") or "unknown"), safe="._-")
     message_id = quote(str(meta.get("message_id", index)), safe="._-")
     chunk_id = meta.get("chunk_id", 0)
@@ -321,8 +324,8 @@ def _parent_key(meta: dict[str, Any], archive: str, index: int) -> tuple[Any, ..
         return ("workspace", meta.get("source_path") or index, meta.get("heading_path") or meta.get("heading"))
     if archive == "books":
         return ("book", meta.get("source") or meta.get("filename") or index)
-    if meta.get("source") == "pdf":
-        return ("pdf", meta.get("document_id") or meta.get("filename") or index)
+    if meta.get("source") in {"pdf", "document"}:
+        return (meta["source"], meta.get("document_id") or meta.get("filename") or index)
     return ("conversation", meta.get("conversation_id") or index)
 
 
@@ -331,8 +334,8 @@ def _context_group_key(meta: dict[str, Any], archive: str) -> tuple[Any, ...] | 
         return ("workspace", meta.get("source_path"), meta.get("heading_path") or meta.get("heading"))
     if archive == "books":
         return ("book", meta.get("source") or meta.get("filename"))
-    if meta.get("source") == "pdf":
-        return ("pdf", meta.get("document_id") or meta.get("filename"))
+    if meta.get("source") in {"pdf", "document"}:
+        return (meta["source"], meta.get("document_id") or meta.get("filename"), meta.get("page"))
     if meta.get("conversation_id") is not None:
         return ("message", meta.get("conversation_id"), meta.get("message_id"))
     return None
@@ -687,6 +690,7 @@ def _public_metadata(meta: dict[str, Any], archive: str) -> dict[str, Any]:
         "segment_start_page", "segment_end_page", "embedding_model",
         "conversation_id", "message_id", "chunk_id", "total_chunks", "document_id",
         "line_start", "line_end", "char_count", "token_estimate", "source_modified_at",
+        "page", "title", "parent_id", "source_name",
     )
     output = {key: _jsonable(meta.get(key)) for key in keys if meta.get(key) is not None}
     output["source"] = _source_name(meta, archive)

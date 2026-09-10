@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/pinguy/Skills",
+  "commit": "41335012d5000dd29d9477c963a6ee1ff0333aba",
+  "licence": "Apache-2.0",
+  "skills": {
+    "blackboard": {
+      "profile": "extra",
+      "files": {
+        "SKILL.md": "372cc0e48c4acc77670673611b68de1dde7c8c9f9d89387836a26caeaced9b79",
+        "references/canary.md": "f3a8ee27e88ed6f1a7838e94f12d12094c47b30f1d7e384da308cbaa93eea84f",
+        "references/schema.md": "6fa006c4793f3a5e8e7876657bf31925d122d42c0d788732d2f9ccf3d4ad11e0",
+        "scripts/blackboard.py": "644f6fd1a99047da0d1522f48c40920423efc001b8fa19724025a6a28c52a597"
+      }
+    },
+    "chatterbox-tts-recovery": {
+      "profile": "extra",
+      "files": {
+        "SKILL.md": "946ac89f7e298a6f5a4fe35a6873ae8b6f3128e3cf16228fa241dfe06c105e4c"
+      }
+    },
+    "check-notes-first": {
+      "profile": "core",
+      "files": {
+        "SKILL.md": "cb0a5b4399ab0276fd6e71a3bac2ff2b96b05cb3f96085605c4c60707bce0d7e"
+      }
+    },
+    "council-blackboard": {
+      "profile": "extra",
+      "files": {
+        "SKILL.md": "1615d7248cda8586e33df959c24528ee88486562c4e8af7499d314c52b7b817e",
+        "scripts/council.py": "d0ddbb28944b528d9b197ed5197d3400f8bb7d09736d8bf1006e54e12aa7b67b",
+        "scripts/openwebui_tool.py": "f271d148b926693317684281d8775dd5ad89542129faa75fff9b532249755687"
+      }
+    },
+    "invariant-guarded-debugging": {
+      "profile": "core",
+      "files": {
+        "SKILL.md": "f49aa2308ca944f241c440a39454da08d3de7babc42e1d7bf50f19a69bf9fef5"
+      }
+    },
+    "local-model-runtime-profiler": {
+      "profile": "extra",
+      "files": {
+        "SKILL.md": "a502126d0638de1f94686782096709024326fa19e02b69e69eb80cb9ed14df7f"
+      }
+    },
+    "openwebui-regression-test": {
+      "profile": "core",
+      "files": {
+        "SKILL.md": "9620c2eb66e04c3b3d10759cb970254da80ec68c416bf6667c43467af0adc1fb"
+      }
+    },
+    "privileged-operations": {
+      "profile": "core",
+      "files": {
+        "SKILL.md": "09dce1648dd4256fa809cdd34f672533ef10c931aed998579b00bd302c26ac39"
+      }
+    },
+    "risk-aware-retry": {
+      "profile": "core",
+      "files": {
+        "SKILL.md": "f27c2d70c8866e07d9f1b4ea2361bf7ee18179749a98e03a23ae43d16a5f443d"
+      }
+    },
+    "session-handover": {
+      "profile": "core",
+      "files": {
+        "SKILL.md": "4822ec05f8e0a9e7051162ad824baf8667bf0562e414214c0156678983fd17aa"
+      }
+    },
+    "symlink-space-saver": {
+      "profile": "extra",
+      "files": {
+        "SKILL.md": "f0746bbb3eadea7082e2dea8ea1f8fa38331abf7c8e7f87fa5b24933e38a248e"
+      }
+    },
+    "video-clip-editor": {
+      "profile": "extra",
+      "files": {
+        "SKILL.md": "b92de85d3e7daf637d3b03ae3c480267b636ca5f1401dbd03c266348853f1e23"
+      }
+    }
+  }
+}

@@ -5,90 +5,107 @@ direction, tuning and final integration. Built on and alongside OpenClaw,
 Open WebUI and other open-source projects; upstream authorship is preserved in
 [LICENSES.md](LICENSES.md).
 
-Portable packaging for the working OpenClaw + Open WebUI integration used on the
-reference CachyOS machine. The repository contains installation logic and a
-sanitised workspace seed; it does **not** contain the owner's credentials,
-memory, chats, browser profile, voice samples, model blobs, or databases.
+**A portable OpenClaw + Open WebUI setup, with local memory, practical agent
+skills and optional speech.** Start with one working model, then add what you
+need. Linux and WSL2 use the same setup wizard.
 
-Current status: **alpha candidate**. See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md)
-before installing or publishing it.
+**Status: 0.1.0-alpha.2.** Installer and regression checks are automated; complete
+native Linux and WSL2 installations still need acceptance testing.
+Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working machine.
 
-## Supported targets
+## What you get
 
-- Native Linux: CachyOS/Arch and Debian/Ubuntu, x86-64, systemd user services.
-- WSL2: Ubuntu or Debian with systemd enabled.
+| Component | Purpose | Included by default? |
+| --- | --- | --- |
+| OpenClaw gateway + Open WebUI | Agent runtime and browser interface, joined by a model adapter | Yes |
+| Pinned upstream patches | Preserve the integration against specific upstream builds | Yes |
+| Skills | Six core reliability skills; all twelve available on demand | Optional |
+| Semantic memory | Import your own documents, chat exports and RhizomeML data; hybrid retrieval | Optional |
+| Voice | Chatterbox-Nano TTS and faster-whisper STT | Optional |
+| Code interpreter | Podman-backed Jupyter environment | Optional |
 
-Other distributions are rejected by preflight until their package mapping and
-service behaviour have been tested.
+OpenClaw stays pinned to **2026.7.1-2** and Open WebUI to **0.11.0**.
+The pinned versions are compatibility choices, not promises that they are the
+latest releases. Upgrading them requires checking the patches and real request
+path first.
 
-## What is installed
+## Start here
 
-- A pinned OpenClaw CLI and gateway (`2026.7.1-2` by default).
-- Open WebUI in an isolated Python virtual environment (`0.11.0` by default).
-- The dynamic OpenClaw-to-Open-WebUI model adapter.
-- Local Ollama catalogue sync.
-- Optional Chatterbox-Nano TTS and faster-whisper STT wiring.
-- Optional Podman-backed Jupyter code interpreter.
-- Empty, user-owned workspace memory scaffolding.
-- A shared first-run wizard for provider verification and optional components.
-- Owner-only document, book, ChatGPT and Claude history import.
+Requirements: x86-64 Linux, Python **3.11+**, an Arch/CachyOS or Debian/Ubuntu
+family distribution, and systemd user services. Under WSL2 use Ubuntu or Debian
+with systemd enabled. Downloads require internet access; the optional voice and
+memory environments can use substantial disk space.
 
-Model weights are downloaded separately and are never part of a release
-archive. Provider and messaging credentials are entered on the target machine.
-
-## Install
-
-Inspect the scripts first. Then:
+Clone the repository, inspect the installer, and preview its actions:
 
 ```bash
-./install-linux.sh --dry-run
-./install-linux.sh
+git clone https://github.com/pinguy/rhizome-stack.git
+cd rhizome-stack
+./install-linux.sh --dry-run --with-skills
+./install-linux.sh --with-skills
 ```
 
-Under WSL2:
+On WSL2 substitute `./install-wsl.sh`; see [WSL setup](docs/WSL.md).
+System packages use interactive sudo; services are staged but not started.
+
+If `~/.local/bin` is not on your PATH, use the full command:
 
 ```bash
-./install-wsl.sh --dry-run
-./install-wsl.sh
+~/.local/bin/rhizome-stack welcome
+~/.local/bin/rhizome-stack doctor
+~/.local/bin/rhizome-stack start
+~/.local/bin/rhizome-stack smoke
 ```
 
-Optional profiles may be combined:
+Open **http://localhost:8080**, create the first local administrator, choose a
+model and send a real message. A model catalogue or healthy HTTP endpoint does
+not prove that inference works. [First-run guide](docs/FIRST_RUN.md) covers
+provider setup, optional modules and packaged Open WebUI tools.
+
+## Add what you need
 
 ```bash
-./install-linux.sh --with-memory --with-voice --download-models --with-jupyter
+# Profiles can be combined; no model blobs are in this repository.
+./install-linux.sh --with-memory --with-skills
+./install-linux.sh --with-voice --download-models
+./install-linux.sh --with-jupyter
+
+# See the collection, or install the extra skills deliberately.
+rhizome-stack skills list
+rhizome-stack skills install --profile all --dry-run
+rhizome-stack skills install --profile all
+
+# Preview a private import before writing anything.
+rhizome-stack import ~/Downloads/conversations.json --type chatgpt --dry-run
+rhizome-stack import ~/Downloads/conversations.json --type chatgpt
+rhizome-stack import ~/Downloads/memory.jsonl.gz --type rhizomeml
 ```
 
-Installers do not accept secrets on the command line. After installation, run
-`rhizome-stack welcome`. It configures and verifies the intelligence backend
-first, then offers optional local components and private knowledge import.
+Ollama and its models are installed separately. Hosted provider credentials are
+entered on the target machine. Memory, chats, credentials, voice references,
+browser profiles and model weights are never seeded from the reference machine.
 
-## Release safety
+## Guides
 
-Releases are assembled from an explicit allow-list:
+- [First run and model verification](docs/FIRST_RUN.md)
+- [Memory formats, provenance and rebuilding](docs/MEMORY.md)
+- [Skills and companion projects](docs/INTEGRATIONS.md)
+- [Updating and troubleshooting](docs/MAINTENANCE.md)
+- [Native Linux](docs/LINUX.md) · [WSL2](docs/WSL.md)
+- [Changes](CHANGELOG.md) · [Known limitations](KNOWN_LIMITATIONS.md)
+
+## Development and releases
 
 ```bash
-python3 tools/export_release.py --source-root .. --output /tmp/rhizome-stack-release
-python3 tools/privacy_audit.py /tmp/rhizome-stack-release
+python3 tests/test_static.py
+python3 tests/test_behaviour.py
+python3 tools/export_release.py --output /tmp/rhizome-stack-release
+python3 tools/build_release.py --output-root /tmp/rhizome-stack-build
 ```
 
-Official archives are produced deterministically with `tools/build_release.py`.
+The exporter copies only the paths in `manifests/release-files.json`, then runs
+the privacy audit and SHA-256 manifest verification. Unlisted files are excluded.
+Inspect the resulting manifest and diff before distributing a release.
 
-The audit is a release gate, not a proof that arbitrary files are safe. A human
-must still inspect the generated manifest and diff before publishing.
-
-## Current boundary
-
-This extraction preserves the glue and service topology. The five changed
-OpenClaw bundles and fifteen changed/retired Open WebUI package files are
-captured as versioned, hash-guarded patch sets. Three generated frontend files
-use audited textual replacements because ordinary line patches are malformed
-against minified bundles. Model weights and user databases remain external.
-
-The live machine is not modified by developing or exporting this package.
-
-## Licence
-
-This is deliberately multi-licensed. Original Rhizome Stack glue is MIT;
-upstream-derived files keep their upstream terms. In particular, Open WebUI
-0.11.0 uses the Open WebUI licence and its historical MIT/BSD boundaries.
-See [LICENSES.md](LICENSES.md) and [third_party/](third_party/).
+Original glue and documentation are MIT; bundled Skills retain Apache-2.0,
+and upstream patches retain their upstream terms. See [LICENSES.md](LICENSES.md).

@@ -6,6 +6,8 @@ from __future__ import annotations
 import getpass
 import json
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -17,7 +19,7 @@ from pathlib import Path
 HOME = Path.home()
 CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "rhizome-stack"
 ENV_PATH = CONFIG_DIR / "stack.env"
-OPENCLAW_CONFIG = HOME / ".openclaw/openclaw.json"
+OPENCLAW_CONFIG = Path(os.environ.get("OPENCLAW_CONFIG_PATH", HOME / ".openclaw/openclaw.json"))
 STATE_PATH = CONFIG_DIR / "welcome-state.json"
 
 PROVIDERS = {
@@ -48,11 +50,15 @@ def read_env() -> tuple[list[str], dict[str, str]]:
     for line in lines:
         if line and not line.lstrip().startswith("#") and "=" in line:
             key, value = line.split("=", 1)
-            values[key] = value
+            parsed = shlex.split(value)
+            values[key] = parsed[0] if parsed else ""
     return lines, values
 
 
 def set_env(updates: dict[str, str]) -> None:
+    if any(any(char in value for char in ("\n", "\r", "\0", "'")) for value in updates.values()):
+        raise ValueError("environment values must be single-line text without apostrophes")
+    updates = {key: shlex.quote(value) for key, value in updates.items()}
     lines, _ = read_env()
     seen: set[str] = set()
     rendered = []
@@ -79,21 +85,25 @@ def request_json(url: str, headers: dict[str, str]) -> object:
         return json.load(response)
 
 
-def verify(provider: str, base_url: str, key: str) -> tuple[bool, str]:
+def verify(provider: str, base_url: str, key: str, model: str) -> tuple[bool, str]:
     try:
         if provider in {"ollama", "gguf"}:
             payload = request_json(base_url.rstrip("/") + "/api/tags", {})
-            count = len(payload.get("models", [])) if isinstance(payload, dict) else 0
-            return count > 0, f"Ollama responded with {count} installed model(s)"
+            installed = {row.get("name") or row.get("model") for row in payload.get("models", []) if isinstance(row, dict)} if isinstance(payload, dict) else set()
+            choices = {model, model + ":latest"} if ":" not in model else {model}
+            found = bool(installed & choices)
+            return found, f"selected Ollama model {model!r} {'is installed' if found else 'was not found'}"
         headers = {"Authorization": f"Bearer {key}"}
         endpoint = base_url.rstrip("/") + "/models"
         if provider == "anthropic":
             headers = {"x-api-key": key, "anthropic-version": "2023-06-01"}
         payload = request_json(endpoint, headers)
-        count = len(payload.get("data", [])) if isinstance(payload, dict) else 0
-        return True, f"provider authenticated; {count} model(s) reported"
+        available = {row.get("id") for row in payload.get("data", []) if isinstance(row, dict)} if isinstance(payload, dict) else set()
+        found = model in available
+        return found, f"selected model {model!r} {'is in the provider catalogue' if found else 'was not found in the provider catalogue'}"
     except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
-        return False, f"verification failed: {type(exc).__name__}: {exc}"
+        # Exception strings may echo a URL containing user-supplied credentials.
+        return False, f"verification failed: {type(exc).__name__}; check the endpoint, key and model ID"
 
 
 def update_openclaw(provider: str, model: str, base_url: str, env_name: str) -> None:
@@ -102,6 +112,8 @@ def update_openclaw(provider: str, model: str, base_url: str, env_name: str) -> 
     primary = f"{route_provider}/{model}"
     if provider == "compatible":
         provider_id = ask("Short provider name", "custom")
+        if not re.fullmatch(r"[a-z][a-z0-9_-]*", provider_id):
+            raise ValueError("provider name must contain lowercase letters, digits, underscores or hyphens")
         primary = f"{provider_id}/{model}"
         config.setdefault("models", {}).setdefault("providers", {})[provider_id] = {
             "baseUrl": base_url,
@@ -111,8 +123,17 @@ def update_openclaw(provider: str, model: str, base_url: str, env_name: str) -> 
         }
     elif provider == "nvidia":
         config.setdefault("models", {}).setdefault("providers", {})["nvidia"] = {
-            "baseUrl": base_url, "api": "openai-completions"
+            "baseUrl": base_url, "api": "openai-completions",
+            "apiKey": {"source": "env", "provider": "default", "id": env_name},
+            "models": [{"id": model, "name": model}],
         }
+    elif provider in {"ollama", "gguf"}:
+        ollama = config.setdefault("models", {}).setdefault("providers", {}).setdefault("ollama", {})
+        ollama.update({"baseUrl": base_url, "api": "ollama", "apiKey": "ollama-local"})
+        models = ollama.setdefault("models", [])
+        if not any(row.get("id") == model for row in models):
+            models.append({"id": model, "name": model})
+        set_env({"OLLAMA_BASE_URL": base_url, "OLLAMA_BASE_URLS": base_url, "DEFAULT_OLLAMA_MODEL": model})
     config.setdefault("agents", {}).setdefault("defaults", {})["model"] = {"primary": primary}
     backup = OPENCLAW_CONFIG.with_name("openclaw.json.before-welcome")
     if not backup.exists():
@@ -129,13 +150,19 @@ def configure_gguf(base_url: str) -> tuple[str, bool, str]:
     if not path.is_file() or path.suffix.lower() != ".gguf":
         raise ValueError("that is not a readable .gguf file")
     model = ask("Local model name", path.stem.lower().replace(" ", "-"))
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:/-]*", model):
+        raise ValueError("invalid local model name")
     context = ask("Context window", "32768")
+    if int(context) <= 0:
+        raise ValueError("context window must be positive")
     state_dir = CONFIG_DIR / "generated"
     state_dir.mkdir(parents=True, exist_ok=True)
     modelfile = state_dir / f"Modelfile.{model.replace('/', '-') }"
-    modelfile.write_text(f"FROM {path}\nPARAMETER num_ctx {int(context)}\n")
-    subprocess.run(["ollama", "create", model, "-f", str(modelfile)], check=True)
-    ok, message = verify("gguf", base_url, "")
+    if any(char in str(path) for char in ('"', "\n", "\r")):
+        raise ValueError("GGUF path cannot contain quotes or newlines")
+    modelfile.write_text(f'FROM "{path}"\nPARAMETER num_ctx {int(context)}\n')
+    subprocess.run(["ollama", "create", model, "-f", str(modelfile)], env={**os.environ, "OLLAMA_HOST": base_url}, check=True)
+    ok, message = verify("gguf", base_url, "", model)
     return model, ok, message
 
 
@@ -166,26 +193,29 @@ def main() -> int:
         if not key:
             print("No key supplied; provider setup stopped without changing configuration.", file=sys.stderr)
             return 2
-        set_env({env_name: key})
     if provider == "gguf":
         model, ok, message = configure_gguf(base_url)
     else:
         if provider == "ollama":
             print("Ollama must be running with at least one model. Try: ollama pull qwen3:8b")
         model = ask("Model ID", {"openai": "gpt-5.6", "anthropic": "claude-sonnet-4-6", "nvidia": "nvidia/nemotron-3-super-120b-a12b", "ollama": "qwen3:8b"}.get(provider, ""))
-        ok, message = verify(provider, base_url, key)
+        ok, message = verify(provider, base_url, key, model)
     print(("PASS " if ok else "FAIL ") + message)
     if not ok:
         print("The backend was not saved as the default. Fix connectivity/key/model and run this wizard again.")
         return 3
+    if env_name:
+        set_env({env_name: key})
     update_openclaw(provider, model, base_url, env_name)
+    print("Catalogue check passed. A real chat response still needs checking after the services start.")
     choices = {
         "voice": yes("Add local speech-to-text and text-to-speech?"),
         "memory": yes("Add private semantic memory and document indexing?", True),
         "jupyter": yes("Add the optional local Jupyter code environment?"),
+        "skills": yes("Add the core reliability and handover skills?", True),
     }
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(json.dumps({"schema": 1, "backend": provider, "model": model, "verified": True, "optional": choices}, indent=2) + "\n")
+    STATE_PATH.write_text(json.dumps({"schema": 1, "backend": provider, "model": model, "verified": True, "verification": "model-catalogue", "inference_verified": False, "optional": choices}, indent=2) + "\n")
     STATE_PATH.chmod(0o600)
     selected = [name for name, enabled in choices.items() if enabled]
     if selected:
@@ -203,11 +233,15 @@ def main() -> int:
             print("Run the installer again from the unpacked release with the matching --with-* flags when ready.")
     if choices["memory"] and yes("Import your own documents or conversation export now?"):
         source = ask("File or directory to import")
-        kind = ask("Type: auto, documents, chatgpt or claude", "auto")
+        kind = ask("Type: auto, documents, chatgpt, claude or rhizomeml", "auto")
         subprocess.run([sys.executable, str(Path(__file__).with_name("import_owner_data.py")), "--type", kind, source], check=True)
     print("\nBackend verified and first-run choices saved. Run 'rhizome-stack doctor', then 'rhizome-stack start'.")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (OSError, ValueError, EOFError, subprocess.CalledProcessError) as exc:
+        print(f"setup failed: {type(exc).__name__}; check your inputs and retry", file=sys.stderr)
+        raise SystemExit(2)

@@ -33,6 +33,14 @@ PUBLIC_ATTRIBUTION_EXEMPTIONS = {
     Path("LICENSE"): ("Copyright (c) 2026 An" + "toni Nor" + "man and Rhizome Stack contributors",),
     Path("README.md"): ("Built by An" + "toni Nor" + "man with heavy AI-assisted development, manual testing,",),
 }
+PUBLIC_REPOSITORIES = (
+    "Skills", "RhizomeML", "rhizome-stack", "chatterbox-tts-addon",
+    "kokoro-tts-addon", "GGUF-Converter-Studio",
+)
+PUBLIC_REPO_PATTERN = re.compile(
+    r"(?:https://github\.com/|(?<![\w/]))" + "ping" + "uy/"
+    + r"(?:" + "|".join(map(re.escape, PUBLIC_REPOSITORIES)) + r")(?=[/#\s\x60\x22.,)?]|$)"
+)
 
 
 def looks_binary(data: bytes) -> bool:
@@ -70,9 +78,13 @@ def audit(root: Path) -> list[str]:
         for permitted in PUBLIC_ATTRIBUTION_EXEMPTIONS.get(relative, ()):
             text = text.replace(permitted, "[audited public attribution]")
         for label, pattern in PATTERNS.items():
-            match = pattern.search(text)
+            # Repository provenance is public attribution. Only suppress the
+            # owner's name check here; credentials, home paths and emails still
+            # get checked against the original text.
+            checked = PUBLIC_REPO_PATTERN.sub("[public repository]", text) if label == "reference username/name" else text
+            match = pattern.search(checked)
             if match:
-                line = text.count("\n", 0, match.start()) + 1
+                line = checked.count("\n", 0, match.start()) + 1
                 findings.append(f"{label}: {relative}:{line}")
     return findings
 

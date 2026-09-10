@@ -19,8 +19,8 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parents[1]
 VERSIONS = json.loads((PROJECT / "manifests/versions.json").read_text())
 HOME = Path.home()
-CONFIG_DIR = HOME / ".config/rhizome-stack"
-STACK_ROOT = HOME / ".local/share/rhizome-stack"
+CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "rhizome-stack"
+STACK_ROOT = Path(os.environ.get("RHIZOME_STACK_ROOT", HOME / ".local/share/rhizome-stack")).expanduser()
 UNIT_DIR = HOME / ".config/systemd/user"
 OPENCLAW_HOME = HOME / ".openclaw"
 
@@ -116,6 +116,16 @@ class Runner:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_path, target)
 
+    def deploy_tree(self, source: Path, destination: Path) -> None:
+        """Refresh shipped code; seed-only copying is reserved for user content."""
+        for source_path in sorted(source.rglob("*")):
+            if not source_path.is_file() or "__pycache__" in source_path.parts or source_path.suffix == ".pyc":
+                continue
+            target = destination / source_path.relative_to(source)
+            if target == source_path:
+                continue
+            self.write(target, source_path.read_text(), source_path.stat().st_mode & 0o777)
+
 
 def require_preflight(target: str) -> str:
     if platform.machine() not in {"x86_64", "amd64"}:
@@ -155,7 +165,8 @@ def package_command(family: str, *, voice: bool, jupyter: bool) -> list[str]:
 
 def render_unit(name: str, stack_root: Path) -> str:
     template = (PROJECT / "systemd" / name).read_text()
-    return template.replace("@@STACK_ROOT@@", str(stack_root)).replace("@@HOME@@", str(HOME))
+    return (template.replace("@@STACK_ROOT@@", str(stack_root)).replace("@@HOME@@", str(HOME))
+            .replace(str(HOME / ".config/rhizome-stack/stack.env"), str(CONFIG_DIR / "stack.env")))
 
 
 def populate_secrets(content: str) -> str:
@@ -176,7 +187,8 @@ def render_env(existing: str | None = None) -> str:
     if existing:
         return populate_secrets(existing)
     sample = (PROJECT / "config/stack.env.example").read_text()
-    return populate_secrets(sample.replace("%h", str(HOME)))
+    sample = sample.replace("%h/.local/share/rhizome-stack", str(STACK_ROOT)).replace("%h", str(HOME))
+    return populate_secrets(sample)
 
 
 def parse_env(content: str) -> dict[str, str]:
@@ -415,10 +427,14 @@ def install_jupyter(runner: Runner) -> None:
 def install_components(runner: Runner) -> None:
     source = PROJECT / "components"
     if source.is_dir():
-        runner.copy_tree(source, STACK_ROOT / "components")
+        runner.deploy_tree(source, STACK_ROOT / "components")
     else:
         raise InstallError("components directory missing; release is incomplete")
-    runner.copy_tree(PROJECT / "tools", STACK_ROOT / "tools")
+    # The installed welcome wizard can re-run the installer only if its
+    # manifests, patches and templates travel with it.
+    for directory in ["tools", "manifests", "patches", "config", "systemd", "containers", "workspace-template", "bin", "third_party"]:
+        runner.deploy_tree(PROJECT / directory, STACK_ROOT / directory)
+    runner.write(STACK_ROOT / "VERSION", (PROJECT / "VERSION").read_text())
 
 
 def main() -> int:
@@ -431,6 +447,7 @@ def main() -> int:
     parser.add_argument("--download-models", action="store_true", help="download large voice/STT weights; requires --with-voice")
     parser.add_argument("--with-memory", action="store_true")
     parser.add_argument("--with-jupyter", action="store_true")
+    parser.add_argument("--with-skills", action="store_true", help="install the six core reliability skills")
     args = parser.parse_args()
     runner = Runner(args.dry_run)
     try:
@@ -444,6 +461,12 @@ def main() -> int:
             runner.run(package_command(family, voice=args.with_voice, jupyter=args.with_jupyter))
         configure_files(runner)
         install_components(runner)
+        if args.with_skills:
+            # Use the source copy in dry runs, without writing installed state.
+            command = [sys.executable, str(PROJECT / "tools/skills.py"), "install", "--profile", "core"]
+            if runner.dry_run:
+                command += ["--dry-run"]
+            runner.run(command)
         if not args.skip_runtime:
             node_bin = install_runtime(runner)
             if args.with_voice:

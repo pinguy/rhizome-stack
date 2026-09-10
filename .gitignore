@@ -4,4 +4,10 @@ __pycache__/
 stack.env
 *.before-rhizome-stack
 release/
-
+state/
+memory/
+models/
+venvs/
+*.token
+*.jsonl.gz
+*.before-*

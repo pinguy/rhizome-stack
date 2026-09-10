@@ -9,10 +9,29 @@ if [[ -f "$CONFIG_FILE" ]]; then
   set +a
 fi
 
+export RHIZOME_STACK_ROOT="${RHIZOME_STACK_ROOT:-$HOME/.local/share/rhizome-stack}"
+if [[ -f "$RHIZOME_STACK_ROOT/manifests/versions.json" ]]; then
+  node_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["node_runtime"])' "$RHIZOME_STACK_ROOT/manifests/versions.json")"
+  export PATH="$RHIZOME_STACK_ROOT/runtime/node-v$node_version-linux-x64/bin:$HOME/.npm-global/bin:$PATH"
+fi
+
 action="${1:-doctor}"
 units=(openclaw-gateway.service openclaw-openwebui-adapter.service open-webui.service)
 
 case "$action" in
+  help|--help|-h)
+    printf 'Rhizome Stack\n\n'
+    printf '  welcome      Configure a provider and optional components\n'
+    printf '  skills       List/install the pinned Skills collection\n'
+    printf '  import       Import private documents or chat exports (supports --dry-run)\n'
+    printf '  configure    Edit local configuration\n'
+    printf '  doctor       Check commands, runtime files and configuration\n'
+    printf '  start|stop|status  Manage core user services\n'
+    printf '  smoke        Check core HTTP endpoints (does not verify inference)\n'
+    ;;
+  skills)
+    exec python3 "$RHIZOME_STACK_ROOT/tools/skills.py" "${@:2}"
+    ;;
   welcome)
     exec python3 "${RHIZOME_STACK_ROOT:-$HOME/.local/share/rhizome-stack}/tools/welcome.py" "${@:2}"
     ;;
@@ -25,7 +44,7 @@ case "$action" in
     ;;
   doctor)
     failures=0
-    for command in node npm python3 systemctl curl; do
+    for command in node npm python3 systemctl curl openclaw; do
       if command -v "$command" >/dev/null; then
         printf 'PASS command %s\n' "$command"
       else
@@ -35,6 +54,10 @@ case "$action" in
     done
     [[ -f "$CONFIG_FILE" ]] || { printf 'FAIL missing %s\n' "$CONFIG_FILE"; failures=$((failures + 1)); }
     [[ -n "${OPENCLAW_GATEWAY_TOKEN:-}" ]] || { printf 'FAIL empty OPENCLAW_GATEWAY_TOKEN\n'; failures=$((failures + 1)); }
+    for relative in venvs/open-webui/bin/open-webui venvs/components/bin/python tools/welcome.py manifests/versions.json; do
+      [[ -f "$RHIZOME_STACK_ROOT/$relative" ]] || { printf 'FAIL missing runtime file %s\n' "$relative"; failures=$((failures + 1)); }
+    done
+    printf 'Use smoke for HTTP health, then send a real chat to verify inference.\n'
     exit "$failures"
     ;;
   start)
@@ -47,13 +70,13 @@ case "$action" in
     systemctl --user --no-pager status "${units[@]}"
     ;;
   smoke)
-    curl --fail --silent --show-error "http://127.0.0.1:${OPENCLAW_PORT:-18789}/" >/dev/null
-    curl --fail --silent --show-error "http://127.0.0.1:${OPENWEBUI_PORT:-8080}/health" >/dev/null
-    curl --fail --silent --show-error "http://127.0.0.1:${ADAPTER_PORT:-18888}/v1/models" >/dev/null
+    curl --fail --silent --show-error --connect-timeout 5 --max-time 20 "http://127.0.0.1:${OPENCLAW_PORT:-18789}/" >/dev/null
+    curl --fail --silent --show-error --connect-timeout 5 --max-time 20 "http://127.0.0.1:${OPENWEBUI_PORT:-8080}/health" >/dev/null
+    curl --fail --silent --show-error --connect-timeout 5 --max-time 20 "http://127.0.0.1:${ADAPTER_PORT:-18888}/v1/models" >/dev/null
     printf 'PASS core HTTP endpoints\n'
     ;;
   *)
-    printf 'usage: rhizome-stack {welcome|import|configure|doctor|start|stop|status|smoke}\n' >&2
+    printf 'usage: rhizome-stack {welcome|skills|import|configure|doctor|start|stop|status|smoke|help}\n' >&2
     exit 64
     ;;
 esac

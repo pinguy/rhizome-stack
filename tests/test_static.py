@@ -93,7 +93,7 @@ def main() -> int:
             })
             result = subprocess.run(
                 [sys.executable, str(ROOT / "tools/welcome.py")], env=env,
-                input="4\ntest-local\nn\nn\nn\n", text=True, capture_output=True,
+                input="4\ntest-local\nn\nn\nn\nn\n", text=True, capture_output=True,
             )
             check(result.returncode == 0, result.stdout + result.stderr)
             state = json.loads((home / ".config/rhizome-stack/welcome-state.json").read_text())
