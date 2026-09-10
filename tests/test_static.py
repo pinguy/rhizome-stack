@@ -86,7 +86,11 @@ def main() -> int:
                 config = config.replace(before, after)
             (home / ".openclaw/openclaw.json").write_text(config)
             env = os.environ.copy()
-            env.update({"HOME": str(home), "OLLAMA_BASE_URL": f"http://127.0.0.1:{server.server_port}"})
+            env.update({
+                "HOME": str(home),
+                "XDG_CONFIG_HOME": str(home / ".config"),
+                "OLLAMA_BASE_URL": f"http://127.0.0.1:{server.server_port}",
+            })
             result = subprocess.run(
                 [sys.executable, str(ROOT / "tools/welcome.py")], env=env,
                 input="4\ntest-local\nn\nn\nn\n", text=True, capture_output=True,
