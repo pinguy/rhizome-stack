@@ -1,0 +1,8 @@
+[Unit]
+Description=Synchronise tool-capable Ollama models into OpenClaw
+After=ollama.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+ExecStart=@@STACK_ROOT@@/venvs/components/bin/python @@STACK_ROOT@@/components/openclaw_ollama_model_sync.py --once

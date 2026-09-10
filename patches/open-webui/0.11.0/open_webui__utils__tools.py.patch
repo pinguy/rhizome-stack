@@ -1,0 +1,20 @@
+--- a/open_webui/utils/tools.py
++++ b/open_webui/utils/tools.py
+@@ -237,9 +237,15 @@
+             return await partial_func(*args, **coerce_kwargs(kwargs))
+ 
+     else:
+-        # Make it a coroutine function when it is not already
++        # Synchronous DB tools can perform CPU-heavy retrieval or blocking
++        # subprocess work. Running them directly here blocks Uvicorn's event
++        # loop, including the Socket.IO heartbeat, which makes the browser show
++        # a false "Connection lost" banner during otherwise successful tool
++        # loops. Keep the async contract while moving sync work to a worker
++        # thread so chat events and websocket pings remain responsive.
+         async def new_function(*args, **kwargs):
+-            return partial_func(*args, **coerce_kwargs(kwargs))
++            coerced_kwargs = coerce_kwargs(kwargs)
++            return await asyncio.to_thread(partial_func, *args, **coerced_kwargs)
+ 
+     update_wrapper(new_function, function)
+     new_function.__signature__ = new_sig

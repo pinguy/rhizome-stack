@@ -1,0 +1,147 @@
+--- a/open_webui/routers/tasks.py
++++ b/open_webui/routers/tasks.py
+@@ -1,3 +1,4 @@
++import asyncio
+ import logging
+ import re
+ from typing import Optional
+@@ -37,6 +38,42 @@
+ 
+ router = APIRouter()
+ 
++# Hidden metadata jobs must not inherit a chat model's full output allowance.
++# These limits apply only to the dedicated task endpoints below, never normal
++# chat, tools, RAG, context size, or visible model output.
++TASK_GENERATION_TIMEOUT_SECONDS = 180
++TASK_OUTPUT_TOKEN_LIMITS = {
++    TASKS.TITLE_GENERATION: 128,
++    TASKS.TAGS_GENERATION: 128,
++    TASKS.FOLLOW_UP_GENERATION: 384,
++    TASKS.EMOJI_GENERATION: 16,
++}
++
++
++def bounded_task_output_params(model: dict, task: TASKS) -> dict:
++    max_tokens = TASK_OUTPUT_TOKEN_LIMITS[task]
++    return (
++        {'max_tokens': max_tokens}
++        if model.get('owned_by') == 'ollama'
++        else {'max_completion_tokens': max_tokens}
++    )
++
++
++async def generate_bounded_task(request: Request, payload: dict, user, task: TASKS):
++    try:
++        async with asyncio.timeout(TASK_GENERATION_TIMEOUT_SECONDS):
++            return await generate_chat_completion(request, form_data=payload, user=user)
++    except TimeoutError:
++        log.error(
++            'Hidden %s task exceeded %ss and was cancelled',
++            task,
++            TASK_GENERATION_TIMEOUT_SECONDS,
++        )
++        return JSONResponse(
++            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
++            content={'detail': f'Hidden {task} generation timed out.'},
++        )
++
+ TASK_CONFIG_KEYS = {
+     'TASK_MODEL': 'task.model.default',
+     'TASK_MODEL_EXTERNAL': 'task.model.external',
+@@ -143,7 +180,6 @@
+         await Config.get('task.model.external'),
+         models,
+     )
+-
+     log.debug(f'generating chat title using model {task_model_id} for user {user.email} ')
+ 
+     title_template = await Config.get('task.title.prompt_template')
+@@ -153,20 +189,12 @@
+         template = DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE
+ 
+     content = await title_generation_template(template, form_data['messages'], user)
+-
+-    max_tokens = models[task_model_id].get('info', {}).get('params', {}).get('max_tokens', 1000)
+ 
+     payload = {
+         'model': task_model_id,
+         'messages': [{'role': 'user', 'content': content}],
+         'stream': False,
+-        **(
+-            {'max_tokens': max_tokens}
+-            if models[task_model_id].get('owned_by') == 'ollama'
+-            else {
+-                'max_completion_tokens': max_tokens,
+-            }
+-        ),
++        **bounded_task_output_params(models[task_model_id], TASKS.TITLE_GENERATION),
+         'metadata': {
+             **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
+             'task': str(TASKS.TITLE_GENERATION),
+@@ -182,7 +210,7 @@
+         raise e
+ 
+     try:
+-        return await generate_chat_completion(request, form_data=payload, user=user)
++        return await generate_bounded_task(request, payload, user, TASKS.TITLE_GENERATION)
+     except Exception as e:
+         log.error('Exception occurred', exc_info=True)
+         return JSONResponse(
+@@ -237,6 +265,7 @@
+         'model': task_model_id,
+         'messages': [{'role': 'user', 'content': content}],
+         'stream': False,
++        **bounded_task_output_params(models[task_model_id], TASKS.FOLLOW_UP_GENERATION),
+         'metadata': {
+             **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
+             'task': str(TASKS.FOLLOW_UP_GENERATION),
+@@ -252,7 +281,7 @@
+         raise e
+ 
+     try:
+-        return await generate_chat_completion(request, form_data=payload, user=user)
++        return await generate_bounded_task(request, payload, user, TASKS.FOLLOW_UP_GENERATION)
+     except Exception as e:
+         log.error('Exception occurred', exc_info=True)
+         return JSONResponse(
+@@ -307,6 +336,7 @@
+         'model': task_model_id,
+         'messages': [{'role': 'user', 'content': content}],
+         'stream': False,
++        **bounded_task_output_params(models[task_model_id], TASKS.TAGS_GENERATION),
+         'metadata': {
+             **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
+             'task': str(TASKS.TAGS_GENERATION),
+@@ -322,7 +352,7 @@
+         raise e
+ 
+     try:
+-        return await generate_chat_completion(request, form_data=payload, user=user)
++        return await generate_bounded_task(request, payload, user, TASKS.TAGS_GENERATION)
+     except Exception as e:
+         log.error(f'Error generating chat completion: {e}')
+         return JSONResponse(
+@@ -594,13 +624,7 @@
+         'model': task_model_id,
+         'messages': [{'role': 'user', 'content': content}],
+         'stream': False,
+-        **(
+-            {'max_tokens': 4}
+-            if models[task_model_id].get('owned_by') == 'ollama'
+-            else {
+-                'max_completion_tokens': 4,
+-            }
+-        ),
++        **bounded_task_output_params(models[task_model_id], TASKS.EMOJI_GENERATION),
+         'metadata': {
+             **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
+             'task': str(TASKS.EMOJI_GENERATION),
+@@ -616,7 +640,7 @@
+         raise e
+ 
+     try:
+-        return await generate_chat_completion(request, form_data=payload, user=user)
++        return await generate_bounded_task(request, payload, user, TASKS.EMOJI_GENERATION)
+     except Exception as e:
+         return JSONResponse(
+             status_code=status.HTTP_400_BAD_REQUEST,

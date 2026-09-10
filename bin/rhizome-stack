@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/rhizome-stack/stack.env"
+if [[ -f "$CONFIG_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+  set +a
+fi
+
+action="${1:-doctor}"
+units=(openclaw-gateway.service openclaw-openwebui-adapter.service open-webui.service)
+
+case "$action" in
+  welcome)
+    exec python3 "${RHIZOME_STACK_ROOT:-$HOME/.local/share/rhizome-stack}/tools/welcome.py" "${@:2}"
+    ;;
+  import)
+    exec python3 "${RHIZOME_STACK_ROOT:-$HOME/.local/share/rhizome-stack}/tools/import_owner_data.py" "${@:2}"
+    ;;
+  configure)
+    "${EDITOR:-vi}" "$CONFIG_FILE"
+    printf 'Local environment saved. Run "openclaw configure" for provider or channel login flows.\n'
+    ;;
+  doctor)
+    failures=0
+    for command in node npm python3 systemctl curl; do
+      if command -v "$command" >/dev/null; then
+        printf 'PASS command %s\n' "$command"
+      else
+        printf 'FAIL command %s\n' "$command"
+        failures=$((failures + 1))
+      fi
+    done
+    [[ -f "$CONFIG_FILE" ]] || { printf 'FAIL missing %s\n' "$CONFIG_FILE"; failures=$((failures + 1)); }
+    [[ -n "${OPENCLAW_GATEWAY_TOKEN:-}" ]] || { printf 'FAIL empty OPENCLAW_GATEWAY_TOKEN\n'; failures=$((failures + 1)); }
+    exit "$failures"
+    ;;
+  start)
+    systemctl --user start "${units[@]}"
+    ;;
+  stop)
+    systemctl --user stop "${units[@]}"
+    ;;
+  status)
+    systemctl --user --no-pager status "${units[@]}"
+    ;;
+  smoke)
+    curl --fail --silent --show-error "http://127.0.0.1:${OPENCLAW_PORT:-18789}/" >/dev/null
+    curl --fail --silent --show-error "http://127.0.0.1:${OPENWEBUI_PORT:-8080}/health" >/dev/null
+    curl --fail --silent --show-error "http://127.0.0.1:${ADAPTER_PORT:-18888}/v1/models" >/dev/null
+    printf 'PASS core HTTP endpoints\n'
+    ;;
+  *)
+    printf 'usage: rhizome-stack {welcome|import|configure|doctor|start|stop|status|smoke}\n' >&2
+    exit 64
+    ;;
+esac

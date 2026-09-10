@@ -1,0 +1,309 @@
+--- a/open_webui/main.py
++++ b/open_webui/main.py
+@@ -8,6 +8,7 @@
+ import sys
+ import time
+ from contextlib import asynccontextmanager
++from pathlib import Path
+ from uuid import uuid4
+ 
+ import aiohttp
+@@ -269,6 +270,150 @@
+ logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
+ log = logging.getLogger(__name__)
+ 
++RHIZOME_DEFAULT_TOOL_IDS = [
++    'rhizome_memory',
++    'web_search',
++    'minimax_music',
++]
++
++RHIZOME_OPENCLAW_RELAY_TOOL_ID = 'openclaw_agent'
++
++RHIZOME_DEFAULT_FEATURES = {}
++
++RHIZOME_BASE_NUM_CTX = 65536
++RHIZOME_MODEL_NUM_CTX = {
++    'ornith-35b-vision': 163840,
++    'ornith-1.5:35b': 163840,
++    # This Qwen3.6 fine-tune can enter its post-tool generation with more than
++    # 65k prompt tokens even in a fresh chat because of the framework and tool
++    # schemas.  At 65,536 it can exhaust the window inside hidden reasoning and
++    # leave no ordinary assistant content.
++    'qwen3-6-14b-a3b-fablevibes-mxfp4-moe': 81920,
++}
++RHIZOME_BASE_NUM_PREDICT = 4096
++RHIZOME_KEEP_ALIVE = '10m'
++RHIZOME_OUTPUT_MULTIPLIER = 2
++
++RHIZOME_DEFAULT_CAPABILITIES = {
++    'tools': True,
++    'builtin_tools': True,
++    'web_search': True,
++    'knowledge': True,
++    'code_interpreter': True,
++    'citations': True,
++}
++
++RHIZOME_FRAMEWORK_PATH = Path(os.getenv('RHIZOME_FRAMEWORK_PATH', str(Path.home() / '.local/share/rhizome-stack/workspace/ethics_engine/OpenWebUI_Instructions.txt')))
++RHIZOME_FRAMEWORK_SYSTEM = RHIZOME_FRAMEWORK_PATH.read_text(encoding='utf-8').strip()
++
++RHIZOME_OPERATIONAL_SYSTEM = (
++    'Use available tools when the user explicitly requests a lookup, current information, '
++    'execution, testing, or calculation. Ground the answer in the returned evidence. Protect '
++    'private information, prefer direct low-fluff answers, state uncertainty honestly, and use '
++    'local memory only when prior context genuinely matters. Never import another user profile.'
++)
++
++
++def _rhizome_compose_system(*prompts):
++    """Join authoritative and model-specific prompts once, preserving order."""
++    blocks = []
++    seen = set()
++    for prompt in prompts:
++        if not isinstance(prompt, str):
++            continue
++        prompt = prompt.strip()
++        if not prompt or prompt in seen:
++            continue
++        seen.add(prompt)
++        blocks.append(prompt)
++    return '\n\n---\n\n'.join(blocks)
++
++
++def _rhizome_first_positive_int(value):
++    try:
++        value = int(value)
++    except (TypeError, ValueError):
++        return None
++    return value if value > 0 else None
++
++
++def _rhizome_find_numeric_key(value, key_names):
++    if isinstance(value, dict):
++        for key in key_names:
++            found = _rhizome_first_positive_int(value.get(key))
++            if found:
++                return found
++        for child in value.values():
++            found = _rhizome_find_numeric_key(child, key_names)
++            if found:
++                return found
++    elif isinstance(value, list):
++        for child in value:
++            found = _rhizome_find_numeric_key(child, key_names)
++            if found:
++                return found
++    return None
++
++
++def _rhizome_provider_capabilities(model):
++    if not isinstance(model, dict):
++        return {}
++
++    capabilities = set()
++    ollama_metadata = model.get('ollama') or {}
++    if isinstance(ollama_metadata, dict):
++        capabilities.update(ollama_metadata.get('capabilities') or [])
++
++    model_meta = model.get('info', {}).get('meta', {})
++    provider_capabilities = {
++        capability: True
++        for capability in ('vision', 'tools', 'thinking', 'completion')
++        if capability in capabilities
++    }
++    if isinstance(model_meta, dict):
++        existing = model_meta.get('capabilities') or {}
++        if isinstance(existing, dict):
++            return {
++                **provider_capabilities,
++                **existing,
++            }
++
++    return provider_capabilities
++
++
++def _rhizome_dynamic_model_params(model, current_params):
++    current_params = current_params or {}
++    model_id = str(model.get('id') or '').removesuffix(':latest')
++    model_context_limit = _rhizome_find_numeric_key(
++        model,
++        ('context_length', 'num_ctx', 'max_context_length', 'max_context'),
++    )
++    base_num_ctx = (
++        _rhizome_first_positive_int(current_params.get('num_ctx'))
++        or RHIZOME_MODEL_NUM_CTX.get(model_id)
++        or RHIZOME_BASE_NUM_CTX
++    )
++    base_num_predict = (
++        _rhizome_first_positive_int(current_params.get('num_predict'))
++        or _rhizome_first_positive_int(current_params.get('max_tokens'))
++        or RHIZOME_BASE_NUM_PREDICT
++    )
++
++    if model_context_limit:
++        # Provider metadata is the advertised maximum context, not a good
++        # default allocation. Starting large Ollama models at their full
++        # window can make cold loads painfully slow.
++        base_num_ctx = min(base_num_ctx, model_context_limit)
++
++    return {
++        'think': False,
++        'num_ctx': base_num_ctx,
++        'num_predict': base_num_predict,
++        # Enforce this at the backend boundary. Browser/model state can retain
++        # an older shorter value and otherwise override the persisted default.
++        'keep_alive': RHIZOME_KEEP_ALIVE,
++    }
++
+ 
+ async def emit_chat_list_event(metadata: dict, chat_id: str):
+     if not is_saved_chat_id(chat_id):
+@@ -1083,18 +1228,67 @@
+             model = model_item
+             await _set_direct_model(request, model, user)
+ 
+-        # Model params: global defaults as base, per-model overrides win
+-        default_model_params = await Config.get('models.default_params', {}) or {}
+-        model_info_params = {
+-            **default_model_params,
+-            **(model_info.params.model_dump() if model_info and model_info.params else {}),
+-        }
++        # Model params: local profile + normal defaults first, then derive the
++        # selected model's context/output limits dynamically. Request params
++        # still win, so the UI/advanced params can toggle Ollama `think`.
++        is_openclaw_bridge_model = str(model_id).startswith('openclaw/')
++        if is_openclaw_bridge_model:
++            # The loopback adapter routes into a complete OpenClaw agent,
++            # which already supplies its own system context and tools.  Keep
++            # this path clean so WebUI defaults do not double-inject them.
++            static_model_info_params = (
++                model_info.params.model_dump()
++                if model_info and model_info.params
++                else {}
++            )
++            model_info_params = static_model_info_params
++        else:
++            default_model_params = dict(
++                await Config.get('models.default_params', {}) or {}
++            )
++            default_system = default_model_params.pop('system', None)
++            model_params = (
++                model_info.params.model_dump()
++                if model_info and model_info.params
++                else {}
++            )
++            model_system = model_params.pop('system', None)
++            static_model_info_params = {
++                **default_model_params,
++                **model_params,
++                'system': _rhizome_compose_system(
++                    RHIZOME_FRAMEWORK_SYSTEM,
++                    RHIZOME_OPERATIONAL_SYSTEM,
++                    default_system,
++                    model_system,
++                ),
++            }
++            model_info_params = {
++                **static_model_info_params,
++                **_rhizome_dynamic_model_params(model, static_model_info_params),
++            }
+         request_params = {key: value for key, value in (form_data.get('params') or {}).items() if value is not None}
++        if not is_openclaw_bridge_model:
++            request_system = request_params.pop('system', None)
++            model_info_params['system'] = _rhizome_compose_system(
++                model_info_params.get('system'),
++                request_system,
++            )
+         if model_info_params or request_params:
+             form_data['params'] = {
+                 **model_info_params,
+                 **request_params,
+             }
++            if not is_openclaw_bridge_model:
++                # Browser/chat state can retain a stale num_ctx (observed: 4096)
++                # while tool continuations omit it and fall back to the backend
++                # allocation. Ollama treats those as different runners and reloads
++                # the same large model mid-turn. Keep model-specific allocations
++                # and the warm window authoritative at the final send boundary.
++                runtime_model_id = str(model.get('id') or '').removesuffix(':latest')
++                if runtime_model_id in RHIZOME_MODEL_NUM_CTX:
++                    form_data['params']['num_ctx'] = RHIZOME_MODEL_NUM_CTX[runtime_model_id]
++                form_data['params']['keep_alive'] = RHIZOME_KEEP_ALIVE
+ 
+         # Check base model existence for custom models
+         if model_info and model_info.base_model_id:
+@@ -1176,6 +1370,73 @@
+             )
+         ):
+             tool_servers = None
++
++        # Dynamic provider models (notably the OpenClaw adapter) do not have a
++        # row in Open WebUI's `model` table.  Preserve metadata assembled by
++        # get_all_models() so their attached tools and default feature toggles
++        # work exactly like local/custom models.
++        provider_model_meta = (model.get('info') or {}).get('meta') or {}
++        model_info_meta = dict(provider_model_meta) if isinstance(provider_model_meta, dict) else {}
++        if model_info and model_info.meta:
++            if hasattr(model_info.meta, 'model_dump'):
++                model_info_meta = model_info.meta.model_dump()
++            elif isinstance(model_info.meta, dict):
++                model_info_meta = model_info.meta
++
++        provider_capabilities = _rhizome_provider_capabilities(model)
++        model_info_meta = {
++            **model_info_meta,
++            'capabilities': {
++                **RHIZOME_DEFAULT_CAPABILITIES,
++                **provider_capabilities,
++                **(model_info_meta.get('capabilities') or {}),
++            },
++            'toolIds': list(
++                dict.fromkeys(
++                    [
++                        *RHIZOME_DEFAULT_TOOL_IDS,
++                        *([] if is_openclaw_bridge_model else [RHIZOME_OPENCLAW_RELAY_TOOL_ID]),
++                        *(model_info_meta.get('toolIds') or []),
++                    ]
++                )
++            ),
++            'defaultFeatureIds': list(
++                dict.fromkeys(
++                    [
++                        *RHIZOME_DEFAULT_FEATURES.keys(),
++                        *(model_info_meta.get('defaultFeatureIds') or []),
++                    ]
++                )
++            ),
++        }
++
++        # The frontend normally sends model-attached tool_ids and default
++        # features, but locally edited/custom model rows can be missed by
++        # stale browser state and raw provider/Ollama models have no row at all.
++        # Always seed the local Rhizome harness before preserving request choices.
++        model_tool_ids = model_info_meta.get('toolIds') or []
++        request_tool_ids = form_data.get('tool_ids')
++        if model_tool_ids:
++            form_data['tool_ids'] = list(
++                dict.fromkeys(
++                    [
++                        *model_tool_ids,
++                        *(request_tool_ids or []),
++                    ]
++                )
++            )
++
++        request_features = form_data.get('features') or {}
++        model_default_features = dict(RHIZOME_DEFAULT_FEATURES)
++        model_capabilities = model_info_meta.get('capabilities') or {}
++        for feature_id in model_info_meta.get('defaultFeatureIds') or []:
++            if model_capabilities.get(feature_id):
++                model_default_features[feature_id] = True
++        if model_default_features:
++            form_data['features'] = {
++                **model_default_features,
++                **request_features,
++            }
+ 
+         metadata = {
+             'user_id': user.id,

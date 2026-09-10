@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "reference_platform": "CachyOS x86_64",
+  "openclaw": "2026.7.1-2",
+  "open_webui": "0.11.0",
+  "python_min": "3.11",
+  "node_min": "22",
+  "node_runtime": "22.22.0",
+  "chatterbox_git": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",
+  "notes": [
+    "OpenClaw 2026.8.1 is deliberately not selected; it failed on the customised reference stack.",
+    "A newer version must pass patch compatibility and full end-to-end tests before changing this pin."
+  ]
+}

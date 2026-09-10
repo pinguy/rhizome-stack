@@ -1,0 +1,32 @@
+--- a/open_webui/utils/models.py
++++ b/open_webui/utils/models.py
+@@ -30,6 +30,19 @@
+ log = logging.getLogger(__name__)
+ 
+ 
++def _ollama_capabilities_to_model_meta(model: dict) -> dict:
++    capabilities = set(model.get('capabilities') or [])
++    if not capabilities:
++        return {}
++
++    meta_capabilities = {}
++    for capability in ('vision', 'tools', 'thinking', 'completion'):
++        if capability in capabilities:
++            meta_capabilities[capability] = True
++
++    return {'capabilities': meta_capabilities} if meta_capabilities else {}
++
++
+ async def fetch_ollama_models(request: Request, user: UserModel = None):
+     raw_ollama_models = await ollama.get_all_models(request, user=user)
+     return [
+@@ -43,6 +56,9 @@
+             'loaded': 'expires_at' in model,
+             'connection_type': model.get('connection_type', 'local'),
+             'tags': model.get('tags', []),
++            'info': {
++                'meta': _ollama_capabilities_to_model_meta(model),
++            },
+         }
+         for model in raw_ollama_models['models']
+     ]

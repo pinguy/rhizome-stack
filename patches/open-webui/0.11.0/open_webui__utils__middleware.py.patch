@@ -1,0 +1,781 @@
+--- a/open_webui/utils/middleware.py
++++ b/open_webui/utils/middleware.py
+@@ -3,6 +3,7 @@
+ import base64
+ import copy
+ import inspect
++import io
+ import json
+ import logging
+ import os
+@@ -191,6 +192,16 @@
+ 
+ DEFAULT_SOLUTION_TAGS = [('<|begin_of_solution|>', '<|end_of_solution|>')]
+ DEFAULT_CODE_INTERPRETER_TAGS = [('<code_interpreter>', '</code_interpreter>')]
++JUPYTER_CODE_INTERPRETER_FILE_PROMPT = """
++Jupyter code interpreter file access:
++- The sandbox working directory is `/work`.
++- The persistent project scratch is mounted at `/work`; legacy `/c_optimizer/...` paths are an alias to the same scratch for older chats. Prefer `/work/...` in new code.
++- Open WebUI uploaded files are mounted read-only at `/mnt/openwebui/uploads`.
++- Attached file tags include `sandbox_path` for Jupyter and `host_path` for OpenClaw/host tools. Use the path matching the current runtime.
++- If a tag has only a file id or URL and no `sandbox_path`, ask for the file to be re-uploaded or use the available file-reading tools instead of guessing a path.
++- Code interpreter executions are cleaned up after each call; for headless game work, start Xvfb, run the game, send keys, capture screenshots, and save outputs within the same `execute_code` call when practical.
++- To display generated screenshots or PNGs inline, call `view_file` once for each specific `/work/...png` file requested. Do not use a ZIP file as a substitute, do not merely describe the PNGs, and do not ask before displaying additional requested PNGs.
++"""
+ 
+ 
+ def _start_tag_pattern(start_tag: str) -> str:
+@@ -1591,6 +1602,15 @@
+             attrs += f' content_type="{file["content_type"]}"'
+         if file.get('name'):
+             attrs += f' name="{file["name"]}"'
++        host_path = file.get('path') or file.get('file', {}).get('path')
++        uploads_roots = (
++            os.path.expanduser('~/.local/share/rhizome-stack/shared/openwebui-uploads/'),
++            os.path.expanduser('~/.local/share/rhizome-stack/state/openwebui-data/uploads/'),
++        )
++        if isinstance(host_path, str) and host_path.startswith(uploads_roots):
++            upload_name = os.path.basename(host_path)
++            attrs += f' sandbox_path="/mnt/openwebui/uploads/{upload_name}"'
++            attrs += f' host_path="{os.path.expanduser("~/.local/share/rhizome-stack/shared/openwebui-uploads/")}{upload_name}"'
+         return f'<file {attrs}/>'
+ 
+     # Pair only user-role messages from both lists to avoid misalignment.
+@@ -1607,6 +1627,7 @@
+             file
+             for file in stored_message.get('files', [])
+             if file.get('url') and not file.get('url').startswith('data:')
++            and not _rhizome_is_image_file_item(file)
+         ]
+         if not files_with_urls:
+             continue
+@@ -1831,6 +1852,10 @@
+     sources = []
+ 
+     if files := body.get('metadata', {}).get('files', None):
++        files = [file_item for file_item in files if not _rhizome_is_image_file_item(file_item)]
++        if not files:
++            return body, {'sources': []}
++
+         # Check if all files are in full context mode
+         all_full_context = all(item.get('context') == 'full' for item in files)
+ 
+@@ -2020,6 +2045,7 @@
+             try:
+                 base64_data = await get_image_base64_from_url(image_url, user=user)
+                 if base64_data:
++                    base64_data = _rhizome_prepare_image_data_url_for_vision(base64_data)
+                     new_content.append(
+                         {
+                             'type': 'image_url',
+@@ -2037,6 +2063,213 @@
+     return form_data
+ 
+ 
++def _rhizome_prepare_image_data_url_for_vision(data_url: str, min_edge: int = 224) -> str:
++    if not isinstance(data_url, str) or not data_url.startswith('data:image/') or ',' not in data_url:
++        return data_url
++
++    try:
++        header, encoded = data_url.split(',', 1)
++        image_bytes = base64.b64decode(encoded)
++
++        from PIL import Image
++
++        with Image.open(io.BytesIO(image_bytes)) as image:
++            width, height = image.size
++            if min(width, height) >= min_edge:
++                return data_url
++
++            scale = min_edge / max(1, min(width, height))
++            new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
++            resample = getattr(Image, 'Resampling', Image).LANCZOS
++            image = image.convert('RGBA' if image.mode in ('RGBA', 'LA', 'P') else 'RGB')
++            image = image.resize(new_size, resample)
++
++            output = io.BytesIO()
++            if image.mode == 'RGBA':
++                image.save(output, format='PNG')
++                content_type = 'image/png'
++            else:
++                image.save(output, format='JPEG', quality=95)
++                content_type = 'image/jpeg'
++
++        return f'data:{content_type};base64,{base64.b64encode(output.getvalue()).decode("utf-8")}'
++    except Exception as e:
++        log.debug(f'Error preparing image for vision input: {e}')
++        return data_url
++
++
++def _rhizome_is_image_file_item(file_item: dict) -> bool:
++    if not isinstance(file_item, dict):
++        return False
++
++    content_type = (
++        file_item.get('content_type')
++        or file_item.get('mime_type')
++        or (file_item.get('meta') or {}).get('content_type')
++        or ((file_item.get('file') or {}).get('meta') or {}).get('content_type')
++        or ''
++    )
++    if str(content_type).startswith('image/'):
++        return True
++
++    name = (
++        file_item.get('name')
++        or file_item.get('filename')
++        or (file_item.get('file') or {}).get('filename')
++        or ''
++    )
++    return str(name).lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.avif'))
++
++
++def _rhizome_file_item_url_or_id(file_item: dict) -> str | None:
++    if not isinstance(file_item, dict):
++        return None
++
++    nested_file = file_item.get('file') or {}
++    return file_item.get('url') or file_item.get('id') or nested_file.get('id') or nested_file.get('url')
++
++
++def _rhizome_messages_have_image_content(messages: list[dict]) -> bool:
++    for message in messages or []:
++        content = message.get('content')
++        if isinstance(content, list):
++            for item in content:
++                if isinstance(item, dict) and item.get('type') == 'image_url':
++                    return True
++    return False
++
++
++def _rhizome_image_turn_should_avoid_tools(prompt: str | None) -> bool:
++    prompt_l = (prompt or '').lower()
++    toolish_terms = (
++        'search',
++        'web',
++        'browse',
++        'look online',
++        'code',
++        'python',
++        'terminal',
++        'council',
++        'openclaw',
++        'memory',
++        'knowledge',
++        'file',
++        'view_file',
++    )
++    return not any(term in prompt_l for term in toolish_terms)
++
++
++def _rhizome_prompt_refers_to_image(prompt: str | None) -> bool:
++    prompt_l = (prompt or '').lower()
++    return any(
++        term in prompt_l
++        for term in (
++            'image',
++            'picture',
++            'photo',
++            'screenshot',
++            'attached',
++            'upload',
++            'describe it',
++            'what is it',
++            'what this is',
++        )
++    )
++
++
++def _rhizome_image_parts(message: dict) -> list[dict]:
++    content = message.get('content')
++    if not isinstance(content, list):
++        return []
++    return [
++        item
++        for item in content
++        if isinstance(item, dict) and item.get('type') == 'image_url' and item.get('image_url', {}).get('url')
++    ]
++
++
++async def rhizome_inject_image_files_into_messages(form_data: dict, metadata: dict, user=None) -> dict:
++    """Promote attached image files into provider vision content."""
++
++    messages = form_data.get('messages') or []
++    metadata_files = metadata.get('files') or []
++
++    if metadata_files:
++        for message in reversed(messages):
++            if message.get('role') == 'user':
++                existing = message.get('files') or []
++                message['files'] = [*existing, *metadata_files]
++                break
++
++    for message in messages:
++        if message.get('role') != 'user':
++            continue
++
++        image_files = [file_item for file_item in message.get('files', []) if _rhizome_is_image_file_item(file_item)]
++        if not image_files:
++            continue
++
++        content = message.get('content', '')
++        if isinstance(content, list):
++            content_parts = content
++        else:
++            content_parts = [{'type': 'text', 'text': content or 'Describe the attached image.'}]
++
++        seen_urls = {
++            item.get('image_url', {}).get('url')
++            for item in content_parts
++            if isinstance(item, dict) and item.get('type') == 'image_url'
++        }
++
++        for file_item in image_files:
++            image_ref = _rhizome_file_item_url_or_id(file_item)
++            if not image_ref or image_ref in seen_urls:
++                continue
++
++            try:
++                image_data_url = await get_image_base64_from_url(image_ref, user=user)
++            except Exception as e:
++                log.debug(f'Error loading image attachment for vision input: {e}')
++                image_data_url = None
++
++            if image_data_url:
++                image_data_url = _rhizome_prepare_image_data_url_for_vision(image_data_url)
++
++            content_parts.append({'type': 'image_url', 'image_url': {'url': image_data_url or image_ref}})
++            seen_urls.add(image_data_url or image_ref)
++
++        message['content'] = content_parts
++
++    last_user_idx = None
++    for idx in range(len(messages) - 1, -1, -1):
++        if messages[idx].get('role') == 'user':
++            last_user_idx = idx
++            break
++
++    if last_user_idx is not None:
++        last_user = messages[last_user_idx]
++        last_prompt = get_content_from_message(last_user)
++        if _rhizome_prompt_refers_to_image(last_prompt) and not _rhizome_image_parts(last_user):
++            prior_images = []
++            for prior in reversed(messages[:last_user_idx]):
++                if prior.get('role') != 'user':
++                    continue
++                prior_images = _rhizome_image_parts(prior)
++                if prior_images:
++                    break
++
++            if prior_images:
++                content = last_user.get('content', '')
++                if isinstance(content, list):
++                    content_parts = content
++                else:
++                    content_parts = [{'type': 'text', 'text': content or 'Describe the attached image.'}]
++                content_parts.extend(copy.deepcopy(prior_images))
++                last_user['content'] = content_parts
++
++    return form_data
++
++
+ async def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[dict]]:
+     """
+     Load the message chain from DB up to message_id,
+@@ -2073,6 +2306,226 @@
+     return None
+ 
+ 
++QWEN_FABLE_XML_TOOL_MODEL = 'qwen3-6-14b-a3b-fablevibes-mxfp4-moe'
++QWEN_FABLE_XML_TOOL_BLOCK_RE = re.compile(
++    r'(?s)^(?P<prefix>.*?)(?P<block><tool_call>\s*\n'
++    r'<function=(?P<name>[A-Za-z_][A-Za-z0-9_]*)>\s*\n'
++    r'(?P<body>.*?)\n</function>\s*\n</tool_call>\s*$'
++    r')'
++)
++QWEN_FABLE_XML_PARAMETER_RE = re.compile(
++    r'(?s)<parameter=(?P<name>[A-Za-z_][A-Za-z0-9_]*)>\s*\n'
++    r'(?P<value>.*?)\n</parameter>\s*'
++)
++QWEN_FABLE_XML_ORPHAN_CLOSING_SUFFIX_RE = re.compile(
++    r'(?s)</parameter>\s*\n</function>\s*\n</tool_call>\s*$'
++)
++
++
++def clean_qwen_fable_structured_tool_residue(model_id: str, output: list, response_tool_calls: list):
++    """Remove only terminal XML residue paired with a structured FableVibes call.
++
++    Ollama can successfully promote a native Qwen XML call to ``tool_calls`` while
++    leaving its terminal closing tags in reasoning_content.  Cleanup happens only
++    after the reasoning stream is fully assembled, only for this exact model, and
++    only when a structured call is actually about to be dispatched.  Non-terminal
++    and unpaired examples remain untouched.
++    """
++    normalized_model_id = str(model_id or '').removesuffix(':latest')
++    if normalized_model_id != QWEN_FABLE_XML_TOOL_MODEL or not output or not response_tool_calls:
++        return None
++
++    reasoning_item = output[-1]
++    if reasoning_item.get('type') != 'reasoning':
++        return None
++
++    parts = reasoning_item.get('content') or []
++    text_parts = [part for part in parts if part.get('type') == 'output_text']
++    if not text_parts:
++        return None
++    text = ''.join(str(part.get('text', '')) for part in text_parts)
++
++    # A complete native block may survive even though Ollama also emitted a
++    # structured call.  Remove it only when its function name equals a call that
++    # will actually be dispatched.  Argument/schema validation remains the
++    # responsibility of the normal structured-call path.
++    full_match = QWEN_FABLE_XML_TOOL_BLOCK_RE.fullmatch(text)
++    if full_match:
++        block = full_match.group('block')
++        if block.count('<tool_call>') != 1 or block.count('</tool_call>') != 1:
++            return None
++        structured_names = {
++            call.get('function', {}).get('name') for call in response_tool_calls
++        }
++        if full_match.group('name') not in structured_names:
++            return None
++        start, end = full_match.span('block')
++    else:
++        # Exact production failure: Ollama consumed the opening/function/value
++        # portion into tool_calls but leaked only the terminal closing tags.
++        residue_match = QWEN_FABLE_XML_ORPHAN_CLOSING_SUFFIX_RE.search(text)
++        if not residue_match:
++            return None
++        start, end = residue_match.span()
++
++    cleaned = text[:start] + text[end:]
++    reasoning_item['content'] = (
++        [{'type': 'output_text', 'text': cleaned}] if cleaned else []
++    )
++    log.info(
++        'FABLE_XML_STRUCTURED_RESIDUE_CLEANED '
++        f'model_id={model_id!r} removed_range=[{start},{end}) '
++        f'removed={text[start:end]!r} structured_functions='
++        f'{[call.get("function", {}).get("name") for call in response_tool_calls]!r}'
++    )
++    return {'start': start, 'end': end, 'removed': text[start:end], 'text': cleaned}
++
++
++def _coerce_qwen_fable_xml_parameter(value: str, schema: dict):
++    """Strictly coerce one Qwen XML parameter according to its registered schema."""
++    value = value.strip()
++    value_type = schema.get('type', 'string')
++
++    if value_type == 'string':
++        return value
++    if value_type == 'integer':
++        if not re.fullmatch(r'-?(?:0|[1-9][0-9]*)', value):
++            raise ValueError('invalid integer')
++        return int(value)
++    if value_type == 'number':
++        if not re.fullmatch(r'-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?', value):
++            raise ValueError('invalid number')
++        return float(value)
++    if value_type == 'boolean':
++        if value not in ('true', 'false'):
++            raise ValueError('invalid boolean')
++        return value == 'true'
++    if value_type in ('array', 'object'):
++        parsed = json.loads(value)
++        expected = list if value_type == 'array' else dict
++        if not isinstance(parsed, expected):
++            raise ValueError(f'invalid {value_type}')
++        return parsed
++    raise ValueError(f'unsupported parameter type: {value_type}')
++
++
++def parse_qwen_fable_reasoning_tool_call(model_id: str, output: list, tools: dict):
++    """Promote one terminal FableVibes XML block only when it names a registered tool.
++
++    This is deliberately not a general XML/regex tool executor.  It is scoped to
++    the exact model, the final reasoning item, a fully anchored block, and the
++    registered tool schema.  Unknown, duplicated, missing, extra, or mistyped
++    parameters make the candidate inert.
++    """
++    normalized_model_id = str(model_id or '').removesuffix(':latest')
++    if normalized_model_id != QWEN_FABLE_XML_TOOL_MODEL:
++        return None
++
++    marker = 'FABLE_XML_FALLBACK_LIVE_20260802_R2'
++    log.info(
++        f'{marker} entered model_id={model_id!r} normalized={normalized_model_id!r} '
++        f'output_items={len(output or [])} registered_tools={sorted((tools or {}).keys())}'
++    )
++    if not output or not tools:
++        log.warning(f'{marker} rejected: missing output or registered tools')
++        return None
++
++    reasoning_item = output[-1]
++    if reasoning_item.get('type') != 'reasoning':
++        log.warning(
++            f'{marker} rejected: final item type={reasoning_item.get("type")!r}; '
++            f'final_item={reasoning_item!r}'
++        )
++        return None
++
++    text = ''.join(
++        str(part.get('text', ''))
++        for part in (reasoning_item.get('content') or [])
++        if part.get('type') == 'output_text'
++    )
++    match = QWEN_FABLE_XML_TOOL_BLOCK_RE.fullmatch(text)
++    if not match:
++        log.warning(f'{marker} rejected: terminal XML block regex mismatch; raw_reasoning={text!r}')
++        return None
++
++    function_name = match.group('name')
++    tool = tools.get(function_name)
++    if not tool:
++        log.warning(
++            f'{marker} rejected: unregistered function={function_name!r}; '
++            f'registered_tools={sorted(tools.keys())}'
++        )
++        return None
++
++    spec = tool.get('spec', {}) or {}
++    parameter_schema = spec.get('parameters', {}) or {}
++    properties = parameter_schema.get('properties', {}) or {}
++    required = set(parameter_schema.get('required', []) or [])
++    body = match.group('body')
++    arguments = {}
++    cursor = 0
++
++    try:
++        for parameter_match in QWEN_FABLE_XML_PARAMETER_RE.finditer(body):
++            if body[cursor : parameter_match.start()].strip():
++                log.warning(
++                    f'{marker} rejected: unexpected parameter-body text before '
++                    f'{parameter_match.group("name")!r}; body={body!r}; schema={parameter_schema!r}'
++                )
++                return None
++            parameter_name = parameter_match.group('name')
++            if parameter_name not in properties or parameter_name in arguments:
++                log.warning(
++                    f'{marker} rejected: unknown or duplicate parameter={parameter_name!r}; '
++                    f'body={body!r}; schema={parameter_schema!r}'
++                )
++                return None
++            raw_value = parameter_match.group('value')
++            if any(tag in raw_value for tag in ('<tool_call>', '</tool_call>', '<function=', '<parameter=')):
++                log.warning(
++                    f'{marker} rejected: nested tool markup in parameter={parameter_name!r}; '
++                    f'raw_value={raw_value!r}; schema={parameter_schema!r}'
++                )
++                return None
++            arguments[parameter_name] = _coerce_qwen_fable_xml_parameter(
++                raw_value,
++                properties.get(parameter_name, {}),
++            )
++            cursor = parameter_match.end()
++    except (TypeError, ValueError, json.JSONDecodeError) as exc:
++        log.warning(
++            f'{marker} rejected: parameter coercion failed: {exc}; '
++            f'body={body!r}; schema={parameter_schema!r}'
++        )
++        return None
++
++    if body[cursor:].strip() or not required.issubset(arguments):
++        log.warning(
++            f'{marker} rejected: trailing body text or missing required parameters; '
++            f'trailing={body[cursor:]!r}; required={sorted(required)!r}; '
++            f'arguments={arguments!r}; schema={parameter_schema!r}'
++        )
++        return None
++
++    prefix = match.group('prefix')
++    reasoning_item['content'] = ([{'type': 'output_text', 'text': prefix}] if prefix else [])
++    call_id = output_id('fc')
++    function_call = {
++        'type': 'function_call',
++        'id': call_id,
++        'call_id': call_id,
++        'name': function_name,
++        'arguments': json.dumps(arguments),
++        'status': 'in_progress',
++    }
++    output.append(function_call)
++    log.info(
++        f'{marker} activated validated_function={function_name!r} '
++        f'arguments={arguments!r} call_id={call_id}'
++    )
++    return function_call
++
++
+ def process_messages_with_output(
+     messages: list[dict],
+     reasoning_format: str | None = None,
+@@ -2084,6 +2537,40 @@
+     OpenAI-style messages (tool_calls + tool results). Strips 'output' before LLM.
+     """
+     processed = []
++
++    def compact_replayed_tool_output(output_messages: list[dict]) -> list[dict]:
++        """Bound historical tool receipts without altering their stored form."""
++        per_result_limit = 1000
++        total_budget = 2000
++        used = 0
++        compacted = []
++
++        for output_message in output_messages:
++            message = dict(output_message)
++            if message.get('role') != 'tool':
++                compacted.append(message)
++                continue
++
++            content = message.get('content', '')
++            if not isinstance(content, str):
++                compacted.append(message)
++                continue
++
++            remaining = max(total_budget - used, 0)
++            allowance = min(per_result_limit, remaining)
++            if allowance <= 0:
++                message['content'] = '[Historical tool output omitted; rely on the prior assistant answer.]'
++            elif len(content) > allowance:
++                marker = '\n...[historical tool output truncated for context efficiency]'
++                keep = max(allowance - len(marker), 0)
++                message['content'] = content[:keep] + marker
++                used += allowance
++            else:
++                used += len(content)
++
++            compacted.append(message)
++
++        return compacted
+ 
+     for message in messages:
+         if message.get('role') == 'assistant' and message.get('output'):
+@@ -2095,7 +2582,7 @@
+                 flatten_tool_images=True,
+             )
+             if output_messages:
+-                processed.extend(output_messages)
++                processed.extend(compact_replayed_tool_output(output_messages))
+                 continue
+ 
+         # Strip 'output' field before adding (LLM shouldn't see it)
+@@ -2317,28 +2804,10 @@
+             system_message = get_system_message(form_data.get('messages', []))
+             form_data['messages'] = [system_message, *db_messages] if system_message else db_messages
+ 
+-            # Inject image files into content as image_url parts (mirrors frontend logic)
++            form_data = await rhizome_inject_image_files_into_messages(form_data, metadata, user=user)
+             for message in form_data['messages']:
+-                image_files = [
+-                    f
+-                    for f in message.get('files', [])
+-                    if f.get('type') == 'image' or (f.get('content_type') or '').startswith('image/')
+-                ]
+-                if message.get('role') == 'user' and image_files:
+-                    text_content = message.get('content', '')
+-                    if isinstance(text_content, str):
+-                        message['content'] = [
+-                            {'type': 'text', 'text': text_content},
+-                            *[
+-                                {
+-                                    'type': 'image_url',
+-                                    'image_url': {'url': f['url']},
+-                                }
+-                                for f in image_files
+-                                if f.get('url')
+-                            ],
+-                        ]
+-                # Strip files field — it's been incorporated into content
++                # Strip files field — image files have been incorporated into content,
++                # and text/document files are handled through metadata file context.
+                 message.pop('files', None)
+ 
+     if regeneration_prompt:
+@@ -2504,6 +2973,19 @@
+     variables = form_data.pop('variables', None)
+     payload_tools = form_data.get('tools', None)  # snapshot before filters
+ 
++    # Open WebUI's browser can submit ``tools: []`` from stale client state even
++    # when the selected model has server-side/default tool IDs.  Treat that UI
++    # shape as "no client override" so configured tools are resolved below.
++    # Keep the explicit empty-list opt-out intact for API callers, which do not
++    # carry a browser session_id.
++    if (
++        payload_tools == []
++        and metadata.get('session_id')
++        and metadata.get('tool_ids')
++    ):
++        form_data.pop('tools', None)
++        payload_tools = None
++
+     # Process the form_data through the pipeline
+     try:
+         form_data = await process_pipeline_inlet_filter(request, form_data, user, models)
+@@ -2576,6 +3058,8 @@
+                 # Append filesystem awareness only for pyodide engine
+                 if engine != 'jupyter':
+                     prompt += CODE_INTERPRETER_PYODIDE_PROMPT
++                else:
++                    prompt += JUPYTER_CODE_INTERPRETER_FILE_PROMPT
+ 
+                 form_data['messages'] = add_or_update_user_message(
+                     prompt,
+@@ -2591,6 +3075,12 @@
+                 if engine != 'jupyter':
+                     form_data['messages'] = add_or_update_system_message(
+                         CODE_INTERPRETER_PYODIDE_PROMPT,
++                        form_data['messages'],
++                        append=True,
++                    )
++                else:
++                    form_data['messages'] = add_or_update_system_message(
++                        JUPYTER_CODE_INTERPRETER_FILE_PROMPT,
+                         form_data['messages'],
+                         append=True,
+                     )
+@@ -2716,6 +3206,9 @@
+         }
+     )
+     form_data['metadata'] = metadata
++
++    form_data = await rhizome_inject_image_files_into_messages(form_data, metadata, user=user)
++    form_data = await convert_url_images_to_base64(form_data, user=user)
+ 
+     # When the caller provides an explicit `tools` key in the request body,
+     # skip all server-side tool resolution and pass the caller's tools through
+@@ -2895,9 +3388,17 @@
+                 features,
+                 model,
+             )
++            if _rhizome_messages_have_image_content(form_data.get('messages', [])):
++                builtin_tools.pop('view_file', None)
+             for name, tool_dict in builtin_tools.items():
+                 if name not in tools_dict:
+                     tools_dict[name] = tool_dict
++
++        if (
++            _rhizome_messages_have_image_content(form_data.get('messages', []))
++            and _rhizome_image_turn_should_avoid_tools(prompt)
++        ):
++            tools_dict = {}
+ 
+         if tools_dict:
+             # Always store resolved tools in metadata so downstream consumers
+@@ -3153,6 +3654,28 @@
+                     append_output_text(output[-1], content)
+ 
+                 assistant_message['content'] = assistant_message.get('content', '') + content
++
++
++def get_assistant_text_from_output(output):
++    """Return only the final visible assistant message from structured output.
++
++    Open WebUI's voice autoplay still reads the legacy ``content`` field.
++    Responses-style providers store visible text in ``output`` instead, so
++    mirror the final answer into ``content`` without leaking reasoning, tool
++    output, or pre-tool prose that a model may repeat after its last tool call.
++    The complete structured receipt remains preserved in ``output``.
++    """
++    for item in reversed(output or []):
++        if item.get('type') != 'message' or item.get('role') != 'assistant':
++            continue
++        chunks = []
++        for part in item.get('content') or []:
++            if part.get('type') == 'output_text' and part.get('text'):
++                chunks.append(str(part['text']))
++        text = '\n'.join(chunks).strip()
++        if text:
++            return text
++    return ''
+ 
+ 
+ async def get_system_oauth_token(request, user):
+@@ -4168,6 +4691,7 @@
+                         )
+ 
+                 async def stream_body_handler(response, form_data):
++                    nonlocal model_id
+                     nonlocal content_parts
+                     nonlocal usage
+                     nonlocal output
+@@ -4850,6 +5374,27 @@
+                                 )
+                                 reasoning_item['status'] = 'completed'
+ 
++                    # Ollama normally converts Qwen tool markup into structured
++                    # delta.tool_calls.  This FableVibes fine-tune can instead
++                    # place a later chained call at the end of reasoning text.
++                    # Promote only the exact, schema-valid model-specific form.
++                    if response_tool_calls:
++                        # Ollama may emit a valid structured tool call while
++                        # leaking the native Qwen closing tags into reasoning.
++                        # Clean only the fully assembled terminal residue paired
++                        # with the call that is about to be dispatched.
++                        clean_qwen_fable_structured_tool_residue(
++                            model_id,
++                            output,
++                            response_tool_calls,
++                        )
++                    else:
++                        parse_qwen_fable_reasoning_tool_call(
++                            model_id,
++                            output,
++                            metadata.get('tools', {}) or {},
++                        )
++
+                     if response_tool_calls:
+                         tool_calls.append(_split_tool_calls(response_tool_calls))
+ 
+@@ -4968,6 +5513,8 @@
+ 
+                     async def execute_tool_call(tool_call):
+                         name = tool_call.get('function', {}).get('name', '')
++                        if str(model_id or '').removesuffix(':latest') == QWEN_FABLE_XML_TOOL_MODEL:
++                            log.info('Dispatching FableVibes registered tool call: %s', name)
+                         params = parse_tool_params(tool_call)
+                         if params is None:
+                             return {}, None, None, None, False
+@@ -5503,8 +6050,10 @@
+                         item['status'] = 'completed'
+ 
+                 title = await Chats.get_chat_title_by_id(metadata['chat_id']) if save_to_chat else ''
++                assistant_content = ''.join(content_parts) or get_assistant_text_from_output(output)
+                 data = {
+                     'done': True,
++                    'content': assistant_content,
+                     'output': output,
+                     'title': title,
+                     **({'usage': usage} if usage else {}),
+@@ -5518,6 +6067,7 @@
+                             metadata['message_id'],
+                             {
+                                 'done': True,
++                                'content': assistant_content,
+                                 'output': output,
+                                 **({'usage': usage} if usage else {}),
+                             },
+@@ -5526,13 +6076,13 @@
+                         await Chats.upsert_message_to_chat_by_id_and_message_id(
+                             metadata['chat_id'],
+                             metadata['message_id'],
+-                            {'done': True, 'usage': usage},
++                            {'done': True, 'content': assistant_content, 'usage': usage},
+                         )
+                     else:
+                         await Chats.upsert_message_to_chat_by_id_and_message_id(
+                             metadata['chat_id'],
+                             metadata['message_id'],
+-                            {'done': True},
++                            {'done': True, 'content': assistant_content},
+                         )
+ 
+                 await publish_chat_finished_event(request, user, metadata, title, ''.join(content_parts), output)
+@@ -5545,7 +6095,7 @@
+                 )
+ 
+                 ctx['assistant_message'] = {
+-                    'content': ''.join(content_parts) or get_output_text(output),
++                    'content': assistant_content,
+                     'output': output,
+                     **({'usage': usage} if usage else {}),
+                 }

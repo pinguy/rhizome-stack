@@ -1,0 +1,32 @@
+--- a/open_webui/utils/memory.py
++++ b/open_webui/utils/memory.py
+@@ -82,11 +82,28 @@
+     return None
+ 
+ 
++_QUERY_STOPWORDS = {
++    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'in',
++    'is', 'it', 'of', 'on', 'or', 'that', 'the', 'to', 'with',
++}
++
++
++def _query_tokens(value: str) -> list[str]:
++    tokens = re.findall(r'[a-z0-9]+', value)
++    kept = [tok for tok in tokens if len(tok) >= 2 and tok not in _QUERY_STOPWORDS]
++    # Fall back to the raw short tokens if stopword/length filtering emptied it.
++    return kept or [tok for tok in tokens if tok]
++
++
+ def _memory_matches_query(memory, query: str) -> bool:
+     value = query.strip().lower()
+     if not value:
+         return True
+-    return value in (memory.content or '').lower() or value in (memory.path or '').lower()
++    haystack = f'{memory.content or ""}\n{memory.path or ""}'.lower()
++    # Exact phrase still wins (backwards compatible), otherwise match on any word.
++    if value in haystack:
++        return True
++    return any(tok in haystack for tok in _query_tokens(value))
+ 
+ 
+ def search_memory_rows(

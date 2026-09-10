@@ -1,0 +1,33 @@
+--- a/open_webui/routers/audio.py
++++ b/open_webui/routers/audio.py
+@@ -611,6 +611,30 @@
+         },
+     )
+     return response
++
++
++@router.post('/stop')
++async def stop_speech(user=Depends(get_verified_user)):
++    """Stop the configured local OpenAI-compatible TTS producer."""
++    engine = await Config.get('audio.tts.engine')
++    if engine != 'openai':
++        return {'ok': True, 'stopped': False, 'reason': 'engine does not expose a stop endpoint'}
++
++    api_base_url = (await Config.get('audio.tts.openai.api_base_url')).rstrip('/')
++    api_key = await Config.get('audio.tts.openai.api_key')
++    session = await get_session()
++    try:
++        async with session.post(
++            f'{api_base_url}/audio/stop',
++            headers={'Authorization': f'Bearer {api_key}'},
++            ssl=AIOHTTP_CLIENT_SESSION_SSL,
++        ) as response:
++            response.raise_for_status()
++            data = await response.json()
++            return {'ok': True, 'stopped': bool(data.get('chatterbox_stopped', data.get('ok', True)))}
++    except Exception as exc:
++        log.warning(f'Configured TTS stop endpoint failed: {exc}')
++        raise HTTPException(status_code=502, detail='Configured TTS stop endpoint failed')
+ 
+ 
+ async def _transcribe_whisper(request, file_path, languages, file_dir, id):

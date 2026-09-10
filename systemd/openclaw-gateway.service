@@ -1,0 +1,20 @@
+[Unit]
+Description=OpenClaw Gateway (Rhizome Stack)
+After=network-online.target
+Wants=network-online.target
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+Environment=PATH=@@STACK_ROOT@@/runtime/node-v22.22.0-linux-x64/bin:/usr/local/bin:/usr/bin
+ExecStart=@@HOME@@/.npm-global/bin/openclaw gateway --port ${OPENCLAW_PORT}
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+OOMPolicy=continue
+KillMode=control-group
+
+[Install]
+WantedBy=default.target

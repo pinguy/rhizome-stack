@@ -1,0 +1,13 @@
+FROM docker.io/library/python:3.12-slim-bookworm
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends build-essential git \
+ && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN useradd --create-home --uid 1000 worker && mkdir -p /work && chown worker:worker /work
+USER worker
+WORKDIR /work
+EXPOSE 8888
+CMD ["python", "-m", "jupyterlab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--ServerApp.token=", "--ServerApp.password=", "--ServerApp.allow_origin=http://127.0.0.1:8080"]
+

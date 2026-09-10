@@ -1,0 +1,19 @@
+[Unit]
+Description=OpenClaw model adapter for Open WebUI
+After=openclaw-gateway.service network-online.target
+Requires=openclaw-gateway.service
+
+[Service]
+Type=simple
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+Environment=OPENCLAW_CONFIG=@@HOME@@/.openclaw/openclaw.json
+Environment=OPENCLAW_BIN=@@HOME@@/.npm-global/bin/openclaw
+Environment=PATH=@@STACK_ROOT@@/runtime/node-v22.22.0-linux-x64/bin:/usr/local/bin:/usr/bin
+ExecStart=@@STACK_ROOT@@/venvs/components/bin/python @@STACK_ROOT@@/components/openclaw_openwebui_adapter.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "core": [
+    "openclaw-gateway",
+    "open-webui",
+    "openclaw-openwebui-adapter",
+    "openclaw-ollama-model-sync"
+  ],
+  "optional": {
+    "voice": ["openwebui-audio-bridge", "chatterbox-nano", "faster-whisper"],
+    "jupyter": ["openwebui-code-jupyter", "openwebui-code-jupyter-idle-guard"],
+    "memory_sync": ["openwebui-memory-sync"]
+  },
+  "excluded_runtime_state": [
+    "credentials",
+    "browser-profiles",
+    "chats",
+    "uploads",
+    "memory-content",
+    "voice-references",
+    "model-weights",
+    "databases",
+    "logs",
+    "backups"
+  ]
+}
+

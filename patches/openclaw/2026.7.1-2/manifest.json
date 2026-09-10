@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": "dreaming-DqzMSXGC.js",
+      "action": "modify",
+      "clean_sha256": "74392dc060c14fc57c05326ab70b05fa6f051f2b340f674f757c0ea231d85319",
+      "patched_sha256": "0de90ace6c4e4c00a1625369d1b71e8459a6c65259dc9d8e89bb1be6b6166067",
+      "payload": "dreaming-DqzMSXGC.js.patch"
+    },
+    {
+      "path": "dreaming-phases-DCJr5DsV.js",
+      "action": "modify",
+      "clean_sha256": "92f3eec64fbed2feb477da6000589944fa1b4800407d150fddc0c37d93780a9f",
+      "patched_sha256": "459ab35a5d14b6b13655dd5894a0c8073321bce22e54dd260f8de2288484cd64",
+      "payload": "dreaming-phases-DCJr5DsV.js.patch"
+    },
+    {
+      "path": "embedded-agent-DGUuxGR2.js",
+      "action": "modify",
+      "clean_sha256": "a1fd6d325758a6a96323027ab2778fa9779fbef55bc597b1a629fc6d0ad1acec",
+      "patched_sha256": "0ec708b6bdda105c5a8023d4c662d1d2275c6313b0d59c9a40d0588b35fc3a76",
+      "payload": "embedded-agent-DGUuxGR2.js.patch"
+    },
+    {
+      "path": "register.runtime-CcW2y9o2.js",
+      "action": "modify",
+      "clean_sha256": "a9ffce0faf9b801dff4ba622bd7e72f5923f82b4a450e13d843f00db920984a6",
+      "patched_sha256": "2a7858deeda45157731709e90a8751df056e8103645456ee7d72685c4091a4a4",
+      "payload": "register.runtime-CcW2y9o2.js.patch"
+    },
+    {
+      "path": "sqlite-B1ze-fre.js",
+      "action": "modify",
+      "clean_sha256": "ed940f0ba0877eea0f00b2da30e727714993db60156fefc6fe80ac8564984c50",
+      "patched_sha256": "16f4c53e8476e3847feb2cbe7ab5252ce862a61cef23992e42684464ca46e552",
+      "payload": "sqlite-B1ze-fre.js.patch"
+    }
+  ]
+}

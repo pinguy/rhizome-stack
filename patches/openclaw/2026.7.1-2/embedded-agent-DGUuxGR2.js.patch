@@ -1,0 +1,11 @@
+--- a/embedded-agent-DGUuxGR2.js
++++ b/embedded-agent-DGUuxGR2.js
+@@ -855,7 +855,7 @@
+ 			}
+ 		}
+ 		if (params.failoverReason === "rate_limit") {
+-			const shortWindowRetry = resolveShortWindowRateLimitRetry(params.lastAssistant?.errorMessage);
++			const shortWindowRetry = resolveShortWindowRateLimitRetry(params.lastAssistant?.errorMessage) ?? (params.provider === "nvidia-nim" ? { retryAfterSeconds: 60 } : null);
+ 			if (params.allowSameModelRateLimitRetry && shortWindowRetry && await params.maybeRetrySameModelRateLimit(shortWindowRetry)) return sameModelRateLimitRetry();
+ 			params.maybeEscalateRateLimitProfileFallback({
+ 				failoverProvider: params.activeErrorContext.provider,

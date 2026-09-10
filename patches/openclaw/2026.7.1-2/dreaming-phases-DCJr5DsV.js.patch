@@ -1,0 +1,11 @@
+--- a/dreaming-phases-DCJr5DsV.js
++++ b/dreaming-phases-DCJr5DsV.js
+@@ -909,7 +909,7 @@
+ function buildRemReflections(entries, limit, minPatternStrength) {
+ 	const tagStats = /* @__PURE__ */ new Map();
+ 	for (const entry of entries) for (const tag of entry.conceptTags) {
+-		if (!tag || REM_REFLECTION_TAG_BLACKLIST.has(tag.toLowerCase())) continue;
++		if (!tag || REM_REFLECTION_TAG_BLACKLIST.has(tag.toLowerCase()) || /\.(?:md|txt|jsonl?|sqlite|db)$/i.test(tag)) continue;
+ 		const stat = tagStats.get(tag) ?? {
+ 			count: 0,
+ 			evidence: /* @__PURE__ */ new Set()

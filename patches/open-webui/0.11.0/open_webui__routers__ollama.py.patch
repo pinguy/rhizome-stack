@@ -1,0 +1,47 @@
+--- a/open_webui/routers/ollama.py
++++ b/open_webui/routers/ollama.py
+@@ -1147,6 +1147,44 @@
+     prefix_id = api_config.get('prefix_id')
+     payload['model'] = strip_provider_model_prefix(payload['model'], prefix_id)
+ 
++    # Keep every local chat model on one stable runner across the initial
++    # browser request, tool continuations, and hidden metadata/title generation.
++    # Earlier request-shaping layers can carry stale browser values (observed
++    # num_ctx=4096 and keep_alive=0) or omit them. A context change makes Ollama
++    # rebuild the runner; a zero/short keep-alive unloads it between UI calls.
++    model_key = str(payload['model']).removesuffix(':latest')
++    stable_num_ctx = {
++        'ornith-35b-vision': 163840,
++        'ornith-1.5:35b': 163840,
++        'qwen3-6-14b-a3b-fablevibes-mxfp4-moe': 81920,
++        # Fable explicitly accepted a faster 32K interactive profile only
++        # with an automatic 65K fallback for long inputs and a separately
++        # selectable full-context alias. See state/fable-runtime-profile/.
++        'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed': 32768,
++        'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed:full65k': 65536,
++    }.get(model_key, 65536)
++
++    # A conservative character-count guard prevents the fast Fable profile
++    # from silently discarding a large early section. The explicit full65k
++    # alias remains visible in the model picker for document-heavy sessions.
++    if model_key == 'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed':
++        message_chars = sum(
++            len(message.get('content') or '')
++            if isinstance(message.get('content'), str)
++            else len(json.dumps(message.get('content') or [], ensure_ascii=False))
++            for message in payload.get('messages', [])
++            if isinstance(message, dict)
++        )
++        if message_chars >= 80000:
++            log.warning(
++                'Fable fast32k input is %d characters; routing to full65k to avoid silent truncation',
++                message_chars,
++            )
++            payload['model'] = 'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed:full65k'
++            stable_num_ctx = 65536
++    payload.setdefault('options', {})['num_ctx'] = stable_num_ctx
++    payload['keep_alive'] = '10m'
++
+     return await send_request(
+         f'{url}/api/chat',
+         payload=json.dumps(payload),

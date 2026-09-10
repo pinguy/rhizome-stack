@@ -1,0 +1,19 @@
+[Unit]
+Description=Open WebUI (Rhizome Stack)
+After=network-online.target openclaw-openwebui-adapter.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+Environment=DATA_DIR=@@STACK_ROOT@@/state/openwebui-data
+Environment=ENABLE_OPENAI_API=true
+Environment=ENABLE_OLLAMA_API=true
+Environment=RAG_EMBEDDING_MODEL_AUTO_UPDATE=false
+Environment=OFFLINE_MODE=false
+ExecStart=@@STACK_ROOT@@/venvs/open-webui/bin/open-webui serve --host 127.0.0.1 --port ${OPENWEBUI_PORT}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,50 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "${STACK_ROOT}/workspace",
+      "model": {
+        "primary": "ollama/${DEFAULT_OLLAMA_MODEL}"
+      },
+      "memorySearch": {
+        "provider": "local"
+      }
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "port": 18789,
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://127.0.0.1:11434",
+        "api": "ollama",
+        "apiKey": "ollama-local",
+        "models": []
+      }
+    }
+  },
+  "channels": {},
+  "plugins": {
+    "bundledDiscovery": "compat",
+    "slots": {
+      "memory": "memory-core"
+    }
+  },
+  "update": {
+    "checkOnStart": false
+  }
+}

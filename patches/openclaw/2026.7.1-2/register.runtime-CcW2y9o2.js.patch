@@ -1,0 +1,11 @@
+--- a/register.runtime-CcW2y9o2.js
++++ b/register.runtime-CcW2y9o2.js
+@@ -363,7 +363,7 @@
+ function applyAnthropicSonnet5Cost(params) {
+ 	if (!isAnthropicSonnet5Model(params.modelId)) return;
+ 	const cost = resolveAnthropicSonnet5Cost();
+-	if (params.model.cost.input === cost.input && params.model.cost.output === cost.output && params.model.cost.cacheRead === cost.cacheRead && params.model.cost.cacheWrite === cost.cacheWrite) return;
++	if (params.model.cost?.input === cost.input && params.model.cost?.output === cost.output && params.model.cost?.cacheRead === cost.cacheRead && params.model.cost?.cacheWrite === cost.cacheWrite) return;
+ 	return {
+ 		...params.model,
+ 		cost

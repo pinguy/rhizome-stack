@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "wheel": "open_webui-0.11.0-py3-none-any.whl",
+  "files": [
+    {
+      "path": "open_webui/main.py",
+      "action": "modify",
+      "clean_sha256": "2e53f5afef53bdc87da2a8f96f4a5437ee6adb18c1f8a66785083f4ba658df33",
+      "patched_sha256": "bb134da27b0b16b28fc578df4ffdc14cb087a67a6cff108972af0b59950f6d3b",
+      "payload": "open_webui__main.py.patch"
+    },
+    {
+      "path": "open_webui/routers/audio.py",
+      "action": "modify",
+      "clean_sha256": "37bfb1f7942bc8c1723b90893a96a26cc5f108f98db453548d0b707c2a6bed04",
+      "patched_sha256": "e78b3aeb89c7679d07d5bce1e8473828952b473e6612dbe01f7ba7519ab0b5e1",
+      "payload": "open_webui__routers__audio.py.patch"
+    },
+    {
+      "path": "open_webui/routers/ollama.py",
+      "action": "modify",
+      "clean_sha256": "dfc91edc36f063499e85dd27b72ff5f97e8f8273513f87520c09e95ddd40b74a",
+      "patched_sha256": "c0db1a88a94645b6a9ad36214d9a412713fd2922ade14bfc2fbfff2cfb23ef6b",
+      "payload": "open_webui__routers__ollama.py.patch"
+    },
+    {
+      "path": "open_webui/routers/tasks.py",
+      "action": "modify",
+      "clean_sha256": "91553977c72078cf6a824c1406dfdc750d720f279b3e848bb7c25c97767918f3",
+      "patched_sha256": "dd4eb4211da877442940d5914e4202f52a49f7a907affc20a4d6b20d4ac228eb",
+      "payload": "open_webui__routers__tasks.py.patch"
+    },
+    {
+      "path": "open_webui/tools/builtin.py",
+      "action": "modify",
+      "clean_sha256": "8a1c2558faa0fccdb20a76f1ad6dbc164558c84403888003255b3ac656606a5d",
+      "patched_sha256": "9f9ae84ccbb3244a3dae4fe7bc95a72324892f16e01a9c100817e4e7b82f40a5",
+      "payload": "open_webui__tools__builtin.py.patch"
+    },
+    {
+      "path": "open_webui/utils/memory.py",
+      "action": "modify",
+      "clean_sha256": "709e9fbc1a9b18bc0f9cc90c654af813f07c90c9eb0e90d15a3d9f193a968405",
+      "patched_sha256": "78e6a2b771c6484a182269598cb33eeda32bd0bbc5f629278df02757cdb0f4f7",
+      "payload": "open_webui__utils__memory.py.patch"
+    },
+    {
+      "path": "open_webui/utils/middleware.py",
+      "action": "modify",
+      "clean_sha256": "42380f32babc369cda496fe44017c25d3b6a417db1da57e97f3119a4f382448a",
+      "patched_sha256": "943dc9368ce5f2108ec5332e28c2e6b57472f7d1518251f87d51cc54c353d453",
+      "payload": "open_webui__utils__middleware.py.patch"
+    },
+    {
+      "path": "open_webui/utils/models.py",
+      "action": "modify",
+      "clean_sha256": "a21ddfd4c5abe69f56840e005988f388a900cc658e01483c33c3b92fa8f17519",
+      "patched_sha256": "29f60681c648eee3de560a22979ad12068634e4381a7f40ce763ea16da1d9af6",
+      "payload": "open_webui__utils__models.py.patch"
+    },
+    {
+      "path": "open_webui/utils/payload.py",
+      "action": "modify",
+      "clean_sha256": "d0ea01aba84cd2f79e514b975ea6efff1c11bf351ce61facee9d0016e4c391a2",
+      "patched_sha256": "74b2b68e8425cd24ef51409ad96f0509dc0661463a2ea603c40b64158058628f",
+      "payload": "open_webui__utils__payload.py.patch"
+    },
+    {
+      "path": "open_webui/utils/tools.py",
+      "action": "modify",
+      "clean_sha256": "987848cca6a1bb8f7b56bbee72740d593f9d4686c3564d95e14c9b46bdf3f2fc",
+      "patched_sha256": "7b5646e2014080b2adff5b72f2fed9aab1a20887632f5d9a677c8873af416ae3",
+      "payload": "open_webui__utils__tools.py.patch"
+    },
+    {
+      "path": "open_webui/frontend/_app/immutable/chunks/BEpREC_0.js",
+      "action": "replace",
+      "clean_sha256": "4dcaf985824d13871ee316fe9316b349a173bac76d49e0e2234b0079687305c3",
+      "patched_sha256": "a55fe0c629b18c8cbb7810e1c58774c3dfb692455b2d42a14685904467d78586",
+      "payload": "open_webui__frontend___app__immutable__chunks__BEpREC_0.js.replacement.txt"
+    },
+    {
+      "path": "open_webui/frontend/_app/immutable/chunks/Bd1cmSN4.js",
+      "action": "replace",
+      "clean_sha256": "649b3edff6258b0ace9caf18e4f7f90cdef4a338f80f05e18fe459b764e12760",
+      "patched_sha256": "43e482794db580ab949951bf3a80fadacd5623d77dc30bc2aa505c97cb04ea87",
+      "payload": "open_webui__frontend___app__immutable__chunks__Bd1cmSN4.js.replacement.txt"
+    },
+    {
+      "path": "open_webui/frontend/_app/immutable/chunks/ci5FwYEI.js",
+      "action": "replace",
+      "clean_sha256": "ec5149165a9b2e6c69b5b61a7f8170132f811d2a88c5a4995dccb59edee92ec7",
+      "patched_sha256": "ca5ad7b90ff07f5bbc9f0a9e87251aed5671d881d678eda6abd84eb52e9555ab",
+      "payload": "open_webui__frontend___app__immutable__chunks__ci5FwYEI.js.replacement.txt"
+    },
+    {
+      "path": "open_webui/frontend/_app/immutable/workers/kokoro.worker-y8zXfoZW.js",
+      "action": "delete",
+      "clean_sha256": "a012cfd2cacfd7f2d5db5019624d432805fcb5f772a35204011c0c155df94d44",
+      "patched_sha256": null,
+      "payload": null
+    },
+    {
+      "path": "open_webui/frontend/_app/immutable/workers/kokoro.worker-y8zXfoZW.js.map",
+      "action": "delete",
+      "clean_sha256": "9455654fd50f12ffdad38cf41e56f81dc6045afb2b8f6016ba2893240039bfca",
+      "patched_sha256": null,
+      "payload": null
+    }
+  ]
+}

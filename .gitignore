@@ -1,0 +1,7 @@
+*.pyc
+__pycache__/
+.pytest_cache/
+stack.env
+*.before-rhizome-stack
+release/
+

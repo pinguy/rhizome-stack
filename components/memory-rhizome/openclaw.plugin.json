@@ -1,0 +1,36 @@
+{
+  "id": "memory-rhizome",
+  "name": "Memory (Rhizome)",
+  "kind": "memory",
+  "description": "Hybrid memory_search: OpenClaw Markdown memory + RhizomeML FAISS (books + historical GPT chats)",
+  "contracts": {
+    "tools": ["memory_search", "memory_get"]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean" },
+      "pythonPath": { "type": "string" },
+      "baseDir": { "type": "string" },
+      "indexPath": { "type": "string" },
+      "textsPath": { "type": "string" },
+      "metadataPath": { "type": "string" },
+      "embedModel": { "type": "string" },
+      "device": { "type": "string", "enum": ["auto", "cuda", "cpu"] },
+      "topK": { "type": "number" },
+      "snippetMaxChars": { "type": "number" }
+    }
+  },
+  "uiHints": {
+    "pythonPath": { "label": "Python path", "placeholder": "~/.local/share/rhizome-stack/venvs/memory/bin/python" },
+    "baseDir": { "label": "RhizomeML base dir", "placeholder": "~/.local/share/rhizome-stack/memory/archive" },
+    "indexPath": { "label": "FAISS index path", "placeholder": "~/.local/share/rhizome-stack/memory/archive/memory.index" },
+    "textsPath": { "label": "Texts .npy path", "placeholder": "~/.local/share/rhizome-stack/memory/archive/memory_texts.npy" },
+    "metadataPath": { "label": "Metadata .pkl path", "placeholder": "~/.local/share/rhizome-stack/memory/archive/memory_metadata.pkl" },
+    "embedModel": { "label": "Embedding model", "placeholder": "sentence-transformers/all-MiniLM-L6-v2" },
+    "device": { "label": "Device", "help": "auto uses CUDA when available" },
+    "topK": { "label": "Top K", "advanced": true },
+    "snippetMaxChars": { "label": "Snippet max chars", "advanced": true }
+  }
+}

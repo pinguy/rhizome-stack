@@ -1,0 +1,33 @@
+diff --git a/src/chatterbox/models/s3tokenizer/s3tokenizer.py b/src/chatterbox/models/s3tokenizer/s3tokenizer.py
+index 8648608..6ece9bb 100644
+--- a/src/chatterbox/models/s3tokenizer/s3tokenizer.py
++++ b/src/chatterbox/models/s3tokenizer/s3tokenizer.py
+@@ -150,7 +150,9 @@ class S3Tokenizer(S3TokenizerV2):
+         if not torch.is_tensor(audio):
+             audio = torch.from_numpy(audio)
+ 
+-        audio = audio.to(self.device)
++        # Librosa can return float64 with newer dependency combinations.
++        # Keep the waveform aligned with the model's float32 CUDA weights.
++        audio = audio.to(device=self.device, dtype=torch.float32)
+         if padding > 0:
+             audio = F.pad(audio, (0, padding))
+         stft = torch.stft(
+diff --git a/src/chatterbox/models/voice_encoder/voice_encoder.py b/src/chatterbox/models/voice_encoder/voice_encoder.py
+index d986f17..c96a19d 100644
+--- a/src/chatterbox/models/voice_encoder/voice_encoder.py
++++ b/src/chatterbox/models/voice_encoder/voice_encoder.py
+@@ -239,7 +239,12 @@ class VoiceEncoder(nn.Module):
+ 
+         # Embed them
+         with torch.inference_mode():
+-            utt_embeds = self.inference(mels.to(self.device), mel_lens, batch_size=batch_size, **kwargs).numpy()
++            utt_embeds = self.inference(
++                mels.to(device=self.device, dtype=torch.float32),
++                mel_lens,
++                batch_size=batch_size,
++                **kwargs,
++            ).numpy()
+ 
+         return self.utt_to_spk_embed(utt_embeds) if as_spk else utt_embeds
+

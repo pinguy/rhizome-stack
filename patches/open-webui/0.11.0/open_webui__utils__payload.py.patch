@@ -1,0 +1,11 @@
+--- a/open_webui/utils/payload.py
++++ b/open_webui/utils/payload.py
+@@ -107,6 +107,8 @@
+ # inplace function: form_data is modified
+ def apply_model_params_to_body_openai(params: dict, form_data: dict) -> dict:
+     params = remove_open_webui_params(params)
++    for key in ('think', 'num_ctx', 'num_batch', 'num_keep', 'num_predict', 'keep_alive'):
++        params.pop(key, None)
+ 
+     custom_params = params.pop('custom_params', {})
+     if custom_params:

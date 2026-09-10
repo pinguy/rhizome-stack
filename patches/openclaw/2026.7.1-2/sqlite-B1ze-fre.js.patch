@@ -1,0 +1,11 @@
+--- a/sqlite-B1ze-fre.js
++++ b/sqlite-B1ze-fre.js
+@@ -27,7 +27,7 @@
+ 	const dir = resolveAgentDir(agentDir);
+ 	return {
+ 		agentId: resolveRegisteredAgentIdForDir(dir) ?? inferAgentIdFromDir(dir),
+-		path: path.join(dir, "openclaw-agent.sqlite")
++		path: path.join(dir, fs.existsSync(path.join(dir, "auth-profiles-compat.sqlite")) ? "auth-profiles-compat.sqlite" : "openclaw-agent.sqlite")
+ 	};
+ }
+ /** Resolves the SQLite database path that stores auth profiles for an agent dir. */

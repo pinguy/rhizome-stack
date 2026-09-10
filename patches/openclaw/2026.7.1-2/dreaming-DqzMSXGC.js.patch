@@ -1,0 +1,13 @@
+--- a/dreaming-DqzMSXGC.js
++++ b/dreaming-DqzMSXGC.js
+@@ -161,7 +161,9 @@
+ function resolveMemoryDreamingPluginConfig(cfg) {
+ 	const entries = asNullableRecord(asNullableRecord(asNullableRecord(cfg)?.plugins)?.entries);
+ 	const pluginId = resolveMemoryDreamingPluginId(cfg);
+-	return asNullableRecord(asNullableRecord(entries?.[pluginId])?.config) ?? void 0;
++	const activeConfig = asNullableRecord(asNullableRecord(entries?.[pluginId])?.config);
++	if (asNullableRecord(activeConfig?.dreaming)) return activeConfig;
++	return asNullableRecord(asNullableRecord(entries?.[DEFAULT_MEMORY_DREAMING_PLUGIN_ID])?.config) ?? activeConfig ?? void 0;
+ }
+ /** @deprecated Use resolveMemoryDreamingPluginConfig. */
+ const resolveMemoryCorePluginConfig = resolveMemoryDreamingPluginConfig;

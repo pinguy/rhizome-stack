@@ -1,0 +1,10 @@
+[Unit]
+Description=Synchronise local workspace and Open WebUI memory
+After=open-webui.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+Environment=RHIZOME_WORKSPACE=@@STACK_ROOT@@/workspace
+ExecStart=@@STACK_ROOT@@/venvs/memory/bin/python @@STACK_ROOT@@/components/sync_openwebui_memory.py sync
+

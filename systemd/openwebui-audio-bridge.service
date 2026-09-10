@@ -1,0 +1,17 @@
+[Unit]
+Description=Open WebUI local TTS and STT bridge
+After=network.target chatterbox-nano.service
+
+[Service]
+Type=simple
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+Environment=WHISPER_PYTHON=@@STACK_ROOT@@/venvs/voice/bin/python
+Environment=VOICE_COMPONENT_DIR=@@STACK_ROOT@@/components
+WorkingDirectory=@@STACK_ROOT@@/components
+ExecStart=@@STACK_ROOT@@/venvs/voice/bin/python @@STACK_ROOT@@/components/openwebui_audio_bridge.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+

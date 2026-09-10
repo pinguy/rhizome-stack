@@ -1,0 +1,15 @@
+[Unit]
+Description=Open WebUI code interpreter Jupyter sandbox
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --rm --replace --name rhizome-stack-jupyter --init --publish 127.0.0.1:8889:8888 --security-opt no-new-privileges --cap-drop=ALL --pids-limit=256 --memory=2g --cpus=4 --volume @@STACK_ROOT@@/shared/openwebui-uploads:/mnt/openwebui/uploads:ro --volume @@STACK_ROOT@@/state/openwebui-code-work:/work:rw localhost/rhizome-stack-jupyter:1
+ExecStop=/usr/bin/podman stop -t 10 rhizome-stack-jupyter
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+

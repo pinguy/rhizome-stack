@@ -1,0 +1,6 @@
+Flask==3.1.2
+requests==2.32.5
+soundfile==0.14.0
+faster-whisper==1.2.1
+huggingface-hub>=0.30,<2
+
