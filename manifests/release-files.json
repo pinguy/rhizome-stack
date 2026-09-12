@@ -3,6 +3,7 @@
   "files": [
     ".github/workflows/verify.yml",
     ".gitignore",
+    "AGENTS.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "KNOWN_LIMITATIONS.md",
