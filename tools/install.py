@@ -416,6 +416,17 @@ def install_memory(runner: Runner, node_bin: Path) -> None:
         runner.run(["env", node_path, str(HOME / ".npm-global/bin/openclaw"), "config", "validate"])
 
 
+def install_routing(runner: Runner) -> None:
+    """Install optional CPU classifier dependencies, without fetching model weights."""
+    venv = STACK_ROOT / "venvs/routing"
+    if runner.dry_run or not venv.exists():
+        runner.run([sys.executable, "-m", "venv", str(venv)])
+    runner.run([str(venv / "bin/pip"), "install", "--index-url",
+                "https://download.pytorch.org/whl/cpu", "torch==2.10.0"])
+    runner.run([str(venv / "bin/pip"), "install", "-r",
+                str(PROJECT / "components/requirements-routing.txt")])
+
+
 def install_jupyter(runner: Runner) -> None:
     runner.run([
         "podman", "build", "--tag", "localhost/rhizome-stack-jupyter:1",
@@ -447,6 +458,7 @@ def main() -> int:
     parser.add_argument("--download-models", action="store_true", help="download large voice/STT weights; requires --with-voice")
     parser.add_argument("--with-memory", action="store_true")
     parser.add_argument("--with-jupyter", action="store_true")
+    parser.add_argument("--with-routing", action="store_true", help="install optional CPU GLiNER dependencies; no model download or routing activation")
     parser.add_argument("--with-skills", action="store_true", help="install the six core reliability skills")
     args = parser.parse_args()
     runner = Runner(args.dry_run)
@@ -475,6 +487,8 @@ def main() -> int:
                 install_memory(runner, node_bin)
             if args.with_jupyter:
                 install_jupyter(runner)
+            if args.with_routing:
+                install_routing(runner)
         if not args.dry_run:
             runner.run(["systemctl", "--user", "daemon-reload"])
         print("installation staged successfully")

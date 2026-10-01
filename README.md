@@ -19,7 +19,8 @@ Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working ma
 | --- | --- | --- |
 | OpenClaw gateway + Open WebUI | Agent runtime and browser interface, joined by a model adapter | Yes |
 | Pinned upstream patches | Preserve the integration against specific upstream builds | Yes |
-| Skills | Six core reliability skills; all twelve available on demand | Optional |
+| Skills | Six core reliability skills; fourteen bundled skills available on demand | Optional |
+| GLiNER + Ornith workforce | Optional routing advice and a bounded, text-only local worker under Rhizome | Optional; configured separately |
 | Semantic memory | Import your own documents, chat exports and RhizomeML data; hybrid retrieval | Optional |
 | Voice | Chatterbox-Nano TTS and faster-whisper STT | Optional |
 | Code interpreter | Podman-backed Jupyter environment | Optional |
@@ -90,6 +91,7 @@ browser profiles and model weights are never seeded from the reference machine.
 - [First run and model verification](docs/FIRST_RUN.md)
 - [Memory formats, provenance and rebuilding](docs/MEMORY.md)
 - [Skills and companion projects](docs/INTEGRATIONS.md)
+- [GLiNER routing advice and the Ornith workforce](docs/WORKFORCE.md)
 - [Updating and troubleshooting](docs/MAINTENANCE.md)
 - [Native Linux](docs/LINUX.md) · [WSL2](docs/WSL.md)
 - [Changes](CHANGELOG.md) · [Known limitations](KNOWN_LIMITATIONS.md)
@@ -99,6 +101,7 @@ browser profiles and model weights are never seeded from the reference machine.
 ```bash
 python3 tests/test_static.py
 python3 tests/test_behaviour.py
+python3 tests/test_workforce.py
 python3 tools/export_release.py --output /tmp/rhizome-stack-release
 python3 tools/build_release.py --output-root /tmp/rhizome-stack-build
 ```

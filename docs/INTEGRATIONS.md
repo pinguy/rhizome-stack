@@ -5,7 +5,7 @@ runtimes and ownership clear.
 
 | Project | Integration here | Boundary |
 | --- | --- | --- |
-| [Skills](https://github.com/pinguy/Skills) | All twelve complete skill directories, including helpers and references, shipped at a pinned revision | Installing a skill does not start its workflow or grant extra permissions |
+| [Skills](https://github.com/pinguy/Skills) | Twelve complete upstream skill directories at a pinned revision, plus two owner-supplied stack skills | Installing a skill does not start its workflow or grant extra permissions |
 | [RhizomeML](https://github.com/pinguy/RhizomeML) | Imports its detailed/compact JSONL and PDF JSON formats with provenance | Training code, dependencies, model weights and existing private indexes stay separate |
 | [Chatterbox TTS add-on](https://github.com/pinguy/chatterbox-tts-addon) | Companion browser extension/Voice Lab and canonical recovery skill | Its installer overlaps this stack's audio service names and ports |
 | [GGUF Converter Studio](https://github.com/pinguy/GGUF-Converter-Studio) | Prepare a GGUF, then select it through the welcome wizard's advanced Ollama route | Conversion/build dependencies stay in the converter environment |
@@ -31,6 +31,9 @@ The core profile contains:
 
 Extras are blackboard, council-blackboard, local-model-runtime-profiler,
 chatterbox-tts-recovery, symlink-space-saver and video-clip-editor.
+The stack also bundles `ornith-research-workforce` and
+`openclaw-downstream-maintainer` as extras. See [the workforce guide](WORKFORCE.md)
+for GLiNER advice, cheap basic work and stronger-model escalation.
 Selecting council-blackboard also selects its blackboard dependency.
 
 The installer reads the default workspace from your OpenClaw config and copies
@@ -93,7 +96,13 @@ not verify chat or tool calling. See the [Ollama Modelfile reference](https://do
 | Skills | `41335012d5000dd29d9477c963a6ee1ff0333aba` |
 | RhizomeML | `746223badfa946f15dd955c03616624e5a31026b` |
 
-Skills are vendored byte-for-byte with Apache-2.0 retained under
+The twelve upstream Skills are vendored byte-for-byte with Apache-2.0 retained under
 `third_party/skills-LICENSE`. The complete file checksums and core/extra grouping
 are in `manifests/skills.json`. Companion tools are linked, not automatically
 downloaded or installed.
+
+The two additional skills come from the owner-supplied archive, with source
+hashes and adaptations recorded per entry in `manifests/skills.json`. They are
+not presented as part of the older upstream snapshot. Reference-machine paths
+are replaced with configured workspace discovery; the Ornith skill adds a
+stack CLI reference. They are distributed under this repository’s MIT licence.

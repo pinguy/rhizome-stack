@@ -7,9 +7,22 @@
     "openclaw-ollama-model-sync"
   ],
   "optional": {
-    "voice": ["openwebui-audio-bridge", "chatterbox-nano", "faster-whisper"],
-    "jupyter": ["openwebui-code-jupyter", "openwebui-code-jupyter-idle-guard"],
-    "memory_sync": ["openwebui-memory-sync"]
+    "voice": [
+      "openwebui-audio-bridge",
+      "chatterbox-nano",
+      "faster-whisper"
+    ],
+    "jupyter": [
+      "openwebui-code-jupyter",
+      "openwebui-code-jupyter-idle-guard"
+    ],
+    "memory_sync": [
+      "openwebui-memory-sync"
+    ],
+    "workforce": [
+      "gliner-routing-adviser",
+      "ornith-text-worker"
+    ]
   },
   "excluded_runtime_state": [
     "credentials",
@@ -24,4 +37,3 @@
     "backups"
   ]
 }
-

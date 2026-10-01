@@ -1,0 +1,3 @@
+# Optional local classifier. CPU PyTorch is installed separately by --with-routing.
+# Pin the reviewed API; runtime/model acceptance remains required on the target.
+gliner2[local] @ git+https://github.com/fastino-ai/GLiNER2.git@55656fbfa01d3d4a77485e1a1eeeaf682990ccdf

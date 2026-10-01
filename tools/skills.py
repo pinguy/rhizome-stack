@@ -71,7 +71,7 @@ def main() -> int:
     args = parser.parse_args()
     manifest = json.loads((PROJECT / "manifests/skills.json").read_text())
     if args.action == "list":
-        print(f"Skills snapshot: {manifest['commit']}")
+        print(f"Upstream Skills snapshot: {manifest['commit']}; per-skill source overrides in manifests/skills.json")
         for name, entry in manifest["skills"].items():
             print(f"{entry['profile']:5}  {name}")
         return 0

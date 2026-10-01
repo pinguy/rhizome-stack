@@ -38,6 +38,7 @@ testing. A source checkout rollback does not undo package or database migrations
 | --- | --- |
 | Linux/WSL installation and preservation | `tools/install.py`, `install-linux.sh`, `install-wsl.sh`, `install-wsl.ps1`, `uninstall.sh` |
 | CLI, setup and provider selection | `bin/rhizome-stack`, `tools/welcome.py`, `config/`, `docs/FIRST_RUN.md` |
+| Optional routing advice and cheap workers | `components/rhizome_workforce.py`, `config/workforce.example.json`, `docs/WORKFORCE.md`, `tests/test_workforce.py` |
 | Chat routing and model discovery | `components/openclaw_openwebui_adapter.py`, `components/openclaw_ollama_model_sync.py`, `components/openwebui-tools/` |
 | Import formats, deduplication and index generations | `tools/import_formats.py`, `tools/import_owner_data.py`, `tools/initialise_empty_memory.py`, `docs/MEMORY.md` |
 | Memory retrieval and OpenClaw plugin | `components/query_memory_archive.py`, `components/memory-rhizome/`, `components/sync_openwebui_memory.py` |
@@ -66,8 +67,10 @@ testing. A source checkout rollback does not undo package or database migrations
   Never run a full installer on the owner's machine merely to test a code change.
 - Preserve patch hash guards. An unexpected upstream file is a compatibility
   failure to investigate, not a reason to force a patch or remove its checks.
-- Bundled Skills are complete, byte-identical snapshots of a pinned upstream
-  revision. Do not casually edit them in place. A deliberate refresh must retain
+- The twelve upstream Skills are complete, byte-identical snapshots of a pinned
+  upstream revision. Owner-supplied stack skills have explicit per-entry
+  source/licence overrides and original hashes in `manifests/skills.json`.
+  Do not casually edit upstream snapshots in place. A deliberate refresh must retain
   helpers/references, provenance, licences and updated checksums in
   `manifests/skills.json`. Load a skill only when relevant. Its presence does not
   authorise delegation, messaging or privileged actions.
@@ -89,6 +92,7 @@ Run from the repository root before submitting changes:
 ```bash
 python3 tests/test_static.py
 python3 tests/test_behaviour.py
+python3 tests/test_workforce.py
 git diff --check
 ```
 
