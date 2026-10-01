@@ -11,12 +11,15 @@ authorship over OpenClaw, Open WebUI or the other projects it connects.
 | Chatterbox integration and upstream source installed at runtime | MIT | https://github.com/resemble-ai/chatterbox |
 | faster-whisper installed dependencies | MIT | https://github.com/SYSTRAN/faster-whisper |
 | Ollama integration | MIT | https://github.com/ollama/ollama |
-| Unmodified skill directories under `components/skills/` | Apache-2.0 (`third_party/skills-LICENSE`) | https://github.com/pinguy/Skills |
+| Twelve unmodified upstream skill directories under `components/skills/` | Apache-2.0 (`third_party/skills-LICENSE`) | https://github.com/pinguy/Skills |
+| Owner-supplied `ornith-research-workforce` and `openclaw-downstream-maintainer`, with stack adaptations | MIT (`LICENSE`) | Owner-supplied archive; per-entry provenance in `manifests/skills.json` |
+| Optional GLiNER2 library and GLiNER2.5-Decide weights | Apache-2.0 upstream terms; weights are not bundled | https://github.com/fastino-ai/GLiNER2 and https://huggingface.co/fastino/GLiNER2.5-Decide |
 
-The Skills snapshot is pinned to a full commit and every bundled skill file is
+The upstream Skills snapshot is pinned to a full commit and every bundled skill file is
 SHA-256 checked by `manifests/skills.json`. Keep the complete directories and
 their Apache notice together when redistributing them. The original MIT grant
-does not relicense these files.
+does not relicense those upstream files. Per-entry provenance/licence fields
+override the manifest-level upstream defaults for the two additional skills.
 
 RhizomeML is a companion pipeline. The stack reads its JSON/JSONL interchange
 formats; it does not bundle its training code, dependencies or private indexes.

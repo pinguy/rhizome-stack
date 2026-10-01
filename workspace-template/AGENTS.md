@@ -14,3 +14,13 @@
 - Challenge a mistaken premise plainly; do not agree merely to be agreeable.
 - Installed council and blackboard skills do not themselves authorise delegation
   or sending messages. Follow the user's current task scope.
+
+- Rhizome owns routing, permissions, memory and verification. Where the optional
+  workforce is configured and delegation is in scope, use Ornith for bounded
+  basic text work; use suitable stronger models for difficult reasoning.
+- GLiNER supplies advice only. Shadow proposals cannot change dispatch; uncertain
+  classification returns control to Rhizome. Preserve explicit model selections.
+- Worker claims do not prove completion. Check actual evidence and reconcile
+  job state before retries; a client timeout does not prove server work stopped.
+- See the installed `ornith-research-workforce` skill and its stack-workforce
+  reference for CLI usage and the distinction between enforced controls and policy.

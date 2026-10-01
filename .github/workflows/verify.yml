@@ -19,6 +19,8 @@ jobs:
         run: python3 tests/test_static.py
       - name: Import, model selection and preservation regressions
         run: python3 tests/test_behaviour.py
+      - name: Routing advice and local worker regressions
+        run: python3 tests/test_workforce.py
       - name: Install memory storage test dependencies
         run: python3 -m pip install numpy==2.3.5 faiss-cpu==1.15.0
       - name: Verify real FAISS index generations

@@ -80,6 +80,45 @@
       "files": {
         "SKILL.md": "b92de85d3e7daf637d3b03ae3c480267b636ca5f1401dbd03c266348853f1e23"
       }
+    },
+    "openclaw-downstream-maintainer": {
+      "profile": "extra",
+      "source": {
+        "kind": "owner-supplied",
+        "archive_sha256": "e3734b12eb2f369b5436de6f08b39b9e5b2d468615f80772b93e76a1e5e638e9",
+        "original_files": {
+          "SKILL.md": "57f27c501aef00824b627fde7de997182c7346abf4b6cc49f78c287030740b79",
+          "references/backport-record.md": "0e2cf88bac3c5daa272efa7997e7d36cb50a5f32a10c6f63af07aace08471a74"
+        },
+        "adaptations": [
+          "Replace reference-machine workspace path with configured workspace discovery."
+        ]
+      },
+      "licence": "MIT",
+      "files": {
+        "SKILL.md": "824371957c898fe2bcbdc43af7e7d4e2595c32322625e9bff57450463a5f0099",
+        "references/backport-record.md": "0e2cf88bac3c5daa272efa7997e7d36cb50a5f32a10c6f63af07aace08471a74"
+      }
+    },
+    "ornith-research-workforce": {
+      "profile": "extra",
+      "source": {
+        "kind": "owner-supplied",
+        "archive_sha256": "e3734b12eb2f369b5436de6f08b39b9e5b2d468615f80772b93e76a1e5e638e9",
+        "original_files": {
+          "SKILL.md": "8db6d3d8bfdb140572a265564032945f6f4ccc41864de2adf5b29ae81e240669",
+          "references/research-job.md": "6fde4934b6c47306b45746aa87e9bafe73b699cf38a45df53e749de9db2b0cc9"
+        },
+        "adaptations": [
+          "Add optional stack CLI integration reference; broaden trigger to basic text tasks."
+        ]
+      },
+      "licence": "MIT",
+      "files": {
+        "SKILL.md": "6f6c7a5b1e97ead02d819024213c932b6b57ad01879e71c75cc4c9dd55fe1c58",
+        "references/research-job.md": "6fde4934b6c47306b45746aa87e9bafe73b699cf38a45df53e749de9db2b0cc9",
+        "references/stack-workforce.md": "a51f5fdc93441e0961afa32628971ca75e1f763d049f2151355aad5d81009e70"
+      }
     }
   }
 }

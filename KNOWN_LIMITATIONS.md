@@ -28,3 +28,9 @@
 - The Jupyter image omits the reference machine's accumulated compilers/caches.
 - Base packages have version pins, but the full transitive dependency graph is
   not locked. A clean dependency install remains a required release check.
+
+- The optional GLiNER/Ornith workforce is agent-operated through CLI helpers,
+  not automatic browser routing. Real checkpoint inference, routing accuracy,
+  optional dependency installation and target-machine resource use are unverified.
+  Classifier calls cold-load in a bounded process. There is no durable worker
+  queue, server-side cancellation guarantee or automatic completion classifier.

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add optional GLiNER shadow/advisory classification and a bounded, tool-free
+  local Ornith worker CLI, with explicit model checks and verification receipts.
+- Bundle the owner-supplied Ornith workforce and downstream-maintainer skills,
+  including references, source hashes and portable workspace discovery.
+- Document routing roles, stronger-model escalation, optional setup and the
+  remaining real-inference acceptance gaps.
+
 ## 0.1.0-alpha.2
 
 - Bundle all twelve Skills directories at a pinned commit, retain Apache-2.0
