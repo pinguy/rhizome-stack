@@ -1,4 +1,62 @@
+# Repository integration — 8 October 2026
+
+Merged the reviewed media/Voice Lab archive with repository commit `b3c4bee`,
+retaining its onboarding, private-write and voice lifecycle fixes. The shared
+ancestor was `8d27fb4`. Existing source-only tests and `tools/file_utils.py` remain
+in the release allow-list. Tool registration keeps the repository's bounded
+error reads and response cleanup alongside the newly packaged Qwen tool.
+
+The combined check runs 12 suites and 115 unittest cases, plus static and
+creative graph/manifest checks. The registration fixture now includes
+`qwen_image` in its expected created tools. The separate review results below
+refer to their original snapshots, not the combined source.
+
 # Hygiene review — 8 October 2026
+
+This follow-up reviewed the newly supplied archive, which already includes
+Open WebUI local media and Voice Lab. The earlier review is retained below as
+historical evidence. This pass keeps the upstream pins, model selection, bundled
+skills and installed-machine configuration unchanged.
+
+## Additional fixes
+
+| Area | Observed defect | Change |
+| --- | --- | --- |
+| Media safety | HTTP errors were treated as idle/offline, including during shutdown verification | Only connection refusal means offline; validate queue structure and stop on ambiguous health responses |
+| Attachment recovery | Stopping ComfyUI could discard the only status/history needed to recover an attachment failure | Save the completed source path before cleanup and reuse it on the same request |
+| Request identity | Adding image seeds/reference IDs mutated the caller's arguments and could change the retry key | Copy the payload before augmentation |
+| Failed jobs | Repeating a known failed request could poll an engine whose history had gone | Return the recorded terminal error without another submission or poll |
+| Receipts | Predictable temporary files and unflushed writes weakened the duplicate-submission guard | Exclusive mode-0600 temporary files, atomic replacement, file and directory fsync, failure cleanup |
+| Tool registration | A missing-tool HTTP 404 aborted registration before creation | Treat only the specific missing-tool GET as absent; retain other API errors |
+| Test setup | Qwen reference tests import Pillow, omitted from CI's install command | Share pinned test dependencies between CI and the README |
+
+## Verification of this pass
+
+- All 10 suites passed: 96 unittest cases plus the static and creative
+  graph/manifest check groups; no skips. The 15 new cases exercise failure,
+  recovery, non-replay, receipt privacy and API error handling.
+- Real FAISS storage I/O passed using deterministic vectors. Qwen reference
+  image checks used Pillow; creative JavaScript checks ran in Node.
+- The initial run exposed missing test dependencies in this environment; the
+  complete run used an isolated environment with `tests/requirements.txt`.
+- No live installation, provider inference, GPU generation or WSL2 acceptance
+  was performed. The recovery tests use synthetic service responses and files;
+  they do not establish clean-machine Open WebUI acceptance.
+
+## Applying the changes
+
+The ZIP remains a complete source distribution. Follow the existing maintenance
+procedure and inspect an installer dry run before refreshing a target. The
+shared media bridge is deployed with the components. Existing registered tools
+remain preserved by the registration helper. Do not delete job receipts to retry
+an uncertain submission; inspect the local generator first. Recovering a known
+completed file requires the same original request identity, as explained in
+[Open WebUI local media](OPENWEBUI_MEDIA.md).
+
+
+---
+
+# Earlier onboarding and voice review — 8 October 2026
 
 Second pass over the supplied pre-media/voice-lab archive. OpenClaw 2026.7.1-2,
 Open WebUI 0.11.0, all other compatibility/model pins, bundled skill snapshots,

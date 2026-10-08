@@ -160,7 +160,7 @@ class SetupRegressions(unittest.TestCase):
                      contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(registration.main(), 0)
                 self.assertEqual([row['id'] for row in created],
-                                 ['rhizome_web_search', 'openclaw_agent', 'minimax_music_3'])
+                             ['rhizome_web_search', 'openclaw_agent', 'minimax_music_3', 'qwen_image'])
                 with self.assertRaisesRegex(RuntimeError, '401'):
                     registration.api(base, 'synthetic', 'GET', '/id/denied')
                 with self.assertRaisesRegex(RuntimeError, '404'):

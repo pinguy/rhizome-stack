@@ -7,7 +7,7 @@ runtimes and ownership clear.
 | --- | --- | --- |
 | [Skills](https://github.com/pinguy/Skills) | Twelve complete upstream skill directories at a pinned revision, plus two owner-supplied stack skills | Installing a skill does not start its workflow or grant extra permissions |
 | [RhizomeML](https://github.com/pinguy/RhizomeML) | Imports its detailed/compact JSONL and PDF JSON formats with provenance | Training code, dependencies, model weights and existing private indexes stay separate |
-| [Chatterbox TTS add-on](https://github.com/pinguy/chatterbox-tts-addon) | Companion browser extension/Voice Lab and canonical recovery skill | Its installer overlaps this stack's audio service names and ports |
+| [Chatterbox TTS add-on](https://github.com/pinguy/chatterbox-tts-addon) | Voice Lab is packaged here; browser extensions remain companion components | Its full installer overlaps this stack's audio service names and ports |
 | [GGUF Converter Studio](https://github.com/pinguy/GGUF-Converter-Studio) | Prepare a GGUF, then select it through the welcome wizard's advanced Ollama route | Conversion/build dependencies stay in the converter environment |
 
 ## Skills
@@ -71,15 +71,19 @@ does not claim to have independently verified them.
 
 ## Chatterbox
 
-The add-on brings Firefox/Chromium speech controls and Voice Lab. Both projects
-use `openwebui-audio-bridge.service`, with bridge port 8010 and CPU synthesis
-port 8020. Running both backend installers on the same account can replace
-service definitions or cause port conflicts.
+The stack packages the add-on's local Voice Lab on port 8030. It prepares and
+previews references, stores them under the private stack state directory and
+can switch the CPU backend's default through a verified, rollback-backed
+systemd drop-in. The browser extensions and accelerator backend are not bundled.
+
+Both projects use `openwebui-audio-bridge.service`, with bridge port 8010 and
+CPU synthesis port 8020. Running both complete backend installers on the same
+account can replace service definitions or cause port conflicts.
 
 Choose one backend owner. Inspect the add-on's current instructions, existing
 unit files and endpoint capabilities before sharing it with the stack. The
-stack has not adopted the add-on's entire 4.2 backend in this release, and the
-two browser/backend paths have not been tested together here.
+stack has not adopted the add-on's entire backend in this release, and the two
+browser/backend paths have not been tested together here.
 
 ## GGUF conversion
 

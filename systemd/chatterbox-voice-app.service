@@ -1,0 +1,21 @@
+[Unit]
+Description=Rhizome Stack Chatterbox Voice Lab
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+Environment=CHATTERBOX_INSTALL_ROOT=@@STACK_ROOT@@
+Environment=CHATTERBOX_REFERENCE_ROOT=@@STACK_ROOT@@/state/chatterbox-voices
+Environment=CHATTERBOX_VOICE_BACKUP_ROOT=@@STACK_ROOT@@/state/backups/voice-lab
+Environment=CHATTERBOX_SYSTEMD_USER_DIR=@@HOME@@/.config/systemd/user
+Environment=CHATTERBOX_BASE=http://127.0.0.1:8020
+Environment=CHATTERBOX_SERVICE=chatterbox-nano.service
+Environment=CHATTERBOX_API_KEY=local-dev-key
+WorkingDirectory=@@STACK_ROOT@@/components
+ExecStart=@@STACK_ROOT@@/venvs/voice/bin/python @@STACK_ROOT@@/components/chatterbox_voice_app.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

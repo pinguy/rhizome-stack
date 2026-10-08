@@ -24,6 +24,12 @@
 - Existing RhizomeML L12 indexes cannot be queried with L6 just because both are
   384-dimensional. Import text outputs or explicitly configure the matching model.
 - Open WebUI tool registration needs a locally created admin and token.
+- The packaged Qwen/MiniMax chat tools coordinate the local Ollama and ComfyUI
+  runtimes. Their saved-chat persistence and VRAM hand-off were accepted on the
+  reference machine, but still require clean native-Linux and WSL2 acceptance.
+- Voice Lab is loopback-only but intentionally writes Chatterbox systemd
+  drop-ins when the user selects a default. It verifies and rolls back the
+  switch; combining it with another Chatterbox backend owner remains unsupported.
 - Three minified Open WebUI frontend changes use exact hash-guarded replacements.
 - The Jupyter image omits the reference machine's accumulated compilers/caches.
 - Base packages have version pins, but the full transitive dependency graph is
@@ -35,6 +41,8 @@
   from their pinned upstream repositories and are never redistributed here.
 - Qwen Image Desk and MiniMax share one ComfyUI endpoint and therefore serialise
   practical GPU use. Each app may stop only the exact ComfyUI process it started.
+  Reference editing accepts PNG/JPEG/WebP up to 20 MB; larger presets and all
+  clean-machine GPU paths have not received separate quality acceptance.
 - MiniLM retrieval is opt-in, loopback-only and advisory. It can return an
   irrelevant support item; final relevance and correctness remain Rhizome's job.
 

@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: '22.22.0'
       - name: Install regression test dependencies
-        run: python3 -m pip install Flask==3.1.2 requests==2.32.5 numpy==2.3.5 faiss-cpu==1.15.0
+        run: python3 -m pip install -r tests/requirements.txt
       - name: Run every bundled regression suite
         run: python3 tools/check.py
       - name: Check whitespace

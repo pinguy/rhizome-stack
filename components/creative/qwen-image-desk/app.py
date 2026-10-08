@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import io
 import json
 import mimetypes
 import os
 import queue
 import random
+import re
 import shutil
 import signal
 import subprocess
@@ -19,6 +21,8 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from PIL import Image, ImageOps, UnidentifiedImageError
+
 from image_presets import DEFAULT_IMAGE_PRESET, image_preset_catalogue, resolve_image_dimensions
 
 
@@ -28,10 +32,12 @@ STACK_ROOT = Path(os.environ.get("RHIZOME_STACK_ROOT", "~/.local/share/rhizome-s
 COMFY_DIR = Path(os.environ.get("COMFY_DIR", STACK_ROOT / "creative/ComfyUI"))
 COMFY_PY = Path(os.environ.get("COMFY_PY", COMFY_DIR / ".venv/bin/python"))
 COMFY_OUTPUT = Path(os.environ.get("COMFY_OUTPUT", COMFY_DIR / "output"))
+COMFY_INPUT = Path(os.environ.get("COMFY_INPUT", COMFY_DIR / "input"))
 COMFY_URL = os.environ.get("COMFY_URL", "http://127.0.0.1:8188").rstrip("/")
 APP_HOST = os.environ.get("APP_HOST", "127.0.0.1")
 APP_PORT = int(os.environ.get("APP_PORT", "8841"))
 STATE_DIR = Path(os.environ.get("QWEN_DESK_STATE", STACK_ROOT / "creative/state/qwen-image-desk"))
+REFERENCE_DIR = STATE_DIR / "reference-inputs"
 OPENCLAW = shutil.which("openclaw") or str(Path.home() / ".npm-global/bin/openclaw")
 OPENCLAW_CONFIG = Path(os.environ.get("OPENCLAW_CONFIG_PATH", Path.home() / ".openclaw/openclaw.json"))
 OPENCLAW_ADAPTER = os.environ.get("OPENCLAW_API_URL", "http://127.0.0.1:18888").rstrip("/")
@@ -146,8 +152,44 @@ class ComfyEngine:
                 pass
 
 
-def qwen_graph(prompt: str, negative: str, seed: int, width: int, height: int, prefix: str) -> dict:
-    return {
+def reference_image(reference_id: str) -> dict:
+    if not isinstance(reference_id, str) or not re.fullmatch(r"ref-[a-f0-9]{32}", reference_id):
+        raise ValueError("invalid reference image")
+    image = (REFERENCE_DIR / f"{reference_id}.png").resolve(strict=True)
+    metadata = (REFERENCE_DIR / f"{reference_id}.json").resolve(strict=True)
+    if not image.is_relative_to(REFERENCE_DIR.resolve()) or not metadata.is_relative_to(REFERENCE_DIR.resolve()):
+        raise ValueError("reference image is outside the desk state directory")
+    value = json.loads(metadata.read_text())
+    value["absolute_path"] = str(image)
+    return value
+
+
+def save_reference(data: bytes, filename: str) -> dict:
+    if not data or len(data) > 20 * 1024**2:
+        raise ValueError("reference must be an image no larger than 20 MB")
+    try:
+        with Image.open(io.BytesIO(data)) as opened:
+            if opened.format not in {"PNG", "JPEG", "WEBP"}:
+                raise ValueError("reference must be PNG, JPEG or WebP")
+            prepared = ImageOps.exif_transpose(opened).convert("RGB")
+            if prepared.width < 64 or prepared.height < 64 or prepared.width * prepared.height > 40_000_000:
+                raise ValueError("reference dimensions are unsupported")
+            reference_id = "ref-" + uuid.uuid4().hex
+            REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
+            target = REFERENCE_DIR / f"{reference_id}.png"
+            prepared.save(target, "PNG", optimize=True)
+            value = {"id": reference_id, "name": Path(filename).name[:200],
+                     "width": prepared.width, "height": prepared.height,
+                     "media_url": f"/api/image-studio/reference/{reference_id}"}
+            atomic_json(REFERENCE_DIR / f"{reference_id}.json", value)
+            return value
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError) as exc:
+        raise ValueError("reference is not a valid supported image") from exc
+
+
+def qwen_graph(prompt: str, negative: str, seed: int, width: int, height: int,
+               prefix: str, reference_name: str | None = None) -> dict:
+    graph = {
         "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "qwen-image-2.1-UC-Q8_0.gguf"}},
         "2": {"class_type": "CLIPLoader", "inputs": {
             "clip_name": "qwen3vl_8b_int8_convrot.safetensors", "type": "qwen_image", "device": "cpu"}},
@@ -164,6 +206,15 @@ def qwen_graph(prompt: str, negative: str, seed: int, width: int, height: int, p
         "7": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["3", 0]}},
         "8": {"class_type": "SaveImage", "inputs": {"images": ["7", 0], "filename_prefix": prefix}},
     }
+    if reference_name:
+        graph["9"] = {"class_type": "LoadImage", "inputs": {"image": reference_name}}
+        graph["10"] = {"class_type": "ImageScale", "inputs": {
+            "image": ["9", 0], "upscale_method": "lanczos", "width": width,
+            "height": height, "crop": "center"}}
+        graph["4"]["inputs"].update({"images.image_1": ["10", 0], "resolution": 0})
+        graph["6"]["inputs"]["latent_image"] = ["4", 2]
+        del graph["5"]
+    return graph
 
 
 def openclaw_models() -> list[dict]:
@@ -190,7 +241,7 @@ def openclaw_models() -> list[dict]:
                 for item in data.get("data", []) if str(item.get("id", "")).startswith("openclaw/")]
 
 
-def expand_prompt(model: str, prompt: str) -> dict:
+def expand_prompt(model: str, prompt: str, editing: bool = False) -> dict:
     prompt = str(prompt or "").strip()
     if not prompt or len(prompt) > 8000:
         raise ValueError("Prompt must contain 1 to 8,000 characters")
@@ -198,7 +249,14 @@ def expand_prompt(model: str, prompt: str) -> dict:
     selected = available.get(model)
     if not selected:
         raise ValueError("Selected OpenClaw model is unavailable")
-    messages = [{"role": "system", "content": EXPANDER_INSTRUCTION}, {"role": "user", "content": prompt}]
+    instruction = (
+        "Rewrite this image-edit instruction clearly and concisely for Qwen Image 2.1. "
+        "An existing reference image will be supplied to Qwen, but you cannot see it. "
+        "Preserve exactly the requested changes. Do not invent image details or extra changes. "
+        "Keep everything not mentioned unchanged. Return only the edit instruction."
+        if editing else EXPANDER_INSTRUCTION
+    )
+    messages = [{"role": "system", "content": instruction}, {"role": "user", "content": prompt}]
     if selected["source"] == "local":
         request = urllib.request.Request(OLLAMA + "/api/chat", data=json.dumps({
             "model": model.removeprefix("openclaw/ollama/"), "stream": False, "think": False,
@@ -249,6 +307,7 @@ class JobQueue:
         base_seed = int(body.get("seed", random.randrange(2**53)))
         if not 0 <= base_seed <= 2**63 - 1:
             raise ValueError("Seed is outside the supported range")
+        reference = reference_image(body["reference_image_id"]) if body.get("reference_image_id") else None
         created = []
         with self.lock:
             for offset in range(count):
@@ -257,6 +316,7 @@ class JobQueue:
                     "prompt": prompt, "original_prompt": str(body.get("original_prompt") or prompt),
                     "negative": str(body.get("negative") or ""), "expander_model": body.get("expander_model"),
                     "prompt_mode": str(body.get("prompt_mode") or "edited"), "image_preset": body.get("preset"),
+                    "reference_image": reference,
                     "width": width, "height": height, "seed": base_seed + offset, "created_at": time.time(),
                 }
                 self.jobs.append(job)
@@ -274,12 +334,22 @@ class JobQueue:
         while True:
             job = self.pending.get()
             self.update(job, status="running", stage="starting engine", started_at=time.time())
+            copied_reference = None
             try:
                 self.engine.start()
                 self.engine.free_models()
                 prefix = f"qwen-image-desk/{job['id']}"
+                reference = job.get("reference_image")
+                if reference:
+                    source_reference = Path(reference["absolute_path"]).resolve(strict=True)
+                    if not source_reference.is_relative_to(REFERENCE_DIR.resolve()):
+                        raise ValueError("reference image is outside the desk state directory")
+                    COMFY_INPUT.mkdir(parents=True, exist_ok=True)
+                    copied_reference = f"qwen-image-desk-{job['id']}.png"
+                    shutil.copy2(source_reference, COMFY_INPUT / copied_reference)
+                    self.update(job, stage="encoding reference and edit prompt")
                 graph = qwen_graph(job["prompt"], job["negative"], job["seed"],
-                                   job["width"], job["height"], prefix)
+                                   job["width"], job["height"], prefix, copied_reference)
                 response = json_request("/prompt", {"prompt": graph, "client_id": "qwen-image-desk"}, timeout=30)
                 prompt_id = response.get("prompt_id")
                 if not prompt_id:
@@ -311,6 +381,8 @@ class JobQueue:
                     "original_prompt": job["original_prompt"], "expanded_prompt": job["prompt"],
                     "negative": job["negative"], "expander_model": job["expander_model"],
                     "prompt_mode": job["prompt_mode"], "image_preset": job["image_preset"],
+                    "reference_image": job.get("reference_image"),
+                    "generation_mode": "edit" if job.get("reference_image") else "text-to-image",
                     "seed": job["seed"], "width": job["width"], "height": job["height"],
                     "steps": 25, "cfg": 1.0, "model": "Qwen Image 2.1 Uncensored",
                     "quant": "Q8_0 GGUF", "created_at": time.time(), "relative_path": str(relative),
@@ -321,6 +393,8 @@ class JobQueue:
             except Exception as exc:
                 self.update(job, status="failed", stage="failed", error=f"{type(exc).__name__}: {exc}")
             finally:
+                if copied_reference:
+                    (COMFY_INPUT / copied_reference).unlink(missing_ok=True)
                 self.engine.last_activity = time.monotonic()
                 self.pending.task_done()
 
@@ -384,6 +458,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_file(STATIC / "index.html")
             if parsed.path == "/api/image-studio/models":
                 return self.send_json(200, {"models": openclaw_models()})
+            if parsed.path == "/api/image-studio/health":
+                state = JOBS.snapshot()
+                active = any(job.get("status") in {"queued", "running"} for job in state["jobs"])
+                return self.send_json(200, {"ok": True, "busy": active, **state,
+                                            "engine": ENGINE.status()})
+            if parsed.path.startswith("/api/image-studio/reference/"):
+                reference_id = parsed.path.rsplit("/", 1)[-1]
+                return self.send_file(Path(reference_image(reference_id)["absolute_path"]))
             if parsed.path == "/api/image-studio/state":
                 state = JOBS.snapshot()
                 try:
@@ -418,9 +500,25 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.path == "/api/image-studio/expand":
                 body = self.json_body()
-                return self.send_json(200, expand_prompt(str(body.get("model") or ""), body.get("prompt")))
+                return self.send_json(200, expand_prompt(str(body.get("model") or ""), body.get("prompt"),
+                                                         bool(body.get("editing"))))
             if self.path == "/api/image-studio/generate":
                 return self.send_json(202, {"jobs": JOBS.enqueue(self.json_body())})
+            if self.path == "/api/image-studio/reference":
+                length = int(self.headers.get("Content-Length", "0"))
+                if self.headers.get("Transfer-Encoding") or not 0 < length <= 20 * 1024**2:
+                    raise ValueError("reference requires Content-Length between 1 byte and 20 MB")
+                raw = self.rfile.read(length)
+                if len(raw) != length:
+                    raise ValueError("incomplete reference upload")
+                filename = urllib.parse.unquote(self.headers.get("X-Filename") or "reference.png")
+                return self.send_json(201, save_reference(raw, filename))
+            if self.path == "/api/image-studio/engine/stop":
+                if any(job.get("status") in {"queued", "running"} for job in JOBS.jobs):
+                    return self.send_json(409, {"error": "An image job is still active"})
+                ENGINE.free_models()
+                stopped = ENGINE.stop_owned()
+                return self.send_json(200, {"stopped": stopped, "engine": ENGINE.status()})
             if self.path == "/api/image-studio/show-output":
                 target = Path(str(self.json_body().get("path") or "")).resolve(strict=True)
                 if not target.is_file() or not target.is_relative_to(COMFY_OUTPUT.resolve()):

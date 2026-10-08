@@ -10,6 +10,7 @@
     "voice": [
       "openwebui-audio-bridge",
       "chatterbox-nano",
+      "chatterbox-voice-lab",
       "faster-whisper"
     ],
     "jupyter": [
@@ -29,7 +30,8 @@
       "comfyui",
       "comfyui-gguf",
       "qwen-image-desk",
-      "minimax-music-3"
+      "minimax-music-3",
+      "openwebui-local-media"
     ]
   },
   "excluded_runtime_state": [

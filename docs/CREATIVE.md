@@ -47,6 +47,20 @@ Qwen Image Desk can optionally use the installed OpenClaw catalogue to expand a
 rough prompt before local generation. MiniMax can use OpenClaw or Ollama to fill
 a musical brief. Those helpers are optional; direct prompts still work.
 
+Qwen also accepts a local PNG, JPEG or WebP reference up to 20 MB. The reference
+is normalised into the Desk's private state directory and passed through Qwen
+Image 2.1's native image-conditioning path. Saved assets retain the reference
+provenance so **Reuse** and same-seed reruns remain edits rather than silently
+falling back to text-to-image.
+
+After registering the packaged `qwen_image` and `minimax_music_3` Open WebUI
+tools, explicit image/music creation requests can use these same applications
+from an ordinary saved chat. The shared bridge serialises generation, refuses
+to interrupt an active ComfyUI job, unloads idle Ollama runners, then frees and
+stops only the ComfyUI process owned by the selected app. PNGs are attached
+inline; MP3s use Open WebUI's native file card and Preview player. Qwen edits
+accept only an image upload owned by the authenticated Open WebUI user.
+
 ## Hardware and WSL2
 
 The selected Q8/int8 model set targets a practical local NVIDIA setup but is not
@@ -68,3 +82,6 @@ FLAC downloads retain their correct content types.
 
 Closing a browser tab does not stop ComfyUI. Use the in-app **Stop engine**
 button or configure `COMFY_IDLE_SECONDS` for automatic idle shutdown.
+
+The chat bridge records a durable request receipt before submission and refuses
+to replay an ambiguously acknowledged generation.

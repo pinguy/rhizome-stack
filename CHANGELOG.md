@@ -15,6 +15,23 @@
   bridge port, and custom voice-model download directories.
 - Extend private atomic writes to onboarding, memory-plugin setup and imported
   records; add setup and voice lifecycle regressions.
+- Distinguish refused connections from HTTP/queue errors during media hand-off;
+  unknown ComfyUI state now blocks model release rather than reporting idle.
+- Retain completed media output paths before engine shutdown so attachment
+  failures can recover without polling lost history or generating duplicates.
+- Keep media request inputs stable across retries, preserve terminal failures,
+  and write private, fsynced receipts through exclusive temporary files.
+- Add 15 media/registration regressions and one shared test dependency file,
+  including the Pillow dependency required by Qwen reference-image checks.
+
+- Add Qwen Image Desk reference upload/edit conditioning with persisted
+  provenance, reuse and same-seed reruns while preserving text-only generation.
+- Refresh the MiniMax Music 3 interface without replacing the hardened packaged
+  backend or its exact-process ownership boundary.
+- Add opt-in Open WebUI Qwen/MiniMax tools with serialised Ollama-to-ComfyUI VRAM
+  hand-off and durable native PNG/MP3 saved-chat attachments.
+- Package Chatterbox Voice Lab with local media preparation, normalised preview,
+  rollback-backed default switching and Trash-based library removal.
 - Forward small chat streaming events promptly; preserve gateway error status,
   handle non-JSON errors, and never append a second response to a broken stream.
 - Preserve Ollama per-model aliases/parameters during catalogue sync, respect

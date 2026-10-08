@@ -1,6 +1,7 @@
 """Loopback HTTP and configuration regressions; no providers, models or GPU needed."""
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import http.client
 import importlib.util
@@ -35,6 +36,7 @@ sync = load('model_sync_test', 'components/openclaw_ollama_model_sync.py')
 music = load('music_test', 'components/creative/minimax-music/app.py')
 sys.path.insert(0, str(ROOT / 'components/creative/qwen-image-desk'))
 qwen = load('qwen_http_test', 'components/creative/qwen-image-desk/app.py')
+media = load('local_media_test', 'components/openwebui_local_media.py')
 gliner = load('gliner_http_test', 'components/workforce_gliner_server.py')
 # These tests exercise the HTTP boundary only; no encoder or vector operations.
 with patch.dict(sys.modules, {'numpy': types.ModuleType('numpy'),
@@ -277,6 +279,116 @@ class CreativeHTTPTest(unittest.TestCase):
                 for length in ('-1', '131073'):
                     with self.subTest(handler=handler, length=length):
                         self.assertEqual(request(address, 'POST', route, headers={'Content-Length': length})[0], 400)
+
+    def test_qwen_reference_upload_and_owned_engine_stop_boundary(self):
+        from PIL import Image
+        image = io.BytesIO()
+        Image.new('RGB', (96, 80), (20, 80, 160)).save(image, 'PNG')
+        raw = image.getvalue()
+        with tempfile.TemporaryDirectory() as temporary, \
+             patch.object(qwen, 'REFERENCE_DIR', Path(temporary) / 'references'), \
+             serve(qwen.Handler) as address:
+            status, _, body = request(address, 'POST', '/api/image-studio/reference', raw, {
+                'Content-Type': 'application/octet-stream',
+                'Content-Length': str(len(raw)),
+                'X-Filename': 'synthetic.png',
+            })
+            self.assertEqual(status, 201)
+            reference = json.loads(body)
+            self.assertEqual((reference['width'], reference['height']), (96, 80))
+            status, headers, body = request(address, 'GET', reference['media_url'])
+            self.assertEqual(status, 200)
+            self.assertEqual(headers['Content-Type'], 'image/png')
+            self.assertTrue(body.startswith(b'\x89PNG'))
+
+            with patch.object(qwen.JOBS, 'jobs', [{'status': 'running'}]), \
+                 patch.object(qwen.ENGINE, 'free_models') as free_models, \
+                 patch.object(qwen.ENGINE, 'stop_owned') as stop_owned:
+                self.assertEqual(request(address, 'POST', '/api/image-studio/engine/stop', '{}')[0], 409)
+                free_models.assert_not_called()
+                stop_owned.assert_not_called()
+
+
+class LocalMediaBridgeTest(unittest.TestCase):
+    def test_busy_generator_prevents_ollama_unload(self):
+        with patch.object(media, 'health', return_value={'busy': True}), \
+             patch.object(media, 'request') as upstream:
+            with self.assertRaisesRegex(RuntimeError, 'already running'):
+                media.hand_over()
+            upstream.assert_not_called()
+
+    def test_music_result_uses_native_file_attachment_and_saved_chat(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output = root / 'output'
+            upload = root / 'uploads'
+            output.mkdir()
+            upload.mkdir()
+            source = output / 'synthetic.mp3'
+            source.write_bytes(b'ID3 synthetic audio')
+
+            config = types.ModuleType('open_webui.config')
+            config.UPLOAD_DIR = str(upload)
+            files_module = types.ModuleType('open_webui.models.files')
+            files_module.FileForm = lambda **values: types.SimpleNamespace(**values)
+            files_module.Files = types.SimpleNamespace(
+                insert_new_file=unittest.mock.AsyncMock(return_value=object()))
+            chats_module = types.ModuleType('open_webui.models.chats')
+            chats_module.Chats = types.SimpleNamespace(
+                add_message_files_by_id_and_message_id=unittest.mock.AsyncMock())
+            chat_id_module = types.ModuleType('open_webui.utils.chat_id')
+            chat_id_module.is_saved_chat_id = lambda value: value == 'saved-chat'
+            modules = {
+                'open_webui': types.ModuleType('open_webui'),
+                'open_webui.config': config,
+                'open_webui.models': types.ModuleType('open_webui.models'),
+                'open_webui.models.files': files_module,
+                'open_webui.models.chats': chats_module,
+                'open_webui.utils': types.ModuleType('open_webui.utils'),
+                'open_webui.utils.chat_id': chat_id_module,
+            }
+            emitter = unittest.mock.AsyncMock()
+            with patch.dict(sys.modules, modules), patch.object(media, 'COMFY_OUTPUT', output):
+                result = asyncio.run(media.attach_result(
+                    'music', source, {'id': 'user-1'},
+                    {'chat_id': 'saved-chat', 'message_id': 'message-1'}, emitter))
+
+            attached = chats_module.Chats.add_message_files_by_id_and_message_id.await_args.args[2][0]
+            self.assertEqual(attached['type'], 'file')
+            self.assertEqual(attached['content_type'], 'audio/mpeg')
+            self.assertNotIn('<audio', json.dumps(attached))
+            self.assertTrue((upload / f"{result['file_id']}_synthetic.mp3").is_file())
+            emitter.assert_awaited_once()
+
+
+class VoiceLabTest(unittest.TestCase):
+    def test_active_default_cannot_be_deleted(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            env = {
+                'CHATTERBOX_INSTALL_ROOT': str(root),
+                'CHATTERBOX_REFERENCE_ROOT': str(root / 'voices'),
+                'CHATTERBOX_VOICE_BACKUP_ROOT': str(root / 'backups'),
+                'CHATTERBOX_SYSTEMD_USER_DIR': str(root / 'systemd'),
+            }
+            with patch.dict(os.environ, env):
+                voice = load('voice_lab_test', 'components/chatterbox_voice_app.py')
+            voice_id = 'a1b2c3d4e5f6'
+            path = voice.VOICE_ROOT / voice_id
+            path.mkdir()
+            reference = path / 'reference.wav'
+            reference.write_bytes(b'RIFF synthetic voice')
+            (path / 'voice.json').write_text(json.dumps({
+                'id': voice_id, 'name': 'Synthetic voice', 'source_name': 'fixture.wav',
+                'reference_path': str(reference), 'duration_seconds': 8,
+                'created_at': '2026-10-08T00:00:00+0100',
+            }))
+            with patch.object(voice, 'all_default_references', return_value={str(reference)}), \
+                 patch.object(voice, 'run') as run:
+                response = voice.app.test_client().delete(f'/api/voices/{voice_id}')
+            self.assertEqual(response.status_code, 409)
+            self.assertTrue(reference.is_file())
+            run.assert_not_called()
 
 
 if __name__ == '__main__':

@@ -15,9 +15,12 @@ const ui = {
   history: $("#historyGrid"), historyCount: $("#historyCount"),
   showFolder: $("#showFolderBtn"), reuse: $("#reuseBtn"), rerun: $("#rerunBtn"),
   rawCount: $("#rawCount"), expandedCount: $("#expandedCount"), toast: $("#toast"),
+  referenceInput: $("#referenceInput"), referencePreview: $("#referencePreview"),
+  referenceImage: $("#referenceImage"), referenceName: $("#referenceName"),
+  referenceNote: $("#referenceNote"), removeReference: $("#removeReferenceBtn"),
 };
 
-const state = { assets: [], jobs: [], presets: [], selectedAsset: null, promptMode: "edited", expanderModel: null, busyExpand: false };
+const state = { assets: [], jobs: [], presets: [], selectedAsset: null, promptMode: "edited", expanderModel: null, busyExpand: false, reference: null, busyUpload: false };
 let toastTimer;
 
 async function api(path, options = {}) {
@@ -102,6 +105,7 @@ function syncCustomSize() {
 }
 
 async function expandPrompt() {
+  if (state.busyUpload) return notify("Wait for the reference upload to finish.", true);
   const prompt = ui.raw.value.trim();
   if (!prompt) return notify("Enter a rough prompt first.", true);
   if (!ui.model.value) return notify("Choose an available OpenClaw model.", true);
@@ -111,7 +115,7 @@ async function expandPrompt() {
   try {
     const result = await api("/api/image-studio/expand", {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({model: ui.model.value, prompt}),
+      body: JSON.stringify({model: ui.model.value, prompt, editing: Boolean(state.reference)}),
     });
     ui.expanded.value = result.expanded_prompt;
     state.expanderModel = result.model;
@@ -145,7 +149,56 @@ function randomSeed() {
   ui.seed.value = String((BigInt(values[0]) << 21n) + BigInt(values[1] & 0x1fffff));
 }
 
+function setReference(reference) {
+  state.reference = reference;
+  ui.referencePreview.hidden = !reference;
+  ui.referenceInput.value = "";
+  if (reference) {
+    ui.referenceImage.src = reference.media_url;
+    ui.referenceName.textContent = `${reference.name} · ${reference.width}×${reference.height}`;
+  } else {
+    ui.referenceImage.removeAttribute("src");
+    ui.referenceName.textContent = "";
+  }
+  ui.referenceNote.textContent = reference
+    ? "Describe what to change. Everything else should stay the same. Reference is fitted to the selected frame (centre-cropped if proportions differ). The prompt model receives text only."
+    : "No reference — create a new image from your prompt. PNG, JPEG or WebP, up to 20 MB. Images stay on this workstation.";
+  ui.generate.firstElementChild.textContent = reference ? "Edit with Qwen" : "Generate with Qwen";
+}
+
+async function uploadReference() {
+  const file = ui.referenceInput.files[0];
+  if (!file) return;
+  if (!file.size || file.size > 20 * 1024 * 1024) {
+    ui.referenceInput.value = "";
+    return notify("Choose an image up to 20 MB.", true);
+  }
+  state.busyUpload = true;
+  ui.referenceInput.disabled = ui.removeReference.disabled = true;
+  setAction("Uploading reference locally…");
+  try {
+    const reference = await api("/api/image-studio/reference", {
+      method: "POST", headers: {"Content-Type": file.type || "application/octet-stream", "X-Filename": encodeURIComponent(file.name)}, body: file,
+    });
+    setReference(reference);
+    const scale = Math.min(1, 1024 / Math.max(reference.width, reference.height));
+    ui.customWidth.value = Math.max(256, Math.round(reference.width * scale / 64) * 64);
+    ui.customHeight.value = Math.max(256, Math.round(reference.height * scale / 64) * 64);
+    ui.preset.value = "custom";
+    syncCustomSize();
+    setAction("Reference ready — enter the changes you want, then Edit with Qwen.");
+  } catch (error) {
+    ui.referenceInput.value = "";
+    setAction(`Reference upload failed — ${error.message}`, true);
+    notify(error.message, true);
+  } finally {
+    state.busyUpload = false;
+    ui.referenceInput.disabled = ui.removeReference.disabled = false;
+  }
+}
+
 async function generate(overrides = {}) {
+  if (state.busyUpload) return notify("Wait for the reference upload to finish.", true);
   const finalPrompt = overrides.final_prompt || ui.expanded.value.trim() || ui.raw.value.trim();
   const originalPrompt = overrides.original_prompt || ui.raw.value.trim() || finalPrompt;
   if (!finalPrompt) return notify("Enter or expand a prompt first.", true);
@@ -160,6 +213,7 @@ async function generate(overrides = {}) {
     custom_height: Number(overrides.custom_height ?? ui.customHeight.value),
     seed: Number(overrides.seed ?? ui.seed.value),
     batch_count: Number(overrides.batch_count ?? ui.batch.value),
+    reference_image_id: Object.hasOwn(overrides, "reference_image_id") ? overrides.reference_image_id : (state.reference?.id || null),
   };
   ui.generate.disabled = true;
   setAction("Submitting to the local Qwen queue…");
@@ -210,6 +264,7 @@ function selectAsset(asset) {
     ["Final for Qwen", asset.expanded_prompt || asset.prompt],
     ["Prompt model", asset.expander_model || "Raw/manual prompt"],
     ["Qwen", `${asset.model} · ${asset.quant}`],
+    ["Mode", asset.reference_image ? `Reference edit · ${asset.reference_image.name}` : "Text to image"],
     ["Settings", `${asset.width}×${asset.height} · seed ${asset.seed} · ${asset.steps || 25} steps · CFG ${asset.cfg ?? 1}`],
     ["Created", created],
     ["Output", asset.absolute_path],
@@ -258,6 +313,7 @@ async function refreshState() {
 }
 
 function reuseAsset(asset) {
+  setReference(asset.reference_image || null);
   ui.raw.value = asset.original_prompt || asset.prompt;
   ui.expanded.value = asset.expanded_prompt || asset.prompt;
   ui.negative.value = asset.negative || "";
@@ -275,6 +331,8 @@ function reuseAsset(asset) {
 }
 
 ui.raw.addEventListener("input", updatePromptViews);
+ui.referenceInput.addEventListener("change", uploadReference);
+ui.removeReference.addEventListener("click", () => { setReference(null); setAction("Reference removed — text-to-image mode."); });
 ui.expanded.addEventListener("input", () => { state.promptMode = "edited"; updatePromptViews(); });
 ui.model.addEventListener("change", () => { localStorage.setItem("qwenDeskModel", ui.model.value); updateModelNote(); });
 ui.preset.addEventListener("change", syncCustomSize);
@@ -290,6 +348,7 @@ ui.rerun.addEventListener("click", () => state.selectedAsset && generate({
   negative: state.selectedAsset.negative || "", expander_model: state.selectedAsset.expander_model,
   prompt_mode: state.selectedAsset.prompt_mode, preset: assetPreset(state.selectedAsset), seed: state.selectedAsset.seed, batch_count: 1,
   custom_width: state.selectedAsset.width, custom_height: state.selectedAsset.height,
+  reference_image_id: state.selectedAsset.reference_image?.id || null,
 }));
 ui.showFolder.addEventListener("click", async () => {
   if (!state.selectedAsset) return;

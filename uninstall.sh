@@ -9,8 +9,9 @@ unit_root="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 units=(
   openclaw-gateway.service openclaw-openwebui-adapter.service openclaw-ollama-model-sync.service
   openclaw-ollama-model-sync.timer open-webui.service openwebui-audio-bridge.service
-  chatterbox-nano.service openwebui-memory-sync.service openwebui-memory-sync.timer
-  openwebui-code-jupyter.service
+  chatterbox-nano.service chatterbox-voice-app.service openwebui-memory-sync.service
+  openwebui-memory-sync.timer openwebui-code-jupyter.service qwen-image-desk.service
+  minimax-music-api.service
 )
 
 mkdir -p "$archive_root/units"
@@ -18,7 +19,7 @@ systemctl --user disable --now "${units[@]}" 2>/dev/null || true
 for unit in "${units[@]}"; do
   path="$unit_root/$unit"
   [[ -f "$path" ]] || continue
-  if ! rg -q 'Rhizome Stack|OpenClaw model adapter|Synchronise tool-capable|local TTS and STT bridge|Chatterbox-Nano|local workspace and Open WebUI memory|code interpreter Jupyter sandbox' "$path"; then
+  if ! rg -q 'Rhizome Stack|OpenClaw model adapter|Synchronise tool-capable|local TTS and STT bridge|Chatterbox-Nano|local workspace and Open WebUI memory|code interpreter Jupyter sandbox|Qwen Image Desk|MiniMax Music 3' "$path"; then
     printf 'Refusing unknown unit: %s\n' "$path" >&2
     exit 2
   fi

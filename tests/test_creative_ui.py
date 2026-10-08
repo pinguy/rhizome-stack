@@ -31,7 +31,7 @@ const elements = new Map();
 const get = selector => {if (!elements.has(selector)) elements.set(selector, element()); return elements.get(selector);};
 let payload = {};
 const context = vm.createContext({
-  document: {querySelector: get, createElement: element},
+  document: {querySelector: get, querySelectorAll(){return [];}, createElement: element, addEventListener(){}},
   window: {scrollTo(){}}, navigator: {},
   setInterval(){return 1;}, clearInterval(){}, setTimeout(){}, alert(){}, confirm(){return false;},
   fetch: async url => ({ok: true, json: async () => url.startsWith('/api/status') ? payload : {models:[], items:[]}}),
@@ -49,7 +49,9 @@ vm.runInContext(script, context);
   assert.ok(!rendered.includes('data-copy="<'), rendered);
   payload = {state:'error', elapsed:2, error:hostile};
   await vm.runInContext('poll("synthetic")', context);
-  assert.ok(get('#status').textContent.includes(hostile));
+  const failed = get('#status').innerHTML;
+  assert.ok(failed.includes('&lt;img'), failed);
+  assert.ok(!failed.includes('<img'), failed);
   context.fetch = async () => ({ok:true, json:async()=>({items:[{
     filename:hostile, path:hostile, url:'/api/audio?filename=song.mp3', recipe:true
   }]})});

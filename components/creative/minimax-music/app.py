@@ -844,163 +844,130 @@ class Handler(BaseHTTPRequestHandler):
 INDEX_HTML = r"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#edf1f4">
 <title>MiniMax Music 3</title>
 <style>
-:root{ --bg:#14161a; --panel:#1e2229; --panel2:#262b34; --line:#333a45;
-       --ink:#eef1f5; --muted:#9aa4b2; --accent:#4c8dff; --accent2:#7c5cff; }
+:root{--bg:#edf1f4;--panel:#fff;--field:#f5f7fa;--line:#dce4ea;--ink:#172431;--muted:#546477;--accent:#2855cb;--accent-soft:#e9efff;--library:#172939;--library-card:#213647;--library-line:#3b5062;--library-muted:#b8c8d7;--radius:18px}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);
-     font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-header{padding:18px 22px;border-bottom:1px solid var(--line);
-       display:flex;align-items:center;gap:12px}
-header h1{font-size:18px;margin:0;font-weight:650;letter-spacing:.2px}
-header .dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:0 0 auto}
-header .eng{font-size:12.5px;color:var(--muted);margin-left:auto}
-.eng-btn{padding:8px 14px;font-size:13px}
-.wrap{max-width:960px;margin:0 auto;padding:22px}
-.grid{display:grid;grid-template-columns:1fr;gap:16px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
-label{display:block;font-weight:600;margin:0 0 6px;font-size:13.5px}
-.hint{color:var(--muted);font-weight:400;font-size:12.5px}
-textarea,input,select{width:100%;background:var(--panel2);border:1px solid var(--line);
-       color:var(--ink);border-radius:9px;padding:11px 12px;font:inherit;resize:vertical}
-textarea:focus,input:focus,select:focus{outline:2px solid var(--accent);border-color:transparent}
-textarea.cap{min-height:120px}textarea.lyr{min-height:150px;font-family:ui-monospace,Menlo,monospace;font-size:13px}
-.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
-.mmss{display:flex;align-items:center;gap:6px;margin-top:8px}
-.mmss input{width:64px;text-align:center;padding:7px 8px}
-.mmss span{font-size:12.5px;color:var(--muted)}
-.btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:0;
-     border-radius:10px;padding:13px 20px;font-weight:650;font-size:15px;cursor:pointer;width:100%}
-.btn:disabled{opacity:.55;cursor:default}
-.btnrow{display:flex;gap:12px;align-items:center;margin-top:4px}
-.btn.sec{background:var(--panel2);border:1px solid var(--line);width:auto;padding:13px 16px}
-details{margin-top:6px}summary{cursor:pointer;color:var(--muted);font-size:13.5px;font-weight:600}
-.slabel{display:flex;justify-content:space-between}.slabel b{color:var(--accent)}
-#status{display:none;margin-top:14px;padding:14px;border:1px solid var(--line);
-        border-radius:10px;background:var(--panel2);font-size:14px}
-#status.show{display:block}
-.spin{display:inline-block;width:15px;height:15px;border:2px solid var(--muted);
-      border-top-color:var(--accent);border-radius:50%;animation:sp 0.8s linear infinite;
-      vertical-align:-2px;margin-right:8px}
-@keyframes sp{to{transform:rotate(360deg)}}
-audio{width:100%;margin-top:12px}
-.hist{display:flex;flex-direction:column;gap:10px}
-.hitem{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;position:relative}
-.hitem .hn{font-size:13px;color:var(--ink);margin-bottom:4px;word-break:break-all;font-weight:600;padding-right:28px}
-.hitem .hpath{font-size:11.5px;color:var(--muted);margin-bottom:7px;word-break:break-all;
-              font-family:ui-monospace,Menlo,monospace}
-.hitem .hpath .cp{cursor:pointer;color:var(--accent);text-decoration:none;margin-left:6px;font-family:system-ui}
-a.dl{color:var(--accent);font-size:13px;text-decoration:none;font-weight:600}
-.hrow{display:flex;gap:16px;margin-top:6px;flex-wrap:wrap}
-a.dl.load{color:var(--accent2)}
-.xdel{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:6px;
-      background:var(--panel);border:1px solid var(--line);color:var(--muted);
-      font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.xdel:hover{border-color:#c04a4a;color:#ff8f8f}
-.pathline{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--muted);
-          margin-top:8px;word-break:break-all}
-.pathline .cp{cursor:pointer;color:var(--accent);text-decoration:none;margin-left:6px;font-family:system-ui}
-.warn{background:#3a2c10;border:1px solid #6b5220;color:#ffd98a;padding:12px 14px;
-      border-radius:10px;margin-bottom:16px;font-size:13.5px;display:none}
-.warn.show{display:block}
-kbd{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12px}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 'Adwaita Sans','Segoe UI',sans-serif}
+button,input,textarea,select{font:inherit}
+button,a,input,textarea,select,summary{-webkit-tap-highlight-color:transparent}
+button,a,summary{touch-action:manipulation}
+button{cursor:pointer}button:disabled{cursor:wait;opacity:.55}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.masthead{max-width:1512px;margin:auto;padding:26px 40px 20px;display:flex;align-items:center;gap:16px}
+.brand-mark{width:44px;height:44px;border-radius:14px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;gap:4px;flex-shrink:0}
+.brand-mark i{display:block;background:currentColor;width:4px;border-radius:3px;height:14px}.brand-mark i:nth-child(2){height:25px}.brand-mark i:nth-child(3){height:19px}
+h1,h2,h3,p{margin:0}h1,h2,h3{font-family:'Fira Sans Condensed','Adwaita Sans',sans-serif}
+h1{font-size:24px;letter-spacing:-.5px;line-height:1.1;font-weight:600}
+.brand-sub{font-size:12px;color:var(--muted);margin-top:5px}
+.engine-tools{margin-left:auto;display:flex;gap:12px;align-items:center}.eng{font-size:12px;color:var(--muted)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--muted);margin-right:7px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#fff;border:1px solid transparent;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:650;min-height:44px;text-decoration:none;transition:background .15s,box-shadow .15s}
+.btn:hover:not(:disabled){box-shadow:0 3px 10px #17243118;background:#2049b6}
+.btn.sec{background:var(--panel);border-color:var(--line);color:var(--ink)}.btn.sec:hover:not(:disabled){background:var(--field)}
+.eng-btn{font-size:12px;padding:8px 12px;min-height:38px}
+.wrap{max-width:1512px;margin:auto;padding:0 40px 40px}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 385px;gap:24px;align-items:start}
+.editor{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 6px 24px #17243104}
+.editor-heading{padding:24px 28px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px}
+.eyebrow{color:var(--muted);font-size:10px;font-weight:700;letter-spacing:1.7px;text-transform:uppercase;margin-bottom:5px}
+h2{font-size:29px;letter-spacing:-.6px;line-height:1.2;font-weight:550}.editor-heading p:last-child{color:var(--muted);font-size:13px;margin-top:6px}
+.session-badge{padding:5px 10px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:650;white-space:nowrap}
+.editor-body{padding:24px 28px}.field{margin-bottom:21px}label{display:block;font-size:13px;font-weight:650;margin-bottom:7px}.optional{font-size:12px;color:var(--muted);font-weight:400;margin-left:6px}
+.hint{color:var(--muted);font-size:12px;font-weight:400}.field-help{display:block;margin-top:7px}
+input:not([type=range]),textarea,select{width:100%;min-width:0;border:1px solid var(--line);border-radius:9px;background:var(--field);color:var(--ink);padding:11px 13px;transition:border-color .15s;line-height:1.55}
+input::placeholder,textarea::placeholder{color:#687889;opacity:1}
+input:not([type=range]):focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;background:var(--panel)}
+textarea{resize:vertical;display:block}textarea.cap{min-height:135px}textarea.lyr{min-height:185px;font:13px/1.8 'Adwaita Mono',monospace}
+#title{background:transparent;font-size:18px;font-weight:500;padding:11px 0;border:0;border-bottom:1px solid var(--line);border-radius:0}
+details.assistant{background:var(--field);border:1px solid var(--line);border-radius:11px;margin-bottom:24px}
+summary{cursor:pointer;font-size:13px;font-weight:600;list-style:none;display:flex;align-items:center;gap:10px;min-height:46px}summary::-webkit-details-marker{display:none}
+summary::after{content:'+';margin-left:auto;color:var(--muted);font-size:20px;font-weight:400}details[open]>summary::after{content:'−'}
+.assistant summary{padding:13px 16px}.assistant-icon{color:var(--accent);font-size:19px}.assistant summary .hint{margin-left:auto;margin-right:8px}.assistant summary::after{margin-left:0}
+.assistant-content{padding:0 16px 17px}.assistant-content .hint{display:block;margin:0 0 13px}.ai-grid{display:grid;grid-template-columns:1fr;gap:12px}.ai-grid textarea{min-height:80px;background:var(--panel)}
+.ai-model-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}.ai-model-row .btn{min-height:46px}
+#aistatus{font-size:12px;color:var(--muted);margin-top:10px;overflow-wrap:anywhere}#aistatus:empty{display:none}
+.field-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.tagbar{display:flex;gap:6px;flex-wrap:wrap;margin:9px 0 0}
+.tag{font:11px/1.5 'Adwaita Mono',monospace;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:6px;padding:5px 8px;min-height:30px}.tag:hover{color:var(--accent);border-color:var(--accent)}
+.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}.settings-row{background:var(--field);border:1px solid var(--line);border-radius:11px;padding:16px;margin-top:23px}.settings-row input:not([type=range]){background:var(--panel)}
+.slabel{display:flex;justify-content:space-between;align-items:baseline}.slabel b{font:12px 'Adwaita Mono',monospace;color:var(--accent)}
+input[type=range]{accent-color:var(--accent);width:100%;padding:0;height:24px;cursor:pointer}.mmss{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:var(--muted)}.mmss input{width:55px!important;padding:5px 7px!important;text-align:center}
+.advanced{border-top:1px solid var(--line);margin-top:20px;padding-top:5px}.advanced summary{color:var(--muted)}.advanced .row{padding:12px 0}
+.generate-bar{position:sticky;bottom:0;z-index:2;box-shadow:0 -5px 20px #17243108;border-top:1px solid var(--line);padding:18px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px;background:#fafbfd;border-radius:0 0 var(--radius) var(--radius)}
+.generate-note{font-size:12px;color:var(--muted);max-width:250px}.generate-note strong{display:block;color:var(--ink);font-size:13px;margin-bottom:2px}#go{min-width:215px;min-height:48px;font-size:15px}
+#status{display:none;padding:18px 28px;border-top:1px solid var(--line);font-size:13px;overflow-wrap:anywhere}#status.show{display:block}#status audio{margin-top:12px}.pathline{font:11px/1.6 'Adwaita Mono',monospace;color:var(--muted);overflow-wrap:anywhere;margin-top:12px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;vertical-align:-2px;margin-right:7px}@keyframes spin{to{transform:rotate(360deg)}}
+.library{background:var(--library);color:#f4f8fc;border:1px solid var(--library);border-radius:var(--radius);padding:23px 20px 20px;position:sticky;top:20px;min-width:0;color-scheme:dark}
+.library .eyebrow{color:var(--library-muted)}.library h2{font-size:25px}.library-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.library .hint{color:var(--library-muted)}
+.count-badge{border:1px solid var(--library-line);border-radius:7px;color:var(--library-muted);padding:3px 9px;font:12px 'Adwaita Mono',monospace}
+.library input{background:var(--library-card)!important;border-color:var(--library-line)!important;color:#f4f8fc!important;font-size:13px}.library input::placeholder{color:var(--library-muted)}
+.library-tools{display:flex;gap:8px;align-items:center;margin-bottom:14px}.refresh{background:var(--library-card);border:1px solid var(--library-line);border-radius:9px;color:#f4f8fc;min-width:43px;height:43px;font-size:18px}.refresh:hover{background:#2c4357}
+.hist{display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 310px);min-height:230px;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--library-line) transparent;padding-right:3px}
+.hitem{border:1px solid var(--library-line);border-radius:11px;background:var(--library-card);padding:13px;min-width:0;flex-shrink:0}.track-top{display:flex;gap:10px;align-items:center}.track-number{display:grid;place-items:center;width:33px;height:37px;flex-shrink:0;background:#30495e;border-radius:6px;font:11px 'Adwaita Mono',monospace;color:#d9e8f8}
+.hn{font-size:13px;font-weight:600;overflow-wrap:anywhere;line-height:1.4}.track-date{font-size:10px;color:var(--library-muted);margin-top:3px}.track-info{min-width:0;flex:1}
+audio{width:100%;height:38px;display:block;margin-top:12px}.hrow{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:11px}a.dl,.text-button{font-size:12px;font-weight:600;text-decoration:none;background:transparent;border:0;padding:0;color:var(--accent);cursor:pointer}.library a.dl,.library .text-button{color:#bed6ff}.library a.dl:hover,.text-button:hover{text-decoration:underline}
+.xdel{margin-left:auto;color:var(--library-muted);font-size:11px;background:none;border:0;padding:4px;min-height:28px}.xdel:hover{color:#fff;text-decoration:underline}
+.file-details{margin-top:8px;border-top:1px solid var(--library-line);padding-top:3px}.file-details summary{font-size:10px;font-weight:400;color:var(--library-muted);min-height:26px}.file-details summary::after{font-size:14px;color:var(--library-muted)}
+.hpath{font:10px/1.6 'Adwaita Mono',monospace;color:var(--library-muted);overflow-wrap:anywhere;padding:4px 0}.cp{display:inline-block;margin-top:4px;margin-left:6px;font-size:11px;border:0;background:none;color:var(--accent);cursor:pointer;padding:3px}.library .cp{color:#bed6ff}
+.library-footer{font-size:11px;color:var(--library-muted);padding-top:14px;display:flex;justify-content:space-between;gap:8px}.empty{font-size:13px;color:var(--library-muted);padding:28px 10px;text-align:center}.empty strong{display:block;color:#f4f8fc;font-size:15px;margin-bottom:8px}
+.warn{display:none;margin-bottom:18px;background:#fff4dc;border:1px solid #dfc182;border-radius:10px;padding:12px 16px;color:#684910;font-size:13px}.warn.show{display:block}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(min-width:1500px){.workspace{grid-template-columns:minmax(0,1fr) 420px}}
+@media(max-width:1100px){.masthead{padding:22px 24px 18px}.wrap{padding:0 24px 30px}.workspace{grid-template-columns:minmax(0,1fr) 330px;gap:18px}.editor-body{padding:20px}.editor-heading,.generate-bar,#status{padding:20px}.row{gap:14px}.generate-note{display:none}#go{width:100%}.library{padding:20px 15px}.eng{max-width:230px}}
+@media(max-width:850px){.workspace{grid-template-columns:1fr}.library{position:static}.hist{max-height:650px}.engine-tools{gap:8px}.eng{max-width:190px}.masthead{padding-top:20px}.brand-sub{display:none}}
+@media(max-width:520px){.masthead{padding:20px 16px 15px;gap:10px;flex-wrap:wrap}.brand-mark{width:37px;height:37px;border-radius:11px}h1{font-size:22px}.engine-tools{width:100%;justify-content:space-between;margin-top:3px}.eng{max-width:none}.wrap{padding:0 12px 24px}.editor-heading{padding:20px 18px}.editor-heading h2{font-size:26px}.editor-body{padding:18px}.session-badge{display:none}.row{grid-template-columns:1fr}.settings-row{gap:18px}.assistant summary .hint{display:none}.assistant summary::after{margin-left:auto}.ai-model-row{grid-template-columns:1fr}.generate-bar{padding:18px}.tagbar{gap:5px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style></head><body>
-<header>
-  <span class="dot" id="engdot"></span>
-  <h1>MiniMax Music 3</h1>
-  <span class="eng" id="engtxt">checking engine…</span>
-  <button class="btn sec eng-btn" id="engbtn" style="display:none">Stop engine</button>
+<header class="masthead">
+  <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div><h1>MiniMax Music 3</h1><p class="brand-sub">Your local music studio</p></div>
+  <div class="engine-tools"><span class="eng" role="status"><span class="dot" id="engdot" aria-hidden="true"></span><span id="engtxt">Checking engine…</span></span><button class="btn sec eng-btn" id="engbtn" style="display:none">Start engine</button></div>
 </header>
-<div class="wrap">
-  <div class="warn" id="warn"></div>
-  <div class="card" id="aicard" style="margin-bottom:16px;border-color:var(--accent)">
-    <label>✨ AI brief
-      <span class="hint">— pick a model, give it styles + a one-line idea; it writes the description &amp; lyrics and names the song.</span></label>
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px">
-      <div style="flex:0 0 260px">
-        <label for="aimodel" class="hint">Model</label>
-        <select id="aimodel"><option value="">loading…</option></select>
+<main class="wrap">
+  <div class="warn" id="warn" role="alert"></div>
+  <div class="workspace">
+    <section class="editor" aria-labelledby="editorTitle">
+      <div class="editor-heading"><div><p class="eyebrow">Composition</p><h2 id="editorTitle">Compose a track.</h2><p>Describe the sound. Shape the song.</p></div><span class="session-badge">Music 3 · local</span></div>
+      <div class="editor-body">
+        <div class="field"><label for="title">Song name <span class="optional">optional</span></label><input type="text" id="title" placeholder="Give this track a name…" spellcheck="true" autocomplete="off"></div>
+        <details class="assistant" id="aicard">
+          <summary><span class="assistant-icon" aria-hidden="true">✧</span>AI songwriting assistant <span class="hint">Start from an idea</span></summary>
+          <div class="assistant-content"><p class="hint">Turn a brief into a name, music description and lyrics. Review and edit anything before generating.</p>
+            <div class="ai-grid"><div><label for="brief">Your idea</label><textarea id="brief" spellcheck="true" placeholder="Disco-house, a driving bassline and a powerful female vocal. A song about leaving a dead-end town behind."></textarea></div>
+            <div class="ai-model-row"><div><label for="aimodel">Writing model</label><select id="aimodel"><option value="">Loading models…</option></select></div><button class="btn sec" id="aifill">Write song details</button></div></div>
+            <div id="aistatus" role="status" aria-live="polite"></div>
+          </div>
+        </details>
+        <div class="field"><label for="caption">Describe the sound</label><textarea class="cap" id="caption" spellcheck="true" aria-describedby="captionHelp"></textarea><span class="hint field-help" id="captionHelp">Genre, mood, instruments and vocals. Specific details shape the result.</span></div>
+        <div class="field"><div class="field-heading"><label for="lyrics">Lyrics &amp; structure</label><span class="hint">Your song, section by section</span></div><textarea class="lyr" id="lyrics" spellcheck="true" aria-describedby="lyricsHelp"></textarea>
+          <div class="tagbar" aria-label="Insert song section"><button class="tag" data-tag="Intro" type="button">+ Intro</button><button class="tag" data-tag="Verse" type="button">+ Verse</button><button class="tag" data-tag="Chorus" type="button">+ Chorus</button><button class="tag" data-tag="Instrumental" type="button">+ Instrumental</button><button class="tag" data-tag="Bridge" type="button">+ Bridge</button><button class="tag" data-tag="Outro" type="button">+ Outro</button></div>
+          <span class="hint field-help" id="lyricsHelp">Insert a section at the cursor. For an instrumental, keep the section tags and leave out lyric lines.</span>
+        </div>
+        <div class="row settings-row">
+          <div><div class="slabel"><label for="seconds">Track length</label><b id="seclab">1m 00s</b></div><input type="range" id="seconds" min="8" max="300" step="1" value="60"><div class="mmss"><input type="number" id="mins" min="0" max="5" step="1" value="1" aria-label="Minutes"><span>min</span><input type="number" id="secs" min="0" max="59" step="1" value="0" aria-label="Seconds"><span>sec</span><span style="margin-left:auto">Up to 5 min</span></div></div>
+          <div><label for="seed">Seed <span class="optional">optional</span></label><input type="text" id="seed" placeholder="Random each time" inputmode="numeric"><span class="hint field-help">Reuse a seed to revisit the same starting point.</span></div>
+        </div>
+        <details class="advanced" id="advanced"><summary>Fine-tune generation <span class="hint">Quality &amp; output</span></summary><div class="row">
+          <div><div class="slabel"><label for="steps">Steps</label><b id="steplab">30</b></div><input type="range" id="steps" min="8" max="60" step="1" value="30"></div>
+          <div><div class="slabel"><label for="cfg">Guidance</label><b id="cfglab">1.7</b></div><input type="range" id="cfg" min="1" max="6" step="0.1" value="1.7"></div>
+          <div><label for="tiled">Memory-saving decode</label><select id="tiled"><option value="0">Off</option><option value="1">On · useful for long songs</option></select></div>
+          <div><label for="quality">MP3 quality</label><select id="quality"><option value="V0">V0 · high quality, variable bitrate</option><option value="320k">320 kbps · maximum bitrate</option><option value="128k">128 kbps · smaller file</option></select></div>
+        </div></details>
       </div>
-      <div style="flex:1;min-width:280px">
-        <label for="brief" class="hint">Brief</label>
-        <textarea id="brief" spellcheck="true" style="width:100%;min-height:70px"
-          placeholder="Styles: electronic-pop indie-rock&#10;Short description: synth late-night driving song in a neon-lit city."></textarea>
-      </div>
-    </div>
-    <div class="btnrow" style="margin-top:10px">
-      <button class="btn sec" id="aifill">✨ Fill in the details</button>
-      <span id="aistatus" class="hint"></span>
-    </div>
+      <div class="generate-bar"><p class="generate-note"><strong>Ready when you are.</strong>The music engine starts automatically.</p><button class="btn" id="go">Generate music</button></div>
+      <div id="status" role="status" aria-live="polite"></div>
+    </section>
+    <aside class="library" aria-labelledby="libraryTitle">
+      <div class="library-head"><div><p class="eyebrow">Listening room</p><h2 id="libraryTitle">Your tracks</h2></div><span class="count-badge" id="trackCount" aria-label="Track count">—</span></div>
+      <div class="library-tools"><label for="trackSearch" class="sr-only">Search recent tracks</label><input id="trackSearch" type="search" placeholder="Find a track…" autocomplete="off"><button id="refreshTracks" class="refresh" title="Refresh tracks" aria-label="Refresh tracks">↻</button></div>
+      <div class="hist" id="hist"><p class="empty">Loading your tracks…</p></div>
+      <p id="noMatches" class="empty" hidden>No matching tracks. Try another name.</p>
+      <div class="library-footer"><span>Recent tracks · newest first</span><span>Saved locally</span></div>
+    </aside>
   </div>
-  <div class="grid">
-    <div class="card">
-      <label for="title">Song name
-        <span class="hint">— optional; becomes the file name (e.g. Rainy Night Lo-Fi).</span></label>
-      <input type="text" id="title" placeholder="Untitled — a timestamped name is used if blank" spellcheck="true" style="margin-bottom:14px">
-
-      <label>Describe the music
-        <span class="hint">— style, mood, instruments, vocals. Specific = better.</span></label>
-      <textarea class="cap" id="caption" spellcheck="true"></textarea>
-
-      <label style="margin-top:14px">Lyrics &amp; structure
-        <span class="hint">— use tags like <kbd>[Intro]</kbd> <kbd>[Verse]</kbd> <kbd>[Chorus]</kbd> <kbd>[Instrumental]</kbd> <kbd>[Outro]</kbd>. Leave lyric lines empty for instrumental.</span></label>
-      <textarea class="lyr" id="lyrics" spellcheck="true"></textarea>
-
-      <div class="row" style="margin-top:14px">
-        <div>
-          <div class="slabel"><label for="seconds">Length</label><b id="seclab">1m 00s</b></div>
-          <input type="range" id="seconds" min="8" max="300" step="1" value="60">
-          <div class="mmss">
-            <input type="number" id="mins" min="0" max="5" step="1" value="1"><span>min</span>
-            <input type="number" id="secs" min="0" max="59" step="1" value="0"><span>sec</span>
-            <span class="hint" style="margin-left:auto">8s–5m</span>
-          </div>
-        </div>
-        <div>
-          <label for="seed">Seed <span class="hint">(blank = random)</span></label>
-          <input type="text" id="seed" placeholder="random">
-        </div>
-      </div>
-
-      <details>
-        <summary>Advanced</summary>
-        <div class="row" style="margin-top:12px">
-          <div>
-            <div class="slabel"><label for="steps">Steps</label><b id="steplab">30</b></div>
-            <input type="range" id="steps" min="8" max="60" step="1" value="30">
-          </div>
-          <div>
-            <div class="slabel"><label for="cfg">Guidance (cfg)</label><b id="cfglab">1.7</b></div>
-            <input type="range" id="cfg" min="1" max="6" step="0.1" value="1.7">
-          </div>
-          <div>
-            <label for="tiled">Tiled decode <span class="hint">(long songs / low VRAM)</span></label>
-            <select id="tiled"><option value="0">Off</option><option value="1">On</option></select>
-          </div>
-          <div>
-            <label for="quality">MP3 quality</label>
-            <select id="quality">
-              <option value="V0">V0 (VBR ~245k, best)</option>
-              <option value="320k">320k (CBR, max)</option>
-              <option value="128k">128k (CBR, small)</option>
-            </select>
-          </div>
-        </div>
-      </details>
-
-      <div class="btnrow">
-        <button class="btn" id="go">Generate music</button>
-      </div>
-      <div id="status"></div>
-    </div>
-
-    <div class="card">
-      <label>Recent generations</label>
-      <div class="hist" id="hist"><span class="hint">Nothing yet — make your first track.</span></div>
-    </div>
-  </div>
-</div>
+</main>
 <script>
 const $=s=>document.querySelector(s);
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -1078,10 +1045,10 @@ function fromBoxes(){
 }
 $('#mins').addEventListener('input',fromBoxes);
 $('#secs').addEventListener('input',fromBoxes);
-// normalise the boxes on blur (e.g. 90s typed in secs -> clamped, reflected)
+// Normalise when leaving the pair, not while focus moves into the other box.
 const reflect=()=>{const t=+$('#seconds').value;$('#mins').value=Math.floor(t/60);$('#secs').value=t%60;};
-$('#mins').addEventListener('change',reflect);
-$('#secs').addEventListener('change',reflect);
+$('#mins').addEventListener('blur',event=>{if(event.relatedTarget!==$('#secs'))reflect();});
+$('#secs').addEventListener('blur',event=>{if(event.relatedTarget!==$('#mins'))reflect();});
 setLen(60);
 
 let engineOK=false, engBusy=false;
@@ -1102,7 +1069,7 @@ async function health(){
       btn.disabled=d.busy;
       $('#warn').classList.remove('show');
     }else{
-      $('#engtxt').textContent=d.idle_stopped?'engine stopped (idle — frees resources)':'engine off';
+      $('#engtxt').textContent=d.idle_stopped?'Ready · engine resting':'Ready · starts when you generate';
       btn.style.display=''; btn.textContent='Start engine'; btn.dataset.act='start'; btn.disabled=false;
       $('#warn').classList.remove('show');
     }
@@ -1127,19 +1094,19 @@ async function poll(pid){
     const r=await fetch('/api/status?prompt_id='+encodeURIComponent(pid));
     const d=await r.json();
     if(d.state==='working'){
-      $('#status').innerHTML='<span class="spin"></span>Generating… '+esc(d.elapsed)+'s'+(d.where?(' · '+esc(d.where)):'');
+      $('#status').innerHTML='<span class="spin"></span>Generating… '+d.elapsed+'s'+(d.where?(' · '+esc(d.where)):'');
       return;
     }
     clearInterval(timer);timer=null;
     if(d.state==='error'){
-      $('#status').textContent='⚠ Failed after '+d.elapsed+'s — '+(d.error||'unknown error');
+      $('#status').innerHTML='⚠ Failed after '+d.elapsed+'s — '+esc(d.error||'unknown error');
       $('#go').disabled=false;$('#go').textContent='Generate music';return;
     }
     if(d.state==='done'){
-      $('#status').innerHTML='✓ '+((d.meta&&d.meta.title)?('“'+esc(d.meta.title)+'” — '):'')+'Done in '+esc(d.elapsed)+'s (seed '+esc(d.meta&&d.meta.seed)+')'+
+      $('#status').innerHTML='✓ '+((d.meta&&d.meta.title)?('“'+esc(d.meta.title)+'” — '):'')+'Done in '+d.elapsed+'s (seed '+(d.meta&&d.meta.seed)+')'+
         '<audio controls autoplay src="'+esc(d.audio_url)+'"></audio>'+
         '<div style="margin-top:8px"><a class="dl" href="'+esc(d.audio_url)+'" download="'+esc(d.filename)+'">⤓ Download '+esc(d.filename)+'</a></div>'+
-        (d.path?('<div class="pathline">Saved to: '+esc(d.path)+'<span class="cp" data-copy="'+esc(d.path)+'">copy</span></div>'):'');
+        (d.path?('<div class="pathline">Saved to: '+esc(d.path)+'<button type="button" class="cp" data-copy="'+esc(d.path)+'">Copy path</button></div>'):'');
       wireCopy($('#status'));
       $('#go').disabled=false;$('#go').textContent='Generate music';
       loadHist();
@@ -1148,6 +1115,7 @@ async function poll(pid){
 }
 
 $('#go').addEventListener('click',async()=>{
+  if(!$('#caption').value.trim()){ $('#status').className='show';$('#status').textContent='Describe the sound before generating.';$('#caption').focus();return; }
   const payload={
     title:$('#title').value, caption:$('#caption').value, lyrics:$('#lyrics').value,
     seconds:+$('#seconds').value, seed:$('#seed').value.trim()||'random',
@@ -1199,39 +1167,72 @@ async function loadRecipe(fn){
     if(d.guidance_cfg!=null){$('#cfg').value=d.guidance_cfg;$('#cfglab').textContent=d.guidance_cfg;}
     $('#tiled').value=d.tiled_decode?'1':'0';
     if(d.quality) $('#quality').value=d.quality;
-    document.querySelector('details').open=true;   // reveal Advanced so it's clear
+    $('#advanced').open=true;   // reveal Advanced so it's clear
     window.scrollTo({top:0,behavior:'smooth'});
     $('#title').focus();
     const st=$('#status');st.className='show';
     st.innerHTML='↻ Loaded settings from <b>'+esc(fn)+'</b> — tweak anything and hit Generate.';
   }catch(e){alert('could not load settings: '+e.message);}
 }
+function filterHistory(){
+  const query=$('#trackSearch').value.trim().toLocaleLowerCase();
+  const tracks=[...$('#hist').querySelectorAll('.hitem')];
+  let visible=0;
+  tracks.forEach(el=>{el.hidden=!el.dataset.filename.toLocaleLowerCase().includes(query);if(!el.hidden)visible++;});
+  $('#trackCount').textContent=query ? `${visible}/${tracks.length}` : String(tracks.length);
+  $('#noMatches').textContent='No matching tracks. Try another name.';
+  $('#noMatches').hidden=!query || visible>0 || !tracks.length;
+}
 async function loadHist(){
+  const refresh=$('#refreshTracks');refresh.disabled=true;
   try{
-    const r=await fetch('/api/history');const d=await r.json();
-    if(!d.items||!d.items.length){
-      $('#hist').innerHTML='<span class="hint">Nothing yet — make your first track.</span>';return;}
+    const r=await fetch('/api/history');
+    if(!r.ok)throw new Error('Could not load tracks');
+    const d=await r.json();
     const box=$('#hist');box.innerHTML='';
-    d.items.forEach(it=>{
-      const el=document.createElement('div');el.className='hitem';
+    $('.library-footer span').textContent=d.items?.length===40?'Latest 40 tracks · newest first':'Recent tracks · newest first';
+    if(!d.items||!d.items.length){
+      box.innerHTML='<p class="empty"><strong>Your first track starts here.</strong>Describe a sound and generate music. Your recordings will appear here.</p>';
+      filterHistory();return;
+    }
+    d.items.forEach((it,index)=>{
+      const el=document.createElement('article');el.className='hitem';el.dataset.filename=it.filename;
+      const name=it.filename.replace(/\.(mp3|flac|wav)$/i,'').replace(/_\d+_?$/,'').replace(/_/g,' ');
+      const date=new Date(it.mtime*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+      const size=it.size<1048576 ? `${Math.round(it.size/1024)} KB` : `${(it.size/1048576).toFixed(1)} MB`;
       el.innerHTML=
-        '<button class="xdel" title="Delete">✕</button>'+
-        '<div class="hn">'+esc(it.filename)+'</div>'+
-        '<div class="hpath">'+esc(it.path)+'<span class="cp" data-copy="'+esc(it.path)+'">copy</span></div>'+
-        '<audio controls preload="none" src="'+esc(it.url)+'"></audio>'+
-        '<div class="hrow">'+
-          '<a class="dl" href="'+esc(it.url)+'" download="'+esc(it.filename)+'">⤓ Download</a>'+
-          (it.recipe?'<a class="dl load" href="#">↻ Load settings</a>':'')+
-        '</div>';
+        '<div class="track-top"><span class="track-number" aria-hidden="true">'+String(index+1).padStart(2,'0')+'</span><div class="track-info"><h3 class="hn">'+esc(name)+'</h3><p class="track-date">'+esc(date)+' · '+esc(size)+'</p></div></div>'+
+        '<audio controls preload="none" aria-label="Play '+esc(name)+'" src="'+esc(it.url)+'"></audio>'+
+        '<div class="hrow"><a class="dl" href="'+esc(it.url)+'" download="'+esc(it.filename)+'">Download</a>'+
+        (it.recipe?'<button class="text-button load" type="button">Load settings</button>':'')+
+        '<button class="xdel" type="button" aria-label="Delete '+esc(name)+'">Delete</button></div>'+
+        '<details class="file-details"><summary>File details</summary><div class="hpath">'+esc(it.path)+'<button type="button" class="cp" data-copy="'+esc(it.path)+'">Copy path</button></div></details>';
       el.querySelector('.xdel').onclick=()=>deleteGen(it.filename,el.querySelector('.xdel'));
       const lb=el.querySelector('.load');
-      if(lb) lb.onclick=(e)=>{e.preventDefault();loadRecipe(it.filename);};
-      wireCopy(el);
-      box.appendChild(el);
+      if(lb)lb.onclick=()=>loadRecipe(it.filename);
+      wireCopy(el);box.appendChild(el);
     });
-  }catch(e){}
+    filterHistory();
+  }catch(e){
+    $('#trackCount').textContent='—';
+    $('#noMatches').hidden=true;
+    if(!$('#hist').querySelector('.hitem'))$('#hist').innerHTML='<p class="empty">Could not load tracks. Use Refresh to try again.</p>';
+    else{ $('#noMatches').textContent='Could not refresh tracks. Your previous list is still shown.';$('#noMatches').hidden=false; }
+  }finally{refresh.disabled=false;}
 }
+$('#trackSearch').addEventListener('input',filterHistory);
+$('#refreshTracks').addEventListener('click',loadHist);
+document.addEventListener('play',event=>{
+  if(event.target.tagName==='AUDIO')document.querySelectorAll('audio').forEach(audio=>{if(audio!==event.target)audio.pause();});
+},true);
+document.querySelectorAll('[data-tag]').forEach(button=>button.addEventListener('click',()=>{
+  const lyrics=$('#lyrics');const start=lyrics.selectionStart;
+  const prefix=start>0&&lyrics.value[start-1]!=='\n'?'\n':'';
+  lyrics.setRangeText(prefix+'['+button.dataset.tag+']\n',start,lyrics.selectionEnd,'end');
+  lyrics.focus();lyrics.dispatchEvent(new Event('input',{bubbles:true}));
+}));
 loadHist();
+
 </script>
 </body></html>
 """

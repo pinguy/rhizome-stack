@@ -32,6 +32,18 @@ remain a separate download:
 ./install-linux.sh --with-voice --download-models
 ```
 
+The voice profile also installs the loopback-only Chatterbox Voice Lab. Start it
+only after the voice environment exists:
+
+```bash
+rhizome-stack voice-lab
+```
+
+It prepares a reference from a local audio/video file, generates a preview and
+can make that reference the Chatterbox default. Default changes back up the
+service drop-in, restart only configured Chatterbox backends, verify the loaded
+reference and roll back if verification fails. Voice media stays on the target.
+
 The Skills profile installs into the workspace configured by OpenClaw, preserving
 differing existing skill directories. See [integrations](INTEGRATIONS.md).
 
@@ -65,6 +77,8 @@ python3 ~/.local/share/rhizome-stack/tools/register_openwebui_tools.py \
 Use the matching configuration directory if you set `XDG_CONFIG_HOME`.
 Registration preserves matching tool IDs. Select the tools in Open WebUI as
 needed; the token is read from disk rather than supplied in process arguments.
+The registered IDs are `rhizome_memory`, `rhizome_web_search`, `openclaw_agent`,
+`minimax_music_3` and `qwen_image`.
 
 ## 5. Import your own knowledge
 

@@ -22,16 +22,37 @@ Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working ma
 | Skills | Six core reliability skills; fourteen bundled skills available on demand | Optional |
 | GLiNER + Ornith workforce | Optional routing advice and a bounded, text-only local worker under Rhizome | Optional; configured separately |
 | Semantic memory | Import your own documents, chat exports and RhizomeML data; hybrid retrieval | Optional |
-| Voice | Chatterbox-Nano TTS and faster-whisper STT | Optional |
+| Voice | Chatterbox-Nano TTS, faster-whisper STT and local Voice Lab | Optional |
 | Code interpreter | Podman-backed Jupyter environment | Optional |
 | CPU MiniLM retrieval | Revision-pinned semantic support for bounded workforce jobs | Optional |
-| Qwen Image Desk | Standalone local image workbench over pinned ComfyUI | Optional |
-| MiniMax Music 3 | Local song-generation web application over pinned ComfyUI | Optional |
+| Qwen Image Desk | Local image generation/editing from its desk or directly inside an Open WebUI chat | Optional |
+| MiniMax Music 3 | Local song generation from its desk or directly inside an Open WebUI chat | Optional |
 
 OpenClaw stays pinned to **2026.7.1-2** and Open WebUI to **0.11.0**.
 The pinned versions are compatibility choices, not promises that they are the
 latest releases. Upgrading them requires checking the patches and real request
 path first.
+
+## Images and music inside Open WebUI
+
+Qwen Image Desk and MiniMax Music 3 are not limited to their standalone web
+interfaces. After the creative profile and packaged Open WebUI tools are
+installed, an ordinary saved chat can:
+
+- create a Qwen image and keep the PNG inline in that chat;
+- edit an image uploaded by the signed-in Open WebUI user;
+- create a MiniMax song and keep the MP3 as a native playable file card; and
+- continue the conversation with the local chat model after generation.
+
+The packaged `qwen_image` and `minimax_music_3` tools share
+`components/openwebui_local_media.py`. It serialises media jobs, refuses to
+interrupt active ComfyUI work, unloads Ollama before generation, starts the
+selected local generator, attaches the finished file to Open WebUI, then frees
+and stops the owned ComfyUI engine so the chat model can reload.
+
+This is shipped integration, not merely two adjacent applications. See
+[Open WebUI local media](docs/OPENWEBUI_MEDIA.md) for the exact data flow,
+setup, safety boundaries and chat examples.
 
 ## Start here
 
@@ -64,7 +85,10 @@ If `~/.local/bin` is not on your PATH, use the full command:
 Open **http://localhost:8080**, create the first local administrator, choose a
 model and send a real message. A model catalogue or healthy HTTP endpoint does
 not prove that inference works. [First-run guide](docs/FIRST_RUN.md) covers
-provider setup, optional modules and packaged Open WebUI tools.
+provider setup, optional modules and packaged Open WebUI tools. The Qwen and
+MiniMax tools are opt-in registrations: they safely hand the local GPU from an
+idle Ollama model to ComfyUI, persist the generated file in the saved chat, and
+then release ComfyUI so chat inference can resume.
 
 ## Add what you need
 
@@ -80,6 +104,9 @@ provider setup, optional modules and packaged Open WebUI tools.
 # Launch either creative app after installation.
 rhizome-stack creative qwen
 rhizome-stack creative minimax
+
+# Prepare, preview and select a local Chatterbox voice.
+rhizome-stack voice-lab
 
 # See the collection, or install the extra skills deliberately.
 rhizome-stack skills list
@@ -112,7 +139,7 @@ browser profiles and model weights are never seeded from the reference machine.
 ```bash
 # Keep the test environment outside the source tree.
 python3 -m venv /tmp/rhizome-stack-tests
-/tmp/rhizome-stack-tests/bin/python -m pip install Flask==3.1.2 requests==2.32.5 numpy==2.3.5 faiss-cpu==1.15.0
+/tmp/rhizome-stack-tests/bin/python -m pip install -r tests/requirements.txt
 /tmp/rhizome-stack-tests/bin/python tools/check.py
 python3 tools/export_release.py --output /tmp/rhizome-stack-release
 python3 tools/build_release.py --output-root /tmp/rhizome-stack-build

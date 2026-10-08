@@ -6,7 +6,7 @@
       "path": "open_webui/main.py",
       "action": "modify",
       "clean_sha256": "2e53f5afef53bdc87da2a8f96f4a5437ee6adb18c1f8a66785083f4ba658df33",
-      "patched_sha256": "bb134da27b0b16b28fc578df4ffdc14cb087a67a6cff108972af0b59950f6d3b",
+      "patched_sha256": "f7291c0300e80f4a3b0c2b3ac92925e77d4b283cb74074a251456c0673f66ad9",
       "payload": "open_webui__main.py.patch"
     },
     {

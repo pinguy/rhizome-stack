@@ -108,6 +108,30 @@ def main() -> int:
         check("/home/" not in text, f"hard-coded home in {path}")
         check("[Unit]" in text, f"missing Unit section in {path}")
     print("PASS systemd template invariants")
+    voice_app = (ROOT / "components/chatterbox_voice_app.py").read_text()
+    check('app.run(host="127.0.0.1"' in voice_app, "Voice Lab is not loopback-only")
+    register_spec = importlib.util.spec_from_file_location(
+        "rhizome_tool_registration", ROOT / "tools/register_openwebui_tools.py")
+    register = importlib.util.module_from_spec(register_spec)
+    assert register_spec.loader is not None
+    register_spec.loader.exec_module(register)
+    expected_tools = {
+        "rhizome_memory", "rhizome_web_search", "openclaw_agent",
+        "minimax_music_3", "qwen_image",
+    }
+    check(set(register.TOOLS) == expected_tools, "packaged Open WebUI tool IDs changed")
+    main_patch = (ROOT / "patches/open-webui/0.11.0/open_webui__main.py.patch").read_text()
+    for tool_id in expected_tools - {"openclaw_agent"}:
+        check(repr(tool_id) in main_patch, f"default tool ID missing from Open WebUI patch: {tool_id}")
+    check("RHIZOME_MEDIA_SYSTEM" in main_patch, "Open WebUI patch lacks local media routing")
+    media_doc = (ROOT / "docs/OPENWEBUI_MEDIA.md").read_text()
+    for required in (
+        "qwen_image.create_image", "minimax_music_3.create_song",
+        "unload every Ollama runner", "attach it to the saved message",
+        "Open WebUI reloads the local chat model",
+    ):
+        check(required in media_doc, f"Open WebUI local-media shipping contract is missing: {required}")
+    print("PASS Voice Lab and local media registration invariants")
     for manifest_path in sorted((ROOT / "patches").glob("*/*/manifest.json")):
         manifest = json.loads(manifest_path.read_text())
         for item in manifest["files"]:

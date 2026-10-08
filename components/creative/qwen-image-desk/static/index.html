@@ -35,6 +35,16 @@
       <label class="field-label" for="rawPrompt">Rough prompt</label>
       <textarea id="rawPrompt" class="prompt-input" rows="5" placeholder="A tired astronaut having tea in a council-flat kitchen at night…"></textarea>
 
+      <div class="reference-panel">
+        <label class="field-label" for="referenceInput">Reference image <span>optional · edit an existing image</span></label>
+        <input id="referenceInput" type="file" accept="image/png,image/jpeg,image/webp">
+        <p class="field-note" id="referenceNote">No reference — create a new image from your prompt. PNG, JPEG or WebP, up to 20 MB. Images stay on this workstation.</p>
+        <div id="referencePreview" hidden>
+          <img id="referenceImage" alt="Reference image to edit">
+          <div><p id="referenceName"></p><button id="removeReferenceBtn" class="button quiet" type="button">Remove reference</button></div>
+        </div>
+      </div>
+
       <div class="model-row">
         <label class="field grow"><span>OpenClaw prompt model</span><select id="modelSelect"><option>Loading models…</option></select></label>
         <button id="expandBtn" class="button primary" type="button">Expand prompt</button>

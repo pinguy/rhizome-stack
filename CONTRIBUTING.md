@@ -3,9 +3,10 @@
 Run `python3 tools/check.py` before submitting a change. It discovers all
 `tests/test_*.py` suites, runs them with the current Python interpreter and
 reports every failing suite. Individual test files can still be run directly.
-See the README for an isolated test environment; Flask and Requests are needed
-for audio/web-search tests, NumPy and FAISS enable the real storage regression,
-and Node runs the creative UI rendering check. Do not treat a skipped optional
+See the README for an isolated test environment using `tests/requirements.txt`.
+Flask and Requests support audio/web-search tests, Pillow supports Qwen reference
+images, NumPy and FAISS enable the real storage regression, and Node runs the
+creative UI rendering check. Do not treat a skipped optional
 check as a pass for that feature.
 
 CI runs every suite and builds both ZIP and tar.zst archives twice, comparing

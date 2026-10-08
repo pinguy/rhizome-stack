@@ -113,3 +113,10 @@ input, select { min-height: 44px; padding: 0 12px; }
 @media (max-width: 1040px) { main { grid-template-columns: 1fr; } .workbench { border-right: 0; border-bottom: 1px solid var(--line); } .preview-stage { max-height: none; } }
 @media (max-width: 680px) { .masthead { align-items: flex-start; flex-direction: column; } .system-strip { justify-content: flex-start; } .workbench, .lightbox { padding: 24px 18px; } .prompt-rail, .controls-grid { grid-template-columns: 1fr; } .model-row { align-items: stretch; flex-direction: column; } .history-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .meta-row { grid-template-columns: 1fr; gap: 4px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+
+.reference-panel { margin: 16px 0; padding: 14px; border: 1px solid #39434c; border-radius: 10px; }
+.reference-panel .field-label span { font-weight: 400; font-size: .8rem; }
+.reference-panel input[type=file] { display: block; max-width: 100%; margin-top: 10px; }
+#referencePreview:not([hidden]) { display: flex; gap: 14px; align-items: center; }
+#referenceImage { width: 112px; height: 112px; object-fit: contain; background: #151a20; border-radius: 6px; }
+#referenceName { overflow-wrap: anywhere; font-size: .85rem; }

@@ -1,0 +1,6 @@
+# Test harness only; no model weights or runtime installation.
+Flask==3.1.2
+requests==2.32.5
+numpy==2.3.5
+faiss-cpu==1.15.0
+Pillow==12.3.0

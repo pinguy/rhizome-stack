@@ -96,7 +96,8 @@ git diff --check
 
 The runner discovers all `tests/test_*.py` files, including creative UI, HTTP
 service and release-integrity regressions. Node is required for the UI check;
-Flask and Requests for audio/web-search checks.
+Flask and Requests for audio/web-search checks, and Pillow for Qwen references.
+Install the shared test dependencies with `python3 -m pip install -r tests/requirements.txt`.
 
 The static suite includes syntax, template/patch checks, isolated import/setup
 checks, and release export with privacy audit and manifest verification. Behaviour
@@ -105,7 +106,7 @@ test for a changed failure mode where it provides meaningful coverage.
 
 The real FAISS storage test skips when dependencies are absent. For storage work,
 use an isolated Python environment with the versions in
-`.github/workflows/verify.yml` and rerun the behaviour suite. Report skips plainly.
+`tests/requirements.txt` and rerun the behaviour suite. Report skips plainly.
 Deterministic-vector FAISS tests do not establish embedding quality. Optional
 OpenClaw schema validation also requires the command to be installed; check its
 version against the pin before interpreting results.
