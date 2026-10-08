@@ -48,11 +48,15 @@ Optional profiles:
 ./install-wsl.sh --with-memory
 ./install-wsl.sh --with-voice --download-models
 ./install-wsl.sh --with-jupyter
+./install-wsl.sh --with-routing
+./install-wsl.sh --with-retrieval
+./install-wsl.sh --with-creative --download-creative-models
 ```
 
 The default voice profile is CPU-only. WSL GPU acceleration is intentionally
 not enabled until its CUDA, driver and Torch compatibility has been tested on
-the target host. Open WebUI and all integration endpoints remain loopback-only;
+the target host. The creative profile is staged but not accepted on WSL2 until
+one real Qwen image and MiniMax audio generation pass. Open WebUI and all integration endpoints remain loopback-only;
 Windows can normally reach Open WebUI at `http://localhost:8080`.
 
 Do not place populated `stack.env`, OpenClaw state or Open WebUI data on the

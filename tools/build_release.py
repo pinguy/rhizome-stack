@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Build a deterministic, audited release tree and tar.zst archive."""
+"""Build deterministic, audited tar.zst and ZIP release archives."""
 
 import argparse
 import hashlib
 import os
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 
@@ -20,6 +21,7 @@ def main() -> int:
     destination = args.output_root.resolve() / version
     tree = destination / "rhizome-stack"
     archive = destination / "rhizome-stack.tar.zst"
+    zip_archive = destination / "rhizome-stack.zip"
     if destination.exists():
         print(f"refusing to overwrite release directory: {destination}", file=sys.stderr)
         return 2
@@ -37,9 +39,23 @@ def main() -> int:
     tar.stdout.close()
     if tar.wait() or compressor.returncode:
         return 2
-    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    (destination / "SHA256SUMS").write_text(f"{digest}  {archive.name}\n")
-    print(f"release archive: {archive}\nsha256: {digest}")
+    with zipfile.ZipFile(zip_archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
+        for path in sorted(tree.rglob("*")):
+            if not path.is_file():
+                continue
+            relative = Path(tree.name) / path.relative_to(tree)
+            info = zipfile.ZipInfo(str(relative), date_time=(1980, 1, 1, 0, 0, 0))
+            info.create_system = 3
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = ((path.stat().st_mode & 0o777) | 0o100000) << 16
+            with path.open("rb") as stream:
+                bundle.writestr(info, stream.read(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+    sums = []
+    for path in (archive, zip_archive):
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        sums.append(f"{digest}  {path.name}")
+        print(f"release archive: {path}\nsha256: {digest}")
+    (destination / "SHA256SUMS").write_text("\n".join(sums) + "\n")
     return 0
 
 

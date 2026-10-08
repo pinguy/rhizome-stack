@@ -27,7 +27,7 @@ import requests
 OPENWEBUI_DB = Path(os.environ.get("OPENWEBUI_DB", str(Path.home() / ".local/share/rhizome-stack/state/openwebui-data/webui.db")))
 OPENCLAW_CONFIG = Path(os.environ.get("OPENCLAW_CONFIG", str(Path.home() / ".openclaw/openclaw.json")))
 LOCAL_TZ = ZoneInfo(os.environ.get("TZ", "UTC"))
-TOOL_VERSION = "1.7.0"
+TOOL_VERSION = "1.7.2"
 F1_RACING_URL = "https://www.formula1.com/en/racing/{year}"
 F1_EVENTS_API_URL = "https://api.formula1.com/v1/editorial-eventlisting/events"
 F1_PUBLIC_API_KEY_FALLBACK = os.getenv(
@@ -51,6 +51,17 @@ RECENCY_TERMS = (
     "this evening",
     "this week",
     "update",
+)
+
+MONTH_NAME_PATTERN = (
+    r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+    r"Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|"
+    r"Dec(?:ember)?)"
+)
+EXPLICIT_DATE_PATTERN = (
+    rf"(?:\d{{4}}-\d{{1,2}}-\d{{1,2}}|"
+    rf"{MONTH_NAME_PATTERN}\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?|"
+    rf"\d{{1,2}}(?:st|nd|rd|th)?\s+{MONTH_NAME_PATTERN}(?:\s+\d{{4}})?)"
 )
 
 ACTIVE_EVENT_TERMS = (
@@ -745,8 +756,32 @@ def _wants_fresh_sources(query: str) -> bool:
     return _contains_any(_clean_query(query), RECENCY_TERMS)
 
 
-def _build_search_query(query: str, clock: dict) -> str:
+def _ground_today_date(query: str, clock: dict) -> tuple[str, bool]:
+    """Replace only dates directly asserted as today's date.
+
+    Keep historical subjects such as "latest news about August 9" intact.
+    """
     cleaned = _clean_query(query)
+    joiner = r"(?:\s+(?:is|on)\s+|\s*[,;:\-]\s*|\s+)"
+    patterns = (
+        re.compile(rf"(?i)(?P<today>\btoday\b){joiner}{EXPLICIT_DATE_PATTERN}"),
+        re.compile(rf"(?i){EXPLICIT_DATE_PATTERN}{joiner}(?P<today>\btoday\b)"),
+    )
+    grounded = cleaned
+    for pattern in patterns:
+        grounded = pattern.sub(
+            lambda match: (
+                f"{match.group('today')} {clock['date']}"
+                if match.start('today') == match.start()
+                else f"{clock['date']} {match.group('today')}"
+            ),
+            grounded,
+        )
+    return grounded, grounded != cleaned
+
+
+def _build_search_query(query: str, clock: dict) -> str:
+    cleaned, _ = _ground_today_date(query, clock)
     if not cleaned:
         return clock["date"]
     if not _wants_fresh_sources(cleaned):
@@ -2058,6 +2093,13 @@ def _response_policy(is_news: bool, is_main_news: bool) -> dict:
     }
     if is_news:
         policy["bias"] = "Political-bias ratings describe outlet perspective, not whether an individual claim is true."
+        policy["political_framing"] = {
+            "event_centric": "Rewrite headlines into event-centric descriptions before summarising; do not inherit person-centric framing from headlines.",
+            "attribution": "Name a political leader when their personal statement, decision, action, or role is materially relevant. For policy or institutional action, prefer the institution after first attribution (for example, the US administration, Washington, or the South Korean government).",
+            "name_repetition": "Do not repeatedly use a political figure's name merely because source headlines do.",
+            "symmetric_verbs": "Apply symmetrical verbs to equivalent evidence regardless of actor: said, announced, claimed, denied, confirmed, or reported according to evidential status, not political identity.",
+            "dominance_check": "Before finalising a general-news summary, count prominent political actors. If one person dominates, check whether the underlying stories genuinely require that person or whether headline framing leaked into the synthesis.",
+        }
     if is_main_news:
         policy["balance"] = "Use paired left/right results when news_balance.balanced is true; disclose fallback when false."
         policy["allsides"] = "AllSides results are comparison context, never the final receipt for a current-event claim."
@@ -2095,6 +2137,7 @@ class Tools:
             )
 
         search_query = _build_search_query(cleaned_query, clock)
+        _, query_date_corrected = _ground_today_date(cleaned_query, clock)
         freshness = _freshness_filter(cleaned_query)
         is_news = _looks_like_news_query(cleaned_query)
         is_main_news = _looks_like_main_news_query(cleaned_query)
@@ -2325,6 +2368,7 @@ class Tools:
             ),
             "original_query": cleaned_query,
             "query": search_query,
+            "query_date_corrected": query_date_corrected,
             "freshness": freshness,
             "schedule_validation": schedule_validation,
             "news_balance": balance_summary,

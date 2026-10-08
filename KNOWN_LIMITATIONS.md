@@ -1,4 +1,4 @@
-# Known limitations — 0.1.0-alpha.2
+# Known limitations — 0.1.0-alpha.6 candidate
 
 - Full installation and browser acceptance still need testing in disposable
   native Linux and actual WSL2 environments. Static and mocked-provider tests
@@ -28,9 +28,19 @@
 - The Jupyter image omits the reference machine's accumulated compilers/caches.
 - Base packages have version pins, but the full transitive dependency graph is
   not locked. A clean dependency install remains a required release check.
+- The creative profile requires a supported NVIDIA/CUDA setup and substantial
+  model storage. Its installer and graphs are checked, but a clean-machine GPU
+  generation still needs native Linux and WSL2 acceptance.
+- Creative model licences differ from the stack licence. Weights are downloaded
+  from their pinned upstream repositories and are never redistributed here.
+- Qwen Image Desk and MiniMax share one ComfyUI endpoint and therefore serialise
+  practical GPU use. Each app may stop only the exact ComfyUI process it started.
+- MiniLM retrieval is opt-in, loopback-only and advisory. It can return an
+  irrelevant support item; final relevance and correctness remain Rhizome's job.
 
 - The optional GLiNER/Ornith workforce is agent-operated through CLI helpers,
-  not automatic browser routing. Real checkpoint inference, routing accuracy,
-  optional dependency installation and target-machine resource use are unverified.
-  Classifier calls cold-load in a bounded process. There is no durable worker
-  queue, server-side cancellation guarantee or automatic completion classifier.
+  not automatic browser routing. One reference machine has real shadow-mode and
+  worker acceptance evidence, but checkpoint weights are not distributed and a
+  new target still needs its own latency, memory and quality checks. The resident
+  classifier is staged but disabled by default. There is no durable worker queue,
+  server-side cancellation guarantee or automatic semantic acceptance.

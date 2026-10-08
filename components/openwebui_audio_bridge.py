@@ -133,8 +133,8 @@ def resolve_backend(device: object) -> tuple[str, str]:
 
 
 def wait_for_chatterbox(base: str = CHATTERBOX_BASE, timeout_s: float = STARTUP_WAIT_SECONDS) -> bool:
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
         try:
             r = requests.get(f'{base}/health', timeout=1.5)
             if r.ok:
@@ -365,8 +365,10 @@ def stt_transcribe():
 
     with tempfile.TemporaryDirectory(prefix='whisper_stt_') as td:
         td = Path(td)
-        src = td / (f.filename or 'input_audio')
-        src.write_bytes(f.read())
+        # Client filenames may be absolute paths or contain parent traversal.
+        # The decoder probes the content, so it does not need the original name.
+        src = td / 'input_audio'
+        f.save(src)
 
         started = time.monotonic()
         try:

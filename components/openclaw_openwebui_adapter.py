@@ -12,11 +12,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 
 HOST = "127.0.0.1"
-PORT = int(os.environ.get("OPENCLAW_WEBUI_ADAPTER_PORT", "18888"))
-GATEWAY = "http://127.0.0.1:18789"
+PORT = int(os.environ.get("OPENCLAW_WEBUI_ADAPTER_PORT", os.environ.get("ADAPTER_PORT", "18888")))
+GATEWAY = "http://127.0.0.1:" + str(int(os.environ.get("OPENCLAW_PORT", "18789")))
+CONFIG = Path(os.environ.get("OPENCLAW_CONFIG_PATH", os.environ.get("OPENCLAW_CONFIG", "~/.openclaw/openclaw.json"))).expanduser()
 MODEL_PREFIX = "openclaw/"
 OPENCLAW_BIN = os.environ.get(
     "OPENCLAW_BIN",
@@ -38,7 +40,7 @@ def open_gateway(req: urllib.request.Request):
 
 
 def gateway_token() -> str:
-    with open(os.path.expanduser("~/.openclaw/openclaw.json"), encoding="utf-8") as handle:
+    with CONFIG.open(encoding="utf-8") as handle:
         return json.load(handle)["gateway"]["auth"]["token"]
 
 
@@ -50,9 +52,10 @@ def refresh_models() -> list[dict]:
         capture_output=True,
         text=True,
         timeout=30,
+        env={**os.environ, "OPENCLAW_CONFIG_PATH": str(CONFIG)},
     )
     payload = json.loads(result.stdout[result.stdout.find("{"):])
-    with open(os.path.expanduser("~/.openclaw/openclaw.json"), encoding="utf-8") as handle:
+    with CONFIG.open(encoding="utf-8") as handle:
         config = json.load(handle)
     # The gateway honours the agent's model visibility allowlist.  The CLI
     # catalogue is broader, so advertising every "available" model would put
@@ -139,21 +142,37 @@ class Handler(BaseHTTPRequestHandler):
             self.json_response(502, {"error": {"message": str(exc)}})
 
     def do_POST(self) -> None:
+        # Every POST is a single logical run; close even on a rejected body so
+        # unread bytes cannot be interpreted as another HTTP request.
+        self.close_connection = True
         if self.path.rstrip("/") != "/v1/chat/completions":
             self.json_response(404, {"error": {"message": "not found"}})
             return
+        response_started = False
         try:
+            if self.headers.get("Transfer-Encoding"):
+                raise ValueError("transfer encoding is not supported; send Content-Length")
             size = int(self.headers.get("Content-Length", "0"))
             if size <= 0 or size > 20_000_000:
                 raise ValueError("invalid request size")
             body = self.rfile.read(size)
+            if len(body) != size:
+                raise ValueError("incomplete request body")
             payload = json.loads(body)
+            if not isinstance(payload, dict):
+                raise ValueError("request body must be an object")
             selected = payload.get("model", "")
-            if not selected.startswith(MODEL_PREFIX):
+            if not isinstance(selected, str) or not selected.startswith(MODEL_PREFIX):
                 raise ValueError("unknown OpenClaw model id")
             backend_model = selected[len(MODEL_PREFIX):]
+            if not backend_model or any(ord(char) < 32 or ord(char) == 127 for char in backend_model):
+                raise ValueError("invalid OpenClaw model id")
             if backend_model.startswith("ollama/"):
                 raise ValueError("Ollama models are intentionally excluded")
+        except (ValueError, TypeError) as exc:
+            self.json_response(400, {"error": {"message": str(exc)}})
+            return
+        try:
             payload["model"] = "openclaw/default"
             req = urllib.request.Request(
                 GATEWAY + "/v1/chat/completions",
@@ -173,17 +192,29 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-cache")
                 self.send_header("Connection", "close")
                 self.end_headers()
-                while chunk := upstream.read(65536):
+                response_started = True
+                # read(n) can wait for n bytes or EOF and stall small SSE
+                # events. read1 forwards whatever the socket has delivered.
+                while chunk := upstream.read1(65536):
                     self.wfile.write(chunk)
                     self.wfile.flush()
         except urllib.error.HTTPError as exc:
-            self.json_response(exc.code, json.loads(exc.read() or b'{}'))
+            with exc:
+                try:
+                    error = json.loads(exc.read(65536))
+                except (ValueError, OSError):
+                    error = None
+            if not isinstance(error, dict):
+                error = {"error": {"message": f"OpenClaw gateway returned HTTP {exc.code}"}}
+            self.json_response(exc.code, error)
         except (BrokenPipeError, ConnectionResetError):
             # The browser/client cancelled the request. There is no downstream
             # connection left on which to report another error.
             return
         except Exception as exc:
-            self.json_response(400, {"error": {"message": str(exc)}})
+            if not response_started:
+                self.json_response(502, {"error": {"message": str(exc)}})
+            # Once streaming begins, another HTTP response would corrupt it.
 
 
 if __name__ == "__main__":

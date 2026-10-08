@@ -24,6 +24,7 @@ case "$action" in
     printf '  welcome      Configure a provider and optional components\n'
     printf '  skills       List/install bundled skills\n'
     printf '  workforce    Routing advice or a bounded local Ornith job (JSON stdin)\n'
+    printf '  creative     Start Qwen Image Desk or MiniMax Music 3\n'
     printf '  import       Import private documents or chat exports (supports --dry-run)\n'
     printf '  configure    Edit local configuration\n'
     printf '  doctor       Check commands, runtime files and configuration\n'
@@ -32,6 +33,29 @@ case "$action" in
     ;;
   workforce)
     exec python3 "$RHIZOME_STACK_ROOT/components/rhizome_workforce.py" "${@:2}"
+    ;;
+  creative)
+    creative_action="${2:-status}"
+    case "$creative_action" in
+      qwen|image)
+        systemctl --user start qwen-image-desk.service
+        xdg-open "http://127.0.0.1:${QWEN_IMAGE_DESK_PORT:-8841}/image-studio/" >/dev/null 2>&1 &
+        ;;
+      minimax|music)
+        systemctl --user start minimax-music-api.service
+        xdg-open "http://127.0.0.1:${MINIMAX_MUSIC_PORT:-8830}/" >/dev/null 2>&1 &
+        ;;
+      status)
+        systemctl --user --no-pager status qwen-image-desk.service minimax-music-api.service
+        ;;
+      stop)
+        systemctl --user stop qwen-image-desk.service minimax-music-api.service
+        ;;
+      *)
+        printf 'usage: rhizome-stack creative {qwen|minimax|status|stop}\n' >&2
+        exit 64
+        ;;
+    esac
     ;;
   skills)
     exec python3 "$RHIZOME_STACK_ROOT/tools/skills.py" "${@:2}"
@@ -80,7 +104,7 @@ case "$action" in
     printf 'PASS core HTTP endpoints\n'
     ;;
   *)
-    printf 'usage: rhizome-stack {welcome|skills|workforce|import|configure|doctor|start|stop|status|smoke|help}\n' >&2
+    printf 'usage: rhizome-stack {welcome|skills|workforce|creative|import|configure|doctor|start|stop|status|smoke|help}\n' >&2
     exit 64
     ;;
 esac

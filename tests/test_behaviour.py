@@ -246,6 +246,29 @@ class SetupTest(unittest.TestCase):
             runner.copy_tree(source, target)
             self.assertEqual((target / "example.py").read_text(), "owner note")
 
+    def test_private_write_does_not_follow_predictable_temporary_symlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            victim = root / "other.txt"
+            victim.write_text("keep me")
+            config = root / "stack.env"
+            (root / "stack.env.tmp").symlink_to(victim)
+            installer.Runner(False).write(config, "SYNTHETIC_SETTING=value\n", 0o600)
+            self.assertEqual(victim.read_text(), "keep me")
+            self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(config.read_text(), "SYNTHETIC_SETTING=value\n")
+            self.assertEqual(list(root.glob(".stack.env.*")), [])
+
+    def test_failed_atomic_write_keeps_existing_file_and_cleans_temporary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = Path(temporary) / "stack.env"
+            config.write_text("old value")
+            with patch.object(installer.os, "fsync", side_effect=OSError("disk error")):
+                with self.assertRaises(OSError):
+                    installer.Runner(False).write(config, "new value", 0o600)
+            self.assertEqual(config.read_text(), "old value")
+            self.assertEqual(list(Path(temporary).glob(".stack.env.*")), [])
+
     def test_complete_skill_install_and_customisation_preserved(self):
         manifest = json.loads((ROOT / "manifests/skills.json").read_text())
         with tempfile.TemporaryDirectory() as temporary:

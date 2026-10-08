@@ -21,7 +21,15 @@
     ],
     "workforce": [
       "gliner-routing-adviser",
-      "ornith-text-worker"
+      "gliner-resident-shadow-helper",
+      "ornith-text-worker",
+      "minilm-retrieval"
+    ],
+    "creative": [
+      "comfyui",
+      "comfyui-gguf",
+      "qwen-image-desk",
+      "minimax-music-3"
     ]
   },
   "excluded_runtime_state": [
@@ -35,5 +43,10 @@
     "databases",
     "logs",
     "backups"
+  ],
+  "explicitly_not_packaged": [
+    "cutroom",
+    "ltx-video-workflows",
+    "creative-projects-and-outputs"
   ]
 }

@@ -5,4 +5,7 @@ After=ollama.service
 [Service]
 Type=oneshot
 EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+Environment=OPENCLAW_CONFIG=@@HOME@@/.openclaw/openclaw.json
+Environment=OPENCLAW_BIN=@@HOME@@/.npm-global/bin/openclaw
+Environment=PATH=@@STACK_ROOT@@/runtime/node-v22.22.0-linux-x64/bin:/usr/local/bin:/usr/bin
 ExecStart=@@STACK_ROOT@@/venvs/components/bin/python @@STACK_ROOT@@/components/openclaw_ollama_model_sync.py --once

@@ -38,7 +38,7 @@ testing. A source checkout rollback does not undo package or database migrations
 | --- | --- |
 | Linux/WSL installation and preservation | `tools/install.py`, `install-linux.sh`, `install-wsl.sh`, `install-wsl.ps1`, `uninstall.sh` |
 | CLI, setup and provider selection | `bin/rhizome-stack`, `tools/welcome.py`, `config/`, `docs/FIRST_RUN.md` |
-| Optional routing advice and cheap workers | `components/rhizome_workforce.py`, `config/workforce.example.json`, `docs/WORKFORCE.md`, `tests/test_workforce.py` |
+| Optional routing advice and cheap workers | `components/rhizome_workforce.py`, `components/workforce_gliner*.py`, `config/workforce.example.json`, `docs/WORKFORCE.md`, `tests/test_workforce.py` |
 | Chat routing and model discovery | `components/openclaw_openwebui_adapter.py`, `components/openclaw_ollama_model_sync.py`, `components/openwebui-tools/` |
 | Import formats, deduplication and index generations | `tools/import_formats.py`, `tools/import_owner_data.py`, `tools/initialise_empty_memory.py`, `docs/MEMORY.md` |
 | Memory retrieval and OpenClaw plugin | `components/query_memory_archive.py`, `components/memory-rhizome/`, `components/sync_openwebui_memory.py` |
@@ -90,11 +90,13 @@ testing. A source checkout rollback does not undo package or database migrations
 Run from the repository root before submitting changes:
 
 ```bash
-python3 tests/test_static.py
-python3 tests/test_behaviour.py
-python3 tests/test_workforce.py
+python3 tools/check.py
 git diff --check
 ```
+
+The runner discovers all `tests/test_*.py` files, including creative UI, HTTP
+service and release-integrity regressions. Node is required for the UI check;
+Flask and Requests for audio/web-search checks.
 
 The static suite includes syntax, template/patch checks, isolated import/setup
 checks, and release export with privacy audit and manifest verification. Behaviour

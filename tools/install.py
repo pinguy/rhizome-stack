@@ -12,6 +12,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -96,10 +97,19 @@ class Runner:
             if not backup.exists():
                 shutil.copy2(path, backup)
                 print(f"  backup: {backup}")
-        temporary = path.with_name(path.name + ".tmp")
-        temporary.write_text(content)
-        temporary.chmod(mode)
-        temporary.replace(path)
+        # Create privately and exclusively: a predictable .tmp can be a symlink,
+        # and writing before chmod briefly exposes newly generated credentials.
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=f".{path.name}.", delete=False) as stream:
+            temporary = Path(stream.name)
+            try:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+                temporary.chmod(mode)
+                temporary.replace(path)
+            finally:
+                temporary.unlink(missing_ok=True)
 
     def copy_tree(self, source: Path, destination: Path) -> None:
         print(f"+ seed {destination} from {source}")
@@ -143,7 +153,7 @@ def require_preflight(target: str) -> str:
     return distro_family(read_os_release())
 
 
-def package_command(family: str, *, voice: bool, jupyter: bool) -> list[str]:
+def package_command(family: str, *, voice: bool, jupyter: bool, creative: bool) -> list[str]:
     common_arch = [
         "base-devel", "curl", "git", "jq", "nodejs", "npm", "python", "python-pip",
         "python-virtualenv", "rsync", "sqlite", "xz", "zstd",
@@ -152,7 +162,7 @@ def package_command(family: str, *, voice: bool, jupyter: bool) -> list[str]:
         "build-essential", "ca-certificates", "curl", "git", "jq", "nodejs", "npm",
         "python3", "python3-pip", "python3-venv", "rsync", "sqlite3", "xz-utils", "zstd",
     ]
-    if voice:
+    if voice or creative:
         common_arch.append("ffmpeg")
         common_debian.append("ffmpeg")
     if jupyter:
@@ -225,7 +235,7 @@ def configure_files(runner: Runner) -> None:
     else:
         print(f"+ preserve existing {openclaw_config}")
     runner.copy_tree(PROJECT / "workspace-template", STACK_ROOT / "workspace")
-    for directory in ["components", "state/openwebui-data", "state/openwebui-code-work", "shared/openwebui-uploads"]:
+    for directory in ["components", "state/openwebui-data", "state/openwebui-code-work", "shared/openwebui-uploads", "creative/state"]:
         path = STACK_ROOT / directory
         print(f"+ ensure {path}")
         if not runner.dry_run:
@@ -427,6 +437,61 @@ def install_routing(runner: Runner) -> None:
                 str(PROJECT / "components/requirements-routing.txt")])
 
 
+def install_retrieval(runner: Runner) -> None:
+    """Install the explicit CPU MiniLM path and enable it in the private config."""
+    venv = STACK_ROOT / "venvs/retrieval"
+    if runner.dry_run or not venv.exists():
+        runner.run([sys.executable, "-m", "venv", str(venv)])
+    runner.run([str(venv / "bin/pip"), "install", "--index-url",
+                "https://download.pytorch.org/whl/cpu", "torch==2.10.0"])
+    runner.run([str(venv / "bin/pip"), "install", "-r",
+                str(PROJECT / "components/requirements-retrieval.txt")])
+    runner.run([str(venv / "bin/python"), str(PROJECT / "tools/fetch_minilm.py")])
+    target = CONFIG_DIR / "workforce.json"
+    if target.is_file():
+        config = json.loads(target.read_text())
+    else:
+        config = json.loads((PROJECT / "config/workforce.example.json").read_text())
+    defaults = json.loads((PROJECT / "config/workforce.example.json").read_text())["retrieval"]
+    retrieval = config.setdefault("retrieval", {})
+    for key, value in defaults.items():
+        retrieval.setdefault(key, value)
+    retrieval["enabled"] = True
+    rendered = json.dumps(config, indent=2).replace("%h", str(HOME))
+    runner.write(target, rendered + "\n", 0o600)
+
+
+def install_creative(runner: Runner, download_models: bool) -> None:
+    """Install pinned ComfyUI plus the one hash-guarded GGUF compatibility patch."""
+    source = STACK_ROOT / "creative/ComfyUI"
+    if not source.exists():
+        runner.run(["git", "clone", "--filter=blob:none", "https://github.com/Comfy-Org/ComfyUI.git", str(source)])
+        runner.run(["git", "-C", str(source), "checkout", "--detach", VERSIONS["comfyui_git"]])
+    venv = source / ".venv"
+    if runner.dry_run or not venv.exists():
+        runner.run([sys.executable, "-m", "venv", str(venv)])
+    pip = venv / "bin/pip"
+    runner.run([str(pip), "install", "--upgrade", "pip"])
+    runner.run([str(pip), "install", "--index-url", VERSIONS["creative_torch_index"],
+                f"torch=={VERSIONS['creative_torch']}",
+                f"torchvision=={VERSIONS['creative_torchvision']}",
+                f"torchaudio=={VERSIONS['creative_torchaudio']}"])
+    runner.run([str(pip), "install", "-r", str(source / "requirements.txt")])
+    gguf = source / "custom_nodes/ComfyUI-GGUF"
+    if not gguf.exists():
+        runner.run(["git", "clone", "--filter=blob:none", "https://github.com/city96/ComfyUI-GGUF.git", str(gguf)])
+        runner.run(["git", "-C", str(gguf), "checkout", "--detach", VERSIONS["comfyui_gguf_git"]])
+    runner.run([str(pip), "install", "-r", str(gguf / "requirements.txt")])
+    patch_set = PROJECT / "patches/comfyui-gguf" / VERSIONS["comfyui_gguf_git"]
+    if runner.dry_run:
+        print(f"+ apply hash-guarded patch set {patch_set} to {gguf}")
+    else:
+        runner.run([sys.executable, str(PROJECT / "tools/apply_patch_set.py"), str(patch_set), str(gguf)])
+    if download_models:
+        runner.run([str(venv / "bin/python"), str(PROJECT / "tools/fetch_creative_models.py"),
+                    "--comfy-root", str(source)])
+
+
 def install_jupyter(runner: Runner) -> None:
     runner.run([
         "podman", "build", "--tag", "localhost/rhizome-stack-jupyter:1",
@@ -459,18 +524,24 @@ def main() -> int:
     parser.add_argument("--with-memory", action="store_true")
     parser.add_argument("--with-jupyter", action="store_true")
     parser.add_argument("--with-routing", action="store_true", help="install optional CPU GLiNER dependencies; no model download or routing activation")
+    parser.add_argument("--with-retrieval", action="store_true", help="install and enable optional CPU MiniLM workforce retrieval")
+    parser.add_argument("--with-creative", action="store_true", help="install pinned ComfyUI, Qwen Image Desk and MiniMax Music 3")
+    parser.add_argument("--download-creative-models", action="store_true", help="download hash-verified Qwen and MiniMax weights; requires --with-creative")
     parser.add_argument("--with-skills", action="store_true", help="install the six core reliability skills")
     args = parser.parse_args()
     runner = Runner(args.dry_run)
     try:
         if args.download_models and not args.with_voice:
             raise InstallError("--download-models requires --with-voice")
+        if args.download_creative_models and not args.with_creative:
+            raise InstallError("--download-creative-models requires --with-creative")
         family = require_preflight(args.target)
         print(f"preflight: target={args.target} family={family} architecture={platform.machine()}")
         if not args.skip_packages:
             if family == "debian":
                 runner.run(["sudo", "apt-get", "update"])
-            runner.run(package_command(family, voice=args.with_voice, jupyter=args.with_jupyter))
+            runner.run(package_command(family, voice=args.with_voice, jupyter=args.with_jupyter,
+                                       creative=args.with_creative))
         configure_files(runner)
         install_components(runner)
         if args.with_skills:
@@ -489,6 +560,10 @@ def main() -> int:
                 install_jupyter(runner)
             if args.with_routing:
                 install_routing(runner)
+            if args.with_retrieval:
+                install_retrieval(runner)
+            if args.with_creative:
+                install_creative(runner, args.download_creative_models)
         if not args.dry_run:
             runner.run(["systemctl", "--user", "daemon-reload"])
         print("installation staged successfully")

@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": "loader.py",
+      "action": "replace",
+      "clean_sha256": "ffff39d209ce22654e67378b80c6a3ca3d349cf8f00ec267085bd16e194730c2",
+      "patched_sha256": "3efc582bf8aa42d7b11a4aac64111c5c2acafe43d944e63220f9928467ec8363",
+      "payload": "loader.py.replacement.txt"
+    }
+  ]
+}

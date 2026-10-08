@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#12161b">
+  <title>Qwen Image Desk</title>
+  <link rel="manifest" href="/image-studio/manifest.webmanifest">
+  <link rel="icon" href="/image-studio/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/image-studio/static/app.css">
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">Q</span>
+      <div>
+        <p class="eyebrow">LOCAL IMAGE UTILITY</p>
+        <h1>Qwen Image Desk</h1>
+      </div>
+    </div>
+    <div class="system-strip" aria-label="System status">
+      <span class="status-pill" id="openclawStatus">OpenClaw · checking</span>
+      <span class="status-pill" id="qwenStatus">Qwen · checking</span>
+      <span class="status-pill" id="queueStatus">Queue · idle</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="workbench" aria-label="Prompt and generation controls">
+      <div class="section-head">
+        <span class="step">01</span>
+        <div><p class="eyebrow">INTENT</p><h2>Start rough. Keep the point.</h2></div>
+      </div>
+
+      <label class="field-label" for="rawPrompt">Rough prompt</label>
+      <textarea id="rawPrompt" class="prompt-input" rows="5" placeholder="A tired astronaut having tea in a council-flat kitchen at night…"></textarea>
+
+      <div class="model-row">
+        <label class="field grow"><span>OpenClaw prompt model</span><select id="modelSelect"><option>Loading models…</option></select></label>
+        <button id="expandBtn" class="button primary" type="button">Expand prompt</button>
+      </div>
+      <p class="field-note" id="modelNote">The selected model only rewrites the image prompt. Qwen generates the picture locally.</p>
+
+      <div class="prompt-rail" id="promptRail">
+        <article class="prompt-card raw-card">
+          <header><span>ORIGINAL</span><span id="rawCount">0 chars</span></header>
+          <p id="originalPreview" class="prompt-preview">Your original wording stays visible here.</p>
+        </article>
+        <article class="prompt-card final-card">
+          <header><span>FINAL FOR QWEN</span><span id="expandedCount">0 chars</span></header>
+          <textarea id="expandedPrompt" rows="9" placeholder="Expand the rough prompt, use it raw, or write the final prompt here."></textarea>
+          <div class="inline-actions">
+            <button id="reexpandBtn" class="button quiet" type="button">Re-expand</button>
+            <button id="rawBtn" class="button quiet" type="button">Use raw prompt</button>
+          </div>
+        </article>
+      </div>
+
+      <details class="negative-wrap">
+        <summary>Negative guidance <span>optional</span></summary>
+        <label class="sr-only" for="negativePrompt">Negative guidance</label>
+        <textarea id="negativePrompt" rows="3" placeholder="watermark, duplicate subject, distorted hands…"></textarea>
+      </details>
+
+      <div class="section-head generation-head">
+        <span class="step">02</span>
+        <div><p class="eyebrow">EXPOSURE</p><h2>Set the frame. Make the image.</h2></div>
+      </div>
+
+      <div class="controls-grid">
+        <label class="field"><span>Frame</span><select id="presetSelect"><option value="">Loading shared sizes…</option></select><span id="customSize" class="custom-size" hidden><input id="customWidth" type="number" min="256" max="1792" step="64" value="1024" aria-label="Custom width"><b>×</b><input id="customHeight" type="number" min="256" max="1792" step="64" value="576" aria-label="Custom height"></span></label>
+        <label class="field"><span>Seed</span><div class="seed-row"><input id="seedInput" type="number" min="0" max="9223372036854775807" value="420251006"><button id="randomSeedBtn" class="icon-button" type="button" title="Choose random seed" aria-label="Choose random seed">↻</button></div></label>
+        <label class="field"><span>Variants</span><select id="batchSelect"><option value="1">1 image</option><option value="2">2 images</option><option value="3">3 images</option><option value="4">4 images</option></select></label>
+      </div>
+
+      <button id="generateBtn" class="button generate" type="button"><span>Generate with Qwen</span><span aria-hidden="true">→</span></button>
+      <div id="actionStatus" class="action-status" role="status">Idle — ready for a prompt.</div>
+
+      <div class="queue-panel">
+        <header><span>RECENT JOBS</span><span id="queueCount">0</span></header>
+        <div id="jobList" class="job-list"><p class="empty-small">No image jobs yet.</p></div>
+      </div>
+    </section>
+
+    <section class="lightbox" aria-label="Generated image preview">
+      <div class="section-head output-head">
+        <span class="step">03</span>
+        <div><p class="eyebrow">CONTACT SHEET</p><h2>Judge the result.</h2></div>
+      </div>
+
+      <div id="previewStage" class="preview-stage empty">
+        <div id="emptyPreview" class="empty-preview"><span class="aperture" aria-hidden="true"></span><strong>No exposure yet</strong><p>Your newest Qwen image will appear here.</p></div>
+        <a id="fullImageLink" href="#" target="_blank" rel="noopener" hidden><img id="resultImage" alt="Latest generated image"></a>
+      </div>
+
+      <div id="resultMeta" class="result-meta" hidden></div>
+      <div id="resultActions" class="result-actions" hidden>
+        <button id="showFolderBtn" class="button quiet" type="button">Show in folder</button>
+        <button id="reuseBtn" class="button quiet" type="button">Reuse settings</button>
+        <button id="rerunBtn" class="button quiet" type="button">Run same seed again</button>
+      </div>
+
+      <div class="history-head"><div><p class="eyebrow">RECENT</p><h3>Previous exposures</h3></div><span id="historyCount">0 images</span></div>
+      <div id="historyGrid" class="history-grid"><p class="empty-small">Generated images stay on disk and will collect here.</p></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
+  <script src="/image-studio/static/app.js" defer></script>
+</body>
+</html>

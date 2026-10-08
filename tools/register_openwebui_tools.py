@@ -14,6 +14,7 @@ TOOLS = {
     "rhizome_web_search": ("Web Search", "web_search.py", "Current public web research through the configured search provider."),
     "rhizome_memory": ("Local Memory", "memory_search.py", "Read-only search of local memory and book indexes."),
     "openclaw_agent": ("OpenClaw Agent", "openclaw_agent.py", "Delegate a bounded task to the paired local OpenClaw agent."),
+    "minimax_music_3": ("MiniMax Music 3", "minimax_music.py", "Generate a local song through the optional MiniMax Music 3 service."),
 }
 
 
@@ -66,4 +67,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

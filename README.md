@@ -9,7 +9,7 @@ Open WebUI and other open-source projects; upstream authorship is preserved in
 skills and optional speech.** Start with one working model, then add what you
 need. Linux and WSL2 use the same setup wizard.
 
-**Status: 0.1.0-alpha.2.** Installer and regression checks are automated; complete
+**Status: 0.1.0-alpha.6 candidate.** Installer and regression checks are automated; complete
 native Linux and WSL2 installations still need acceptance testing.
 Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working machine.
 
@@ -24,6 +24,9 @@ Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working ma
 | Semantic memory | Import your own documents, chat exports and RhizomeML data; hybrid retrieval | Optional |
 | Voice | Chatterbox-Nano TTS and faster-whisper STT | Optional |
 | Code interpreter | Podman-backed Jupyter environment | Optional |
+| CPU MiniLM retrieval | Revision-pinned semantic support for bounded workforce jobs | Optional |
+| Qwen Image Desk | Standalone local image workbench over pinned ComfyUI | Optional |
+| MiniMax Music 3 | Local song-generation web application over pinned ComfyUI | Optional |
 
 OpenClaw stays pinned to **2026.7.1-2** and Open WebUI to **0.11.0**.
 The pinned versions are compatibility choices, not promises that they are the
@@ -70,6 +73,13 @@ provider setup, optional modules and packaged Open WebUI tools.
 ./install-linux.sh --with-memory --with-skills
 ./install-linux.sh --with-voice --download-models
 ./install-linux.sh --with-jupyter
+./install-linux.sh --with-routing
+./install-linux.sh --with-retrieval
+./install-linux.sh --with-creative --download-creative-models
+
+# Launch either creative app after installation.
+rhizome-stack creative qwen
+rhizome-stack creative minimax
 
 # See the collection, or install the extra skills deliberately.
 rhizome-stack skills list
@@ -92,6 +102,7 @@ browser profiles and model weights are never seeded from the reference machine.
 - [Memory formats, provenance and rebuilding](docs/MEMORY.md)
 - [Skills and companion projects](docs/INTEGRATIONS.md)
 - [GLiNER routing advice and the Ornith workforce](docs/WORKFORCE.md)
+- [ComfyUI, Qwen Image Desk and MiniMax Music 3](docs/CREATIVE.md)
 - [Updating and troubleshooting](docs/MAINTENANCE.md)
 - [Native Linux](docs/LINUX.md) · [WSL2](docs/WSL.md)
 - [Changes](CHANGELOG.md) · [Known limitations](KNOWN_LIMITATIONS.md)
@@ -99,12 +110,18 @@ browser profiles and model weights are never seeded from the reference machine.
 ## Development and releases
 
 ```bash
-python3 tests/test_static.py
-python3 tests/test_behaviour.py
-python3 tests/test_workforce.py
+# Keep the test environment outside the source tree.
+python3 -m venv /tmp/rhizome-stack-tests
+/tmp/rhizome-stack-tests/bin/python -m pip install Flask==3.1.2 requests==2.32.5 numpy==2.3.5 faiss-cpu==1.15.0
+/tmp/rhizome-stack-tests/bin/python tools/check.py
 python3 tools/export_release.py --output /tmp/rhizome-stack-release
 python3 tools/build_release.py --output-root /tmp/rhizome-stack-build
 ```
+
+The test runner discovers every `tests/test_*.py` suite and returns a failure
+if any suite fails. Node is needed for the creative JavaScript regression;
+FAISS storage checks skip explicitly when its dependencies are absent.
+See [hygiene review notes](docs/HYGIENE_REVIEW.md) for changes and validation limits.
 
 The exporter copies only the paths in `manifests/release-files.json`, then runs
 the privacy audit and SHA-256 manifest verification. Unlisted files are excluded.

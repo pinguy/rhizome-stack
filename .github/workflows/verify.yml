@@ -15,13 +15,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Static, privacy and idempotence tests
-        run: python3 tests/test_static.py
-      - name: Import, model selection and preservation regressions
-        run: python3 tests/test_behaviour.py
-      - name: Routing advice and local worker regressions
-        run: python3 tests/test_workforce.py
-      - name: Install memory storage test dependencies
-        run: python3 -m pip install numpy==2.3.5 faiss-cpu==1.15.0
-      - name: Verify real FAISS index generations
-        run: python3 tests/test_behaviour.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - name: Install regression test dependencies
+        run: python3 -m pip install Flask==3.1.2 requests==2.32.5 numpy==2.3.5 faiss-cpu==1.15.0
+      - name: Run every bundled regression suite
+        run: python3 tools/check.py
+      - name: Check whitespace
+        run: git diff --check
+      - name: Install release compressor
+        run: sudo apt-get update && sudo apt-get install -y zstd
+      - name: Verify reproducible release archives
+        shell: bash
+        run: |
+          python3 tools/build_release.py --output-root "$RUNNER_TEMP/rhizome-build-a"
+          python3 tools/build_release.py --output-root "$RUNNER_TEMP/rhizome-build-b"
+          version="$(cat VERSION)"
+          cmp "$RUNNER_TEMP/rhizome-build-a/$version/rhizome-stack.tar.zst" "$RUNNER_TEMP/rhizome-build-b/$version/rhizome-stack.tar.zst"
+          cmp "$RUNNER_TEMP/rhizome-build-a/$version/rhizome-stack.zip" "$RUNNER_TEMP/rhizome-build-b/$version/rhizome-stack.zip"

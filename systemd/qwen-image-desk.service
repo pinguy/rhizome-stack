@@ -1,0 +1,19 @@
+[Unit]
+Description=Standalone Qwen Image Desk
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+Environment=APP_HOST=127.0.0.1
+Environment=APP_PORT=8841
+Environment=COMFY_DIR=@@STACK_ROOT@@/creative/ComfyUI
+Environment=COMFY_PY=@@STACK_ROOT@@/creative/ComfyUI/.venv/bin/python
+WorkingDirectory=@@STACK_ROOT@@/components/creative/qwen-image-desk
+ExecStart=@@STACK_ROOT@@/creative/ComfyUI/.venv/bin/python @@STACK_ROOT@@/components/creative/qwen-image-desk/app.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target

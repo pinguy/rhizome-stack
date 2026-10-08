@@ -1,9 +1,16 @@
 # Contributing
 
-Run `python3 tests/test_static.py`, `python3 tests/test_behaviour.py` and
-`python3 tests/test_workforce.py` before submitting a change. A release must
-also pass `tools/privacy_audit.py`, manifest verification and the deterministic
-two-build comparison.
+Run `python3 tools/check.py` before submitting a change. It discovers all
+`tests/test_*.py` suites, runs them with the current Python interpreter and
+reports every failing suite. Individual test files can still be run directly.
+See the README for an isolated test environment; Flask and Requests are needed
+for audio/web-search tests, NumPy and FAISS enable the real storage regression,
+and Node runs the creative UI rendering check. Do not treat a skipped optional
+check as a pass for that feature.
+
+CI runs every suite and builds both ZIP and tar.zst archives twice, comparing
+each pair byte-for-byte. Each export also passes the privacy audit, release
+allow-list and SHA-256/size verification.
 
 Add distributable source files to `manifests/release-files.json`. Keep Skills
 upstream copies byte-identical to their pinned revision and update all checksums

@@ -7,8 +7,16 @@
   "node_min": "22",
   "node_runtime": "22.22.0",
   "chatterbox_git": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",
+  "comfyui_git": "af89add63f71a487fde45efc7fba744f3455ae73",
+  "comfyui_gguf_git": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a",
+  "creative_torch": "2.13.0",
+  "creative_torchvision": "0.28.0",
+  "creative_torchaudio": "2.11.0",
+  "creative_torch_index": "https://download.pytorch.org/whl/cu130",
+  "minilm_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
   "notes": [
     "OpenClaw 2026.8.1 is deliberately not selected; it failed on the customised reference stack.",
-    "A newer version must pass patch compatibility and full end-to-end tests before changing this pin."
+    "A newer version must pass patch compatibility and full end-to-end tests before changing this pin.",
+    "Creative model weights are optional, separately downloaded, revision-pinned and hash-verified."
   ]
 }

@@ -1,0 +1,19 @@
+[Unit]
+Description=Rhizome resident GLiNER shadow classifier
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=@@STACK_ROOT@@/venvs/routing/bin/python @@STACK_ROOT@@/components/workforce_gliner_server.py --config %h/.config/rhizome-stack/workforce.json
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=HF_DATASETS_OFFLINE=1
+Environment=PYTHONNOUSERSITE=1
+Environment=NO_PROXY=*
+Environment=no_proxy=*
+WorkingDirectory=/tmp
+Restart=no
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target

@@ -13,8 +13,10 @@ import urllib.request
 from pathlib import Path
 
 
-CONFIG = Path.home() / ".openclaw" / "openclaw.json"
-OLLAMA_TAGS = "http://127.0.0.1:11434/api/tags"
+CONFIG = Path(os.environ.get("OPENCLAW_CONFIG_PATH", os.environ.get("OPENCLAW_CONFIG", "~/.openclaw/openclaw.json"))).expanduser()
+OLLAMA_BASE = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+OLLAMA_TAGS = OLLAMA_BASE + "/api/tags"
+OPENCLAW_BIN = os.environ.get("OPENCLAW_BIN", "openclaw")
 POLL_SECONDS = 10
 
 
@@ -27,7 +29,7 @@ def ollama_models() -> set[str]:
             continue
         name = row["name"]
         request = urllib.request.Request(
-            "http://127.0.0.1:11434/api/show",
+            OLLAMA_BASE + "/api/show",
             data=json.dumps({"model": name}).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -49,7 +51,7 @@ def sync_once() -> bool:
         raise RuntimeError("agents.defaults.models is not an object")
 
     updated = {key: value for key, value in current.items() if not key.startswith("ollama/")}
-    updated.update({key: {} for key in sorted(wanted)})
+    updated.update({key: current.get(key, {}) for key in sorted(wanted)})
     if updated == current:
         return False
 
@@ -62,11 +64,13 @@ def sync_once() -> bool:
         value = Path(value_path).read_text(encoding="utf-8")
         subprocess.run(
             [
-                "openclaw", "config", "set", "agents.defaults.models",
+                OPENCLAW_BIN, "config", "set", "agents.defaults.models",
                 value, "--strict-json", "--replace",
             ],
             check=True,
             stdout=subprocess.DEVNULL,
+            timeout=30,
+            env={**os.environ, "OPENCLAW_CONFIG_PATH": str(CONFIG)},
         )
     finally:
         os.unlink(value_path)
@@ -82,6 +86,8 @@ def main() -> int:
             sync_once()
         except Exception as exc:
             print(f"sync failed: {exc}", file=sys.stderr, flush=True)
+            if oneshot:
+                return 1
         if oneshot:
             return 0
         time.sleep(POLL_SECONDS)

@@ -6,8 +6,7 @@ Keep your working configuration and data backed up. From a clean checkout:
 
 ```bash
 git pull --ff-only
-python3 tests/test_static.py
-python3 tests/test_behaviour.py
+python3 tools/check.py
 ./install-linux.sh --dry-run --with-skills
 rhizome-stack stop
 ./install-linux.sh --with-skills
@@ -77,6 +76,14 @@ distributable source/docs paths there. Never generate it from a runtime install,
 and never add private state just to make a release check pass.
 
 The release builder runs the privacy audit, creates a SHA-256 manifest and
-produces deterministic tar.zst output. Compare two independent builds before
+produces deterministic ZIP and tar.zst output. Verification also checks byte
+counts, the release allow-list and the absence of symlinks. Compare two independent builds before
 publishing an archive. GitHub source commits and downloadable release archives
 are different deliverables; pushing this repository does not create a release.
+
+The adapter reads `OPENCLAW_PORT`; model sync reads `OPENCLAW_BIN` and
+`OLLAMA_BASE_URL`. Both prefer `OPENCLAW_CONFIG_PATH`, with `OPENCLAW_CONFIG`
+as a compatibility fallback, and pass that same config path to the CLI.
+For model sync, a failed one-shot sync
+now marks its systemd run as failed instead of reporting success. Existing
+aliases and model parameters survive catalogue refreshes.

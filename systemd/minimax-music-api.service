@@ -1,0 +1,20 @@
+[Unit]
+Description=MiniMax Music 3 local web application
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+Environment=APP_HOST=127.0.0.1
+Environment=APP_PORT=8830
+Environment=COMFY_DIR=@@STACK_ROOT@@/creative/ComfyUI
+Environment=COMFY_PY=@@STACK_ROOT@@/creative/ComfyUI/.venv/bin/python
+Environment=COMFY_IDLE_SECONDS=300
+WorkingDirectory=@@STACK_ROOT@@/components/creative/minimax-music
+ExecStart=@@STACK_ROOT@@/creative/ComfyUI/.venv/bin/python @@STACK_ROOT@@/components/creative/minimax-music/app.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target
