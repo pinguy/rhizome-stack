@@ -2,6 +2,19 @@
 
 ## Unreleased — hygiene review
 
+- Add wizard-selected models to the gateway allow-list and preserve fallback
+  routes, aliases and model tuning when changing the primary provider.
+- Treat HTTP 404 as a missing tool during registration while retaining other
+  API failures and preserving existing tool customisations.
+- Protect Whisper decoding from stale idle timers, bound worker startup/reply
+  waits, and reap failed workers without unread stderr pipes.
+- Restore Chatterbox's cached default voice after successful or failed previews,
+  including installations without a configured reference WAV; use a monotonic
+  idle clock and reject malformed text/seed inputs before generation.
+- Honour speech cancellation during startup and the final chunk, the configured
+  bridge port, and custom voice-model download directories.
+- Extend private atomic writes to onboarding, memory-plugin setup and imported
+  records; add setup and voice lifecycle regressions.
 - Forward small chat streaming events promptly; preserve gateway error status,
   handle non-JSON errors, and never append a second response to a broken stream.
 - Preserve Ollama per-model aliases/parameters during catalogue sync, respect

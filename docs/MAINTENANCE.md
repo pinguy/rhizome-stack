@@ -87,3 +87,23 @@ as a compatibility fallback, and pass that same config path to the CLI.
 For model sync, a failed one-shot sync
 now marks its systemd run as failed instead of reporting success. Existing
 aliases and model parameters survive catalogue refreshes.
+
+The welcome wizard also adds its selected model to `agents.defaults.models`,
+so the adapter can advertise it, and retains existing fallback routes and model
+tuning. If an earlier wizard run selected a model which is missing from the
+picker, rerun welcome with that provider/model and check a real chat afterwards.
+
+The audio bridge honours `AUDIO_BRIDGE_PORT`. If changing it, also update both
+Open WebUI audio base URLs; set `CHATTERBOX_BASE` when moving the TTS backend.
+Whisper startup and decoding have separate timeouts, configurable through
+`WHISPER_STARTUP_TIMEOUT_SECONDS` (120 by default) and
+`WHISPER_DECODE_TIMEOUT_SECONDS` (300). A timeout reaps the local worker so the
+next request can start fresh. Worker stderr goes to service logs. Idle unload
+waits for decoding to finish and ignores timers cancelled by newer requests.
+Speech stop takes effect after the current backend call; it does not interrupt
+Chatterbox mid-generation or stop its service.
+
+Voice previews restore the cached configured or bundled default conditioning,
+even after a generation failure. After updating the optional voice services,
+check a transcription, a preview followed by normal speech, and stop during a
+long utterance. Synthetic lifecycle regressions do not establish audio quality.

@@ -12,9 +12,10 @@ import secrets
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
+
+from file_utils import atomic_write_text
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -99,17 +100,7 @@ class Runner:
                 print(f"  backup: {backup}")
         # Create privately and exclusively: a predictable .tmp can be a symlink,
         # and writing before chmod briefly exposes newly generated credentials.
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
-                                         prefix=f".{path.name}.", delete=False) as stream:
-            temporary = Path(stream.name)
-            try:
-                stream.write(content)
-                stream.flush()
-                os.fsync(stream.fileno())
-                temporary.chmod(mode)
-                temporary.replace(path)
-            finally:
-                temporary.unlink(missing_ok=True)
+        atomic_write_text(path, content, mode)
 
     def copy_tree(self, source: Path, destination: Path) -> None:
         print(f"+ seed {destination} from {source}")
@@ -381,7 +372,8 @@ def install_voice(runner: Runner, download_models: bool) -> None:
                 raise InstallError("Chatterbox patch is neither applicable nor already applied")
     runner.run([str(pip), "install", "--editable", str(source)])
     if download_models:
-        runner.run([str(venv / "bin/python"), str(PROJECT / "tools/fetch_voice_models.py")])
+        runner.run([str(venv / "bin/python"), str(PROJECT / "tools/fetch_voice_models.py"),
+                    "--model-root", str(STACK_ROOT / "models")])
 
 
 def install_memory(runner: Runner, node_bin: Path) -> None:
@@ -419,10 +411,7 @@ def install_memory(runner: Runner, node_bin: Path) -> None:
         backup = config_path.with_suffix(".json.before-memory-rhizome")
         if not backup.exists():
             shutil.copy2(config_path, backup)
-        temporary = config_path.with_suffix(".json.tmp")
-        temporary.write_text(json.dumps(config, indent=2) + "\n")
-        temporary.chmod(0o600)
-        temporary.replace(config_path)
+        atomic_write_text(config_path, json.dumps(config, indent=2) + "\n")
         runner.run(["env", node_path, str(HOME / ".npm-global/bin/openclaw"), "config", "validate"])
 
 

@@ -17,6 +17,7 @@ import zipfile
 from pathlib import Path
 
 from import_formats import records as conversation_records, structured_records
+from file_utils import atomic_write_text
 
 STACK_ROOT = Path(os.environ.get("RHIZOME_STACK_ROOT", Path.home() / ".local/share/rhizome-stack")).expanduser()
 ROOT = STACK_ROOT / "memory"
@@ -127,10 +128,7 @@ def import_source(source: Path, kind: str, dry_run: bool = False) -> int:
                     if origin in origins:
                         continue
                     origins.append(origin)
-                temporary = destination.with_suffix(".tmp")
-                temporary.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
-                temporary.chmod(0o600)
-                temporary.replace(destination)
+                atomic_write_text(destination, json.dumps(record, ensure_ascii=False, indent=2) + "\n")
     return count
 
 

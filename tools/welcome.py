@@ -15,6 +15,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from file_utils import atomic_write_text
+
 
 HOME = Path.home()
 CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "rhizome-stack"
@@ -73,10 +75,7 @@ def set_env(updates: dict[str, str]) -> None:
         if key not in seen:
             rendered.append(f"{key}={value}")
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    temporary = ENV_PATH.with_suffix(".tmp")
-    temporary.write_text("\n".join(rendered) + "\n")
-    temporary.chmod(0o600)
-    temporary.replace(ENV_PATH)
+    atomic_write_text(ENV_PATH, "\n".join(rendered) + "\n")
 
 
 def request_json(url: str, headers: dict[str, str]) -> object:
@@ -134,14 +133,16 @@ def update_openclaw(provider: str, model: str, base_url: str, env_name: str) -> 
         if not any(row.get("id") == model for row in models):
             models.append({"id": model, "name": model})
         set_env({"OLLAMA_BASE_URL": base_url, "OLLAMA_BASE_URLS": base_url, "DEFAULT_OLLAMA_MODEL": model})
-    config.setdefault("agents", {}).setdefault("defaults", {})["model"] = {"primary": primary}
+    defaults = config.setdefault("agents", {}).setdefault("defaults", {})
+    # Keep fallback routes and per-model tuning while making the selected
+    # primary visible to the gateway and Open WebUI's adapter catalogue.
+    selection = defaults.get("model")
+    defaults["model"] = {**(selection if isinstance(selection, dict) else {}), "primary": primary}
+    defaults.setdefault("models", {}).setdefault(primary, {})
     backup = OPENCLAW_CONFIG.with_name("openclaw.json.before-welcome")
     if not backup.exists():
         shutil.copy2(OPENCLAW_CONFIG, backup)
-    temporary = OPENCLAW_CONFIG.with_suffix(".tmp")
-    temporary.write_text(json.dumps(config, indent=2) + "\n")
-    temporary.chmod(0o600)
-    temporary.replace(OPENCLAW_CONFIG)
+    atomic_write_text(OPENCLAW_CONFIG, json.dumps(config, indent=2) + "\n")
 
 
 def configure_gguf(base_url: str) -> tuple[str, bool, str]:
@@ -215,8 +216,7 @@ def main() -> int:
         "skills": yes("Add the core reliability and handover skills?", True),
     }
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(json.dumps({"schema": 1, "backend": provider, "model": model, "verified": True, "verification": "model-catalogue", "inference_verified": False, "optional": choices}, indent=2) + "\n")
-    STATE_PATH.chmod(0o600)
+    atomic_write_text(STATE_PATH, json.dumps({"schema": 1, "backend": provider, "model": model, "verified": True, "verification": "model-catalogue", "inference_verified": False, "optional": choices}, indent=2) + "\n")
     selected = [name for name, enabled in choices.items() if enabled]
     if selected:
         print("\nSelected optional components: " + ", ".join(selected))

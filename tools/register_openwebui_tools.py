@@ -31,7 +31,10 @@ def api(base: str, token: str, method: str, path: str, body: dict | None = None)
             raw = response.read()
             return json.loads(raw) if raw else None
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode(errors="replace")
+        with exc:
+            if exc.code == 404 and method == "GET" and path.startswith("/id/"):
+                return None
+            detail = exc.read(4096).decode(errors="replace")
         raise RuntimeError(f"Open WebUI API {exc.code}: {detail[:1000]}") from exc
 
 

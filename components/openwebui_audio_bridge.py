@@ -5,6 +5,7 @@ import io
 import json
 import os
 import re
+import selectors
 import subprocess
 import tempfile
 import time
@@ -41,6 +42,8 @@ CHATTERBOX_GPU_SERVICE = os.environ.get('CHATTERBOX_GPU_SERVICE', 'chatterbox-na
 STARTUP_WAIT_SECONDS = float(os.environ.get('CHATTERBOX_STARTUP_WAIT_SECONDS', '45'))
 HEALTH_POLL_INTERVAL = float(os.environ.get('CHATTERBOX_HEALTH_POLL_INTERVAL', '0.4'))
 WHISPER_MODEL_IDLE_SECONDS = float(os.environ.get('WHISPER_MODEL_IDLE_SECONDS', '300'))
+WHISPER_STARTUP_TIMEOUT_SECONDS = float(os.environ.get('WHISPER_STARTUP_TIMEOUT_SECONDS', '120'))
+WHISPER_DECODE_TIMEOUT_SECONDS = float(os.environ.get('WHISPER_DECODE_TIMEOUT_SECONDS', '300'))
 # Chatterbox stays warm between utterances and unloads itself after its own
 # idle window (CHATTERBOX_IDLE_SECONDS in chatterbox-nano.service). The bridge
 # only starts it; it never tears it down, because Voice Lab shares the service.
@@ -56,10 +59,13 @@ _whisper_worker_lock = Lock()
 _whisper_decode_lock = Lock()
 _whisper_worker: subprocess.Popen[str] | None = None
 _whisper_unload_timer: Timer | None = None
+_whisper_idle_epoch = 0
 
 
 def split_tts_text(text: str, limit: int = CHATTERBOX_CHUNK_CHARS) -> list[str]:
     """Split long text internally while keeping one browser playback job."""
+    if limit <= 0:
+        raise ValueError('TTS chunk size must be positive')
     if len(text) <= limit:
         return [text]
     chunks: list[str] = []
@@ -110,14 +116,14 @@ def join_wav_parts(parts: list[bytes]) -> bytes:
     return output.getvalue()
 
 
-def check_auth() -> tuple[bool, Response | None]:
+def check_auth() -> tuple[bool, Response | None, int]:
     auth = request.headers.get('Authorization', '')
     if not auth.startswith('Bearer '):
         return False, jsonify({'error': 'missing bearer token'}), 401
     token = auth.split(' ', 1)[1].strip()
     if token != BRIDGE_API_KEY:
         return False, jsonify({'error': 'invalid api key'}), 401
-    return True, None
+    return True, None, 200
 
 
 def resolve_backend(device: object) -> tuple[str, str]:
@@ -173,66 +179,137 @@ def ensure_chatterbox_running(base: str = CHATTERBOX_BASE, service: str = CHATTE
         return wait_for_chatterbox(base, timeout_s=STARTUP_WAIT_SECONDS)
 
 
-def get_whisper_worker() -> subprocess.Popen[str]:
-    global _whisper_worker
-    if _whisper_worker is not None and _whisper_worker.poll() is None:
-        return _whisper_worker
-    env = os.environ.copy()
-    env['WHISPER_MODEL'] = WHISPER_MODEL
-    env.setdefault('WHISPER_COMPUTE_TYPE', 'int8')
-    env.setdefault('WHISPER_CPU_THREADS', '16')
-    _whisper_worker = subprocess.Popen(
-        [WHISPER_PYTHON, str(TTS_SST_DIR / 'whisper_worker.py')],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-        env=env,
-    )
-    ready = _whisper_worker.stdout.readline() if _whisper_worker.stdout else ''
-    if not ready or not json.loads(ready).get('ready'):
-        error = _whisper_worker.stderr.read()[-1200:] if _whisper_worker.stderr else ''
-        raise RuntimeError(f'Whisper worker failed to become ready: {error}')
-    return _whisper_worker
-
-
-def unload_whisper_model_if_idle() -> None:
-    global _whisper_worker, _whisper_unload_timer
-    with _whisper_worker_lock:
-        worker, _whisper_worker = _whisper_worker, None
-        _whisper_unload_timer = None
-        if worker is not None and worker.poll() is None:
+def stop_whisper_worker(worker: subprocess.Popen[str]) -> None:
+    """Reap only our worker and close its pipes, including after failed startup."""
+    try:
+        if worker.poll() is None:
             worker.terminate()
             try:
                 worker.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 worker.kill()
                 worker.wait(timeout=5)
+    finally:
+        for stream in (worker.stdin, worker.stdout, worker.stderr):
+            if stream is not None:
+                stream.close()
+
+
+def whisper_reply(worker: subprocess.Popen[str], timeout_s: float) -> dict:
+    """Read one bounded JSON line without hanging on EOF or a partial line."""
+    if worker.stdout is None:
+        raise RuntimeError('Whisper worker output unavailable')
+    deadline = time.monotonic() + timeout_s
+    raw = bytearray()
+    with selectors.DefaultSelector() as selector:
+        selector.register(worker.stdout, selectors.EVENT_READ)
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not selector.select(remaining):
+                raise TimeoutError('Whisper worker response timed out')
+            chunk = os.read(worker.stdout.fileno(), 4096)
+            if not chunk:
+                raise RuntimeError('Whisper worker closed its output before replying')
+            raw.extend(chunk)
+            if len(raw) > 1024 * 1024:
+                raise RuntimeError('Whisper worker response exceeds 1 MiB')
+            if b'\n' in raw:
+                line, trailing = raw.split(b'\n', 1)
+                if trailing.strip():
+                    raise RuntimeError('unexpected extra Whisper worker reply')
+                value = json.loads(line)
+                if not isinstance(value, dict):
+                    raise RuntimeError('Whisper worker reply must be an object')
+                return value
+
+
+def get_whisper_worker() -> subprocess.Popen[str]:
+    global _whisper_worker
+    if _whisper_worker is not None and _whisper_worker.poll() is None:
+        return _whisper_worker
+    if _whisper_worker is not None:
+        stop_whisper_worker(_whisper_worker)
+        _whisper_worker = None
+    env = os.environ.copy()
+    env['WHISPER_MODEL'] = WHISPER_MODEL
+    env.setdefault('WHISPER_COMPUTE_TYPE', 'int8')
+    env.setdefault('WHISPER_CPU_THREADS', '16')
+    worker = subprocess.Popen(
+        [WHISPER_PYTHON, str(TTS_SST_DIR / 'whisper_worker.py')],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        # Inherit the journal/terminal: an unread stderr pipe can fill during
+        # model loading and block the worker before it sends its ready message.
+        stderr=None,
+        text=True,
+        bufsize=1,
+        env=env,
+    )
+    try:
+        if not whisper_reply(worker, WHISPER_STARTUP_TIMEOUT_SECONDS).get('ready'):
+            raise RuntimeError('Whisper worker failed to become ready; check service logs')
+    except Exception:
+        stop_whisper_worker(worker)
+        raise
+    _whisper_worker = worker
+    return worker
+
+
+def unload_whisper_model_if_idle(epoch: int | None = None) -> None:
+    global _whisper_worker, _whisper_unload_timer
+    # Use the same lock order as decoding. A stale timer may already be waiting
+    # when a new request cancels it, so check its epoch after acquiring the lock.
+    with _whisper_decode_lock, _whisper_worker_lock:
+        if epoch is not None and epoch != _whisper_idle_epoch:
+            return
+        worker, _whisper_worker = _whisper_worker, None
+        _whisper_unload_timer = None
+        if worker is not None:
+            stop_whisper_worker(worker)
+
+
+def cancel_whisper_unload() -> None:
+    global _whisper_unload_timer, _whisper_idle_epoch
+    with _whisper_worker_lock:
+        _whisper_idle_epoch += 1
+        if _whisper_unload_timer is not None:
+            _whisper_unload_timer.cancel()
+            _whisper_unload_timer = None
 
 
 def schedule_whisper_unload() -> None:
-    global _whisper_unload_timer
+    global _whisper_unload_timer, _whisper_idle_epoch
     if WHISPER_MODEL_IDLE_SECONDS <= 0:
         return
     with _whisper_worker_lock:
+        _whisper_idle_epoch += 1
         if _whisper_unload_timer is not None:
             _whisper_unload_timer.cancel()
-        _whisper_unload_timer = Timer(WHISPER_MODEL_IDLE_SECONDS, unload_whisper_model_if_idle)
+        _whisper_unload_timer = Timer(WHISPER_MODEL_IDLE_SECONDS, unload_whisper_model_if_idle,
+                                     args=(_whisper_idle_epoch,))
         _whisper_unload_timer.daemon = True
         _whisper_unload_timer.start()
 
 
 def transcribe_whisper_audio(audio_path: Path) -> str:
+    global _whisper_worker
     worker = get_whisper_worker()
-    if worker.stdin is None or worker.stdout is None:
-        raise RuntimeError('Whisper worker pipes unavailable')
-    worker.stdin.write(json.dumps({'audio_path': str(audio_path)}) + '\n')
-    worker.stdin.flush()
-    response = json.loads(worker.stdout.readline())
-    if 'error' in response:
-        raise RuntimeError(response['error'])
-    return response.get('text', '').strip()
+    try:
+        if worker.stdin is None or worker.stdout is None:
+            raise RuntimeError('Whisper worker pipes unavailable')
+        worker.stdin.write(json.dumps({'audio_path': str(audio_path)}) + '\n')
+        worker.stdin.flush()
+        response = whisper_reply(worker, WHISPER_DECODE_TIMEOUT_SECONDS)
+        if 'error' in response:
+            raise RuntimeError(response['error'])
+        text = response.get('text')
+        if not isinstance(text, str):
+            raise RuntimeError('Whisper worker reply must contain text')
+        return text.strip()
+    except Exception:
+        _whisper_worker = None
+        stop_whisper_worker(worker)
+        raise
 
 
 @app.get('/health')
@@ -288,22 +365,27 @@ def tts_speech():
     if not ok:
         return err, status[0]
 
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({'error': 'request body must be a JSON object'}), 400
     text = body.get('input') or body.get('text') or ''
-
-    if not text.strip():
+    if not isinstance(text, str) or not text.strip():
         return jsonify({'error': "'input' text is required"}), 400
+    if not normalize_tts_chunk(text):
+        return jsonify({'error': "'input' must contain speakable text"}), 400
+    if CHATTERBOX_CHUNK_CHARS <= 0:
+        return jsonify({'error': 'TTS chunk size must be positive'}), 500
 
     # Device hint: JSON "device" or X-Chatterbox-Device header. Absent => CPU,
     # so Open WebUI (which never sends it) is unaffected.
     device = body.get('device') or request.headers.get('X-Chatterbox-Device')
     base, service = resolve_backend(device)
 
-    if not ensure_chatterbox_running(base, service):
-        return jsonify({'error': 'chatterbox not ready after startup wait'}), 502
-
     with _tts_epoch_lock:
         epoch = _tts_cancel_epoch
+
+    if not ensure_chatterbox_running(base, service):
+        return jsonify({'error': 'chatterbox not ready after startup wait'}), 502
 
     audio_parts: list[bytes] = []
     for raw_chunk in split_tts_text(text):
@@ -321,8 +403,12 @@ def tts_speech():
         except Exception:
             # One retry handles a cold-start race, or an idle unload that landed
             # between chunks; restart it rather than only waiting on health.
+            if tts_cancelled(epoch):
+                return jsonify({'error': 'cancelled'}), 409
             if not ensure_chatterbox_running(base, service):
                 return jsonify({'error': 'chatterbox request failed and service is still not healthy'}), 502
+            if tts_cancelled(epoch):
+                return jsonify({'error': 'cancelled'}), 409
             try:
                 r = requests.post(f'{base}/v1/audio/speech', json=payload, headers={'Authorization': f'Bearer {BRIDGE_API_KEY}'}, timeout=300)
                 r.raise_for_status()
@@ -331,6 +417,8 @@ def tts_speech():
                 return jsonify({'error': f'chatterbox request failed: {exc}', 'detail': detail}), 502
         audio_parts.append(r.content)
 
+    if tts_cancelled(epoch):
+        return jsonify({'error': 'cancelled'}), 409
     try:
         audio = audio_parts[0] if len(audio_parts) == 1 else join_wav_parts(audio_parts)
     except Exception as exc:
@@ -360,8 +448,8 @@ def stt_transcribe():
     if not f:
         return jsonify({'error': "multipart field 'file' is required"}), 400
 
-    if not Path(TRANSCRIBE_SH).exists():
-        return jsonify({'error': f'transcribe.sh not found: {TRANSCRIBE_SH}'}), 500
+    if not whisper_configured():
+        return jsonify({'error': 'Whisper interpreter or worker is missing; install the voice profile'}), 500
 
     with tempfile.TemporaryDirectory(prefix='whisper_stt_') as td:
         td = Path(td)
@@ -373,6 +461,7 @@ def stt_transcribe():
         started = time.monotonic()
         try:
             with _whisper_decode_lock:
+                cancel_whisper_unload()
                 text = transcribe_whisper_audio(src)
                 schedule_whisper_unload()
         except Exception as e:
@@ -386,5 +475,9 @@ def stt_transcribe():
     })
 
 
+def whisper_configured() -> bool:
+    return Path(WHISPER_PYTHON).is_file() and (TTS_SST_DIR / 'whisper_worker.py').is_file()
+
+
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=8010)
+    app.run(host='127.0.0.1', port=int(os.environ.get('AUDIO_BRIDGE_PORT', '8010')))

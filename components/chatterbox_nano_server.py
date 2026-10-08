@@ -48,26 +48,30 @@ if REFERENCE_WAV is not None:
     with torch.inference_mode():
         model.prepare_conditionals(str(REFERENCE_WAV))
 active_reference = str(REFERENCE_WAV) if REFERENCE_WAV is not None else "model-default"
+# prepare_conditionals replaces model.conds. Keep the loaded default (including
+# the bundled voice when no reference WAV is configured) to restore cheaply.
+default_conditionals = model.conds
+default_reference = active_reference
 
 # Idle tracking lives here rather than in a client because every caller
 # (Open WebUI bridge, Voice Lab, ad-hoc curl) hits this process directly.
 # Health polls deliberately do not count as activity: a UI left open must not
 # keep the model resident forever.
 activity_lock = Lock()
-last_activity = time.time()
+last_activity = time.monotonic()
 active_requests = 0
 
 def mark_activity(delta: int = 0) -> None:
     global last_activity, active_requests
     with activity_lock:
         active_requests += delta
-        last_activity = time.time()
+        last_activity = time.monotonic()
 
 def idle_seconds() -> float:
     with activity_lock:
         if active_requests > 0:
             return 0.0
-        return time.time() - last_activity
+        return time.monotonic() - last_activity
 
 def idle_watchdog() -> None:
     while True:
@@ -115,10 +119,13 @@ def speech():
     global active_reference
     if not authorised():
         return jsonify({"error": "invalid bearer token"}), 401
-    body = request.get_json(silent=True) or {}
-    text = str(body.get("input") or body.get("text") or "").strip()
-    if not text:
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "request body must be a JSON object"}), 400
+    text = body.get("input") or body.get("text") or ""
+    if not isinstance(text, str) or not text.strip():
         return jsonify({"error": "'input' text is required"}), 400
+    text = text.strip()
     if len(text) > MAX_INPUT_CHARS:
         return jsonify({"error": f"input exceeds {MAX_INPUT_CHARS} characters"}), 400
     try:
@@ -128,9 +135,13 @@ def speech():
     seed = body.get("seed")
     if seed is not None:
         try:
+            if isinstance(seed, bool) or not isinstance(seed, (str, int)):
+                raise ValueError
             seed = int(seed)
+            if not -(2**63) <= seed < 2**64:
+                raise ValueError
         except (TypeError, ValueError):
-            return jsonify({"error": "seed must be an integer"}), 400
+            return jsonify({"error": "seed must be an integer between -2^63 and 2^64-1"}), 400
     started = time.monotonic()
     mark_activity(+1)
     try:
@@ -144,9 +155,9 @@ def speech():
             finally:
                 # Per-request conditioning mutates model.conds. A Voice Lab preview
                 # must never leak into the next Open WebUI request.
-                if reference_audio is not None and REFERENCE_WAV is not None:
-                    model.prepare_conditionals(str(REFERENCE_WAV))
-                    active_reference = str(REFERENCE_WAV)
+                if reference_audio is not None:
+                    model.conds = default_conditionals
+                    active_reference = default_reference
     except Exception as exc:
         app.logger.exception("Chatterbox generation failed")
         return jsonify({"error": f"chatterbox generation failed: {exc}"}), 500

@@ -1,4 +1,60 @@
-# Hygiene review — 7 October 2026
+# Hygiene review — 8 October 2026
+
+Second pass over the supplied pre-media/voice-lab archive. OpenClaw 2026.7.1-2,
+Open WebUI 0.11.0, all other compatibility/model pins, bundled skill snapshots,
+and routing defaults are retained. No installed service, owner configuration or
+model weight was changed during this review.
+
+## Additional fixes
+
+| Area | Confirmed failure | Change |
+| --- | --- | --- |
+| Provider onboarding | A selected model could remain absent from the allow-list used by the adapter; selecting a primary erased fallbacks | Add the selected model and retain existing model settings/fallbacks |
+| Tool registration | A missing tool reported by HTTP 404 aborted first-time registration | Accept 404 only for tool-ID lookup; preserve existing tools and propagate other errors |
+| Whisper lifecycle | A previous idle timer could terminate an active decoder; unbounded reads and unread stderr could hang it | Serialise idle unload with decoding, invalidate stale timers, bound JSON replies and reap failed workers |
+| Voice preview isolation | With no configured reference WAV, a preview left its conditioning in the shared model | Restore the cached bundled/configured default after success or failure without re-encoding it |
+| Speech requests | JSON arrays/non-text input could fail as server errors; stop during startup/final generation was missed | Validate text and seeds before model work; retain the cancellation epoch through startup and check completion |
+| Runtime paths | The bridge ignored its configured port; voice downloads ignored custom install roots | Honour the port and pass the selected model directory explicitly |
+| Private writes | Wizard, memory-plugin and import paths still used predictable temporary filenames | Share exclusive private writes with fsync, atomic replacement and failure cleanup |
+
+## Verification of this pass
+
+- Eleven suites passed: 96 unittest cases, plus the static and creative
+  graph/manifest check groups, with no skips. Nineteen regression cases were
+  added for the failures above.
+- Real FAISS I/O uses deterministic vectors; no embedding model was downloaded.
+- Real local subprocess pipes exercise partial replies, EOF, Unicode text,
+  failed startup and decode cleanup. A concurrent timer fixture verifies that
+  unload waits for the decode lock and ignores a superseded timer.
+- A loopback HTTP fixture exercises first-time tool registration, preserving
+  an existing tool and propagating authentication/create errors.
+- Chatterbox request isolation uses synthetic conditioning/waveform objects.
+  The pinned upstream source was inspected to confirm that preparing a preview
+  replaces `model.conds`. These checks do not test speech inference or quality.
+- Installer/setup/import tests use disposable directories and symlink fixtures;
+  no working installation was modified. The custom-root download test mocks the
+  downloader and fetches no weights.
+- Privacy audit, allow-list, SHA-256/size verification and `git diff --check`
+  passed. Two independent ZIP and tar.zst builds matched byte-for-byte, retaining
+  the supplied executable permissions.
+
+Test environment: Linux x86-64, Python 3.12, Node for JavaScript checks, and the
+Flask/Requests/NumPy/FAISS versions documented in the repository's CI. Dependencies
+were installed in a disposable environment outside the source tree. Complete
+Linux/WSL installation, live provider chat, actual Whisper/Chatterbox inference,
+and GPU image/music generation remain unverified here. No compatibility upgrade
+or real model download was attempted.
+
+## Applying this archive
+
+Use the updated source with the existing maintenance procedure and inspect an
+installer dry run using the same optional profiles as the target. Preserve
+private config and weights. Refresh the voice components and restart only the
+affected services deliberately, then check actual chat, transcription, voice
+preview isolation and long-speech stop through the browser. Existing populated
+`stack.env` files are preserved; add timeout overrides locally only if needed.
+
+## Previous pass — 7 October 2026
 
 Reviewed the supplied 0.1.0-alpha.6 candidate archive and applied the fixes below.
 The upstream version pins, model manifests, bundled skill snapshots and runtime
