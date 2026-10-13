@@ -276,8 +276,28 @@ function selectAsset(asset) {
 function renderHistory() {
   ui.historyCount.textContent = `${state.assets.length} image${state.assets.length === 1 ? "" : "s"}`;
   if (!state.assets.length) { ui.history.innerHTML = '<p class="empty-small">Generated images stay on disk and will collect here.</p>'; return; }
-  ui.history.innerHTML = state.assets.slice(0, 18).map(asset => `<button class="history-card" data-id="${escapeHtml(asset.id)}" type="button"><img src="${escapeHtml(asset.media_url)}" loading="lazy" alt="Qwen result"><span class="history-copy"><strong>${escapeHtml(asset.original_prompt || asset.prompt)}</strong><span>${asset.width}×${asset.height} · seed ${asset.seed}</span></span></button>`).join("");
-  ui.history.querySelectorAll("[data-id]").forEach(button => button.addEventListener("click", () => selectAsset(state.assets.find(asset => asset.id === button.dataset.id))));
+  ui.history.innerHTML = state.assets.slice(0, 18).map(asset => `<div class="history-card" data-id="${escapeHtml(asset.id)}"><button class="history-select" data-action="select" type="button"><img src="${escapeHtml(asset.media_url)}" loading="lazy" alt="Qwen result"><span class="history-copy"><strong>${escapeHtml(asset.original_prompt || asset.prompt)}</strong><span>${asset.width}×${asset.height} · seed ${asset.seed}</span></span></button><button class="history-delete" data-action="delete" type="button" aria-label="Delete image" title="Delete image">×</button></div>`).join("");
+  ui.history.querySelectorAll('[data-action="select"]').forEach(button => button.addEventListener("click", () => {
+    const card = button.closest("[data-id]");
+    selectAsset(state.assets.find(asset => asset.id === card.dataset.id));
+  }));
+  ui.history.querySelectorAll('[data-action="delete"]').forEach(button => button.addEventListener("click", async () => {
+    const card = button.closest("[data-id]");
+    const asset = state.assets.find(item => item.id === card.dataset.id);
+    if (!asset || !window.confirm("Delete this image? It will be moved to Trash.")) return;
+    button.disabled = true;
+    try {
+      await api("/api/image-studio/delete", {
+        method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id: asset.id}),
+      });
+      if (state.selectedAsset?.id === asset.id) state.selectedAsset = null;
+      notify("Image moved to Trash.");
+      await refreshState();
+    } catch (error) {
+      button.disabled = false;
+      notify(error.message, true);
+    }
+  }));
 }
 
 async function refreshState() {

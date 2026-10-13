@@ -42,7 +42,10 @@ def request(method, url, body=None, timeout=30, headers=None):
 
 def health(kind):
     endpoint = "/api/health" if kind == "music" else "/api/image-studio/health"
-    return request("GET", (MUSIC if kind == "music" else IMAGE) + endpoint, timeout=5)
+    value = request("GET", (MUSIC if kind == "music" else IMAGE) + endpoint, timeout=5)
+    if not isinstance(value, dict) or not isinstance(value.get("busy"), bool):
+        raise RuntimeError("Generation app returned an invalid health response")
+    return value
 
 
 def connection_refused(exc):
@@ -64,7 +67,9 @@ def ensure_app(kind):
         try:
             health(kind)
             return
-        except (urllib.error.URLError, TimeoutError):
+        except urllib.error.URLError as exc:
+            if not connection_refused(exc):
+                raise
             time.sleep(1)
     raise RuntimeError("The local generation app did not become ready")
 

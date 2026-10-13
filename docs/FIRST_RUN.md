@@ -21,6 +21,11 @@ environment. GGUF files stay where you put them.
 
 Existing provider logins and customised configurations are best handled with
 `openclaw configure`; the wizard is intended for initial setup.
+Selecting a model adds it to the adapter's visibility list and keeps existing
+model aliases, parameters and fallback settings. The first OpenClaw configuration
+is retained as `openclaw.json.before-welcome`. Configuration replacements use
+exclusive mode-0600 temporary files, so a failed write leaves the previous file
+intact.
 
 ## 2. Choose optional components
 

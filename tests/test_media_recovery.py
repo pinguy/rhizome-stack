@@ -30,6 +30,16 @@ def http_error(code):
 
 
 class QueueSafetyTest(unittest.TestCase):
+    def test_startup_http_error_is_not_retried_as_offline(self):
+        refused = urllib.error.URLError(ConnectionRefusedError())
+        with patch.object(media, 'health', side_effect=[refused, http_error(503)]) as health, \
+             patch.object(media.subprocess, 'run') as run, patch.object(media.time, 'sleep') as sleep:
+            with self.assertRaises(urllib.error.HTTPError):
+                media.ensure_app('image')
+            self.assertEqual(health.call_count, 2)
+            run.assert_called_once()
+            sleep.assert_not_called()
+
     def test_only_refused_connection_means_offline(self):
         with patch.object(media, 'request', side_effect=urllib.error.URLError(ConnectionRefusedError())):
             self.assertTrue(media.comfy_idle())

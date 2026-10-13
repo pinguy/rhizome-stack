@@ -1,4 +1,4 @@
-# Known limitations — 0.1.0-alpha.6 candidate
+# Known limitations — 0.1.0-alpha.7 candidate
 
 - Full installation and browser acceptance still need testing in disposable
   native Linux and actual WSL2 environments. Static and mocked-provider tests

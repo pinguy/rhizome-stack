@@ -99,9 +99,13 @@ input, select { min-height: 44px; padding: 0 12px; }
 .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .history-head { margin-top: 38px; padding-top: 24px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: end; color: var(--muted); }
 .history-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.history-card { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); min-width: 0; text-align: left; color: var(--text); padding: 0; }
+.history-card { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); min-width: 0; }
 .history-card:hover { border-color: var(--blue); }
+.history-select { display: block; width: 100%; border: 0; background: transparent; text-align: left; color: var(--text); padding: 0; }
 .history-card img { display: block; width: 100%; aspect-ratio: 1.35; object-fit: cover; background: #090b0e; }
+.history-delete { position: absolute; top: 7px; right: 7px; width: 30px; height: 30px; border: 2px solid #fff; border-radius: 50%; padding: 0 0 2px; display: grid; place-items: center; background: #c62828; color: #fff; font: 800 22px/1 Arial, sans-serif; box-shadow: 0 2px 9px rgba(0,0,0,.7); }
+.history-delete:hover { background: #f44336; transform: scale(1.06); }
+.history-delete:disabled { opacity: .55; cursor: wait; }
 .history-copy { padding: 10px; }
 .history-copy strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
 .history-copy span { display: block; margin-top: 5px; color: var(--muted); font: 10px/1.3 ui-monospace, monospace; }

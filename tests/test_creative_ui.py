@@ -1,10 +1,14 @@
 """Run the actual MiniMax UI handlers against a tiny DOM fixture in Node."""
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 NODE = shutil.which('node')
@@ -12,6 +16,46 @@ NODE = shutil.which('node')
 
 @unittest.skipUnless(NODE, 'Node is required for creative JavaScript checks')
 class CreativeUITest(unittest.TestCase):
+    def test_qwen_gallery_prunes_stale_records_and_deletes_via_trash(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            output = temporary / 'output'
+            state = temporary / 'state'
+            output.mkdir()
+            image = output / 'kept.png'
+            image.write_bytes(b'png')
+            module_dir = ROOT / 'components/creative/qwen-image-desk'
+            with patch.dict(os.environ, {
+                'COMFY_OUTPUT': str(output),
+                'QWEN_DESK_STATE': str(state),
+                'RHIZOME_STACK_ROOT': str(temporary / 'stack'),
+            }):
+                sys.path.insert(0, str(module_dir))
+                try:
+                    spec = importlib.util.spec_from_file_location('qwen_gallery_test', module_dir / 'app.py')
+                    qwen = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(qwen)
+                finally:
+                    sys.path.remove(str(module_dir))
+            jobs = qwen.JobQueue(qwen.ComfyEngine())
+            jobs.assets = [
+                {'id': 'asset-kept', 'relative_path': 'kept.png'},
+                {'id': 'asset-stale', 'relative_path': 'missing.png'},
+            ]
+            snapshot = jobs.snapshot()
+            self.assertEqual([item['id'] for item in snapshot['assets']], ['asset-kept'])
+            with patch.object(qwen.subprocess, 'run', return_value=subprocess.CompletedProcess(['gio'], 0, '', '')) as trashed:
+                self.assertEqual(jobs.delete_asset('asset-kept'), {'deleted': True, 'id': 'asset-kept'})
+            trashed.assert_called_once_with(['gio', 'trash', str(image)], capture_output=True,
+                                            text=True, timeout=30, check=False)
+            self.assertEqual(jobs.assets, [])
+            jobs.assets = [{'id': 'asset-escape', 'relative_path': '../outside.png'}]
+            with self.assertRaisesRegex(ValueError, 'outside the creative output directory'):
+                jobs.delete_asset('asset-escape')
+            script = (module_dir / 'static/app.js').read_text()
+            self.assertIn('data-action="delete"', script)
+            self.assertIn('/api/image-studio/delete', script)
+
     def test_titles_filenames_and_errors_are_rendered_as_text(self):
         spec = importlib.util.spec_from_file_location('music_ui_test', ROOT / 'components/creative/minimax-music/app.py')
         music = importlib.util.module_from_spec(spec)

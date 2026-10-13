@@ -9,7 +9,7 @@ Open WebUI and other open-source projects; upstream authorship is preserved in
 skills and optional speech.** Start with one working model, then add what you
 need. Linux and WSL2 use the same setup wizard.
 
-**Status: 0.1.0-alpha.6 candidate.** Installer and regression checks are automated; complete
+**Status: 0.1.0-alpha.7 candidate.** Installer and regression checks are automated; complete
 native Linux and WSL2 installations still need acceptance testing.
 Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working machine.
 
@@ -148,7 +148,8 @@ python3 tools/build_release.py --output-root /tmp/rhizome-stack-build
 The test runner discovers every `tests/test_*.py` suite and returns a failure
 if any suite fails. Node is needed for the creative JavaScript regression;
 FAISS storage checks skip explicitly when its dependencies are absent.
-See [hygiene review notes](docs/HYGIENE_REVIEW.md) for changes and validation limits.
+See the [13 October integration review](docs/HYGIENE_REVIEW_2026-10-13.md)
+for this update, and the [earlier review](docs/HYGIENE_REVIEW.md).
 
 The exporter copies only the paths in `manifests/release-files.json`, then runs
 the privacy audit and SHA-256 manifest verification. Unlisted files are excluded.

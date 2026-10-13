@@ -171,9 +171,11 @@ def save_reference(data: bytes, filename: str) -> dict:
         with Image.open(io.BytesIO(data)) as opened:
             if opened.format not in {"PNG", "JPEG", "WEBP"}:
                 raise ValueError("reference must be PNG, JPEG or WebP")
-            prepared = ImageOps.exif_transpose(opened).convert("RGB")
-            if prepared.width < 64 or prepared.height < 64 or prepared.width * prepared.height > 40_000_000:
+            # Reject oversized dimensions before EXIF transpose/convert decode
+            # and allocate the full pixel buffer.
+            if opened.width < 64 or opened.height < 64 or opened.width * opened.height > 40_000_000:
                 raise ValueError("reference dimensions are unsupported")
+            prepared = ImageOps.exif_transpose(opened).convert("RGB")
             reference_id = "ref-" + uuid.uuid4().hex
             REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
             target = REFERENCE_DIR / f"{reference_id}.png"
@@ -305,7 +307,7 @@ class JobQueue:
         if not prompt or len(prompt) > 16000:
             raise ValueError("Final prompt must contain 1 to 16,000 characters")
         base_seed = int(body.get("seed", random.randrange(2**53)))
-        if not 0 <= base_seed <= 2**63 - 1:
+        if not 0 <= base_seed <= 2**63 - count:
             raise ValueError("Seed is outside the supported range")
         reference = reference_image(body["reference_image_id"]) if body.get("reference_image_id") else None
         created = []
@@ -400,6 +402,11 @@ class JobQueue:
 
     def snapshot(self) -> dict:
         with self.lock:
+            existing = [item for item in self.assets
+                        if (COMFY_OUTPUT / str(item.get("relative_path") or "")).is_file()]
+            if len(existing) != len(self.assets):
+                self.assets = existing
+                self.save()
             assets = []
             for item in self.assets:
                 asset = dict(item)
@@ -408,6 +415,25 @@ class JobQueue:
                 asset["media_url"] = "/media/" + urllib.parse.quote(asset["relative_path"])
                 assets.append(asset)
             return {"jobs": [dict(job) for job in self.jobs[-100:]], "assets": assets}
+
+    def delete_asset(self, asset_id: str) -> dict:
+        if not isinstance(asset_id, str) or not asset_id.startswith("asset-"):
+            raise ValueError("invalid image id")
+        with self.lock:
+            asset = next((item for item in self.assets if item.get("id") == asset_id), None)
+            if asset is None:
+                raise ValueError("image is no longer in the gallery")
+            target = (COMFY_OUTPUT / str(asset.get("relative_path") or "")).resolve()
+            if not target.is_relative_to(COMFY_OUTPUT.resolve()):
+                raise ValueError("image path is outside the creative output directory")
+            if target.is_file():
+                trashed = subprocess.run(["gio", "trash", str(target)], capture_output=True,
+                                         text=True, timeout=30, check=False)
+                if trashed.returncode != 0:
+                    raise RuntimeError(trashed.stderr.strip() or "could not move image to Trash")
+            self.assets = [item for item in self.assets if item.get("id") != asset_id]
+            self.save()
+            return {"deleted": True, "id": asset_id}
 
 
 ENGINE = ComfyEngine()
@@ -504,6 +530,8 @@ class Handler(BaseHTTPRequestHandler):
                                                          bool(body.get("editing"))))
             if self.path == "/api/image-studio/generate":
                 return self.send_json(202, {"jobs": JOBS.enqueue(self.json_body())})
+            if self.path == "/api/image-studio/delete":
+                return self.send_json(200, JOBS.delete_asset(self.json_body().get("id", "")))
             if self.path == "/api/image-studio/reference":
                 length = int(self.headers.get("Content-Length", "0"))
                 if self.headers.get("Transfer-Encoding") or not 0 < length <= 20 * 1024**2:

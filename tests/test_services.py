@@ -203,6 +203,22 @@ class WorkforceHTTPTest(unittest.TestCase):
 
 
 class CreativeHTTPTest(unittest.TestCase):
+    def test_qwen_oversized_reference_rejected_before_pixel_decode(self):
+        opened = unittest.mock.MagicMock(format='PNG', width=10000, height=10000)
+        opened.__enter__.return_value = opened
+        with patch.object(qwen.Image, 'open', return_value=opened), \
+             patch.object(qwen.ImageOps, 'exif_transpose') as decode:
+            with self.assertRaisesRegex(ValueError, 'dimensions'):
+                qwen.save_reference(b'synthetic image header', 'fixture.png')
+            decode.assert_not_called()
+    def test_qwen_batch_seed_overflow_rejected_before_enqueue(self):
+        with patch.object(qwen.JOBS.pending, 'put') as enqueue, \
+             patch.object(qwen.JOBS, 'jobs', []), patch.object(qwen.JOBS, 'save'):
+            with self.assertRaisesRegex(ValueError, 'Seed'):
+                qwen.JOBS.enqueue({'preset': 'square-standard', 'final_prompt': 'Fixture',
+                                   'seed': 2**63 - 1, 'batch_count': 2})
+            enqueue.assert_not_called()
+
     def test_audio_rejects_traversal_absolute_paths_and_symlink_escape(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -310,6 +326,12 @@ class CreativeHTTPTest(unittest.TestCase):
 
 
 class LocalMediaBridgeTest(unittest.TestCase):
+    def test_malformed_app_health_is_not_idle(self):
+        for value in ({}, [], {'busy': 'false'}):
+            with self.subTest(value=value), patch.object(media, 'request', return_value=value):
+                with self.assertRaisesRegex(RuntimeError, 'invalid health'):
+                    media.health('image')
+
     def test_busy_generator_prevents_ollama_unload(self):
         with patch.object(media, 'health', return_value={'busy': True}), \
              patch.object(media, 'request') as upstream:

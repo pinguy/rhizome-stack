@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-alpha.7 candidate — 13 October 2026 integration
+
+- Integrate the reviewed archive with the current repository, retaining its
+  existing onboarding, private-write, voice and media-recovery improvements.
+- Upgrade the packaged Brave search tool from 1.7.2 to the supplied 1.9.0,
+  including bounded async work, partial results and expanded diagnostics.
+- Add Qwen gallery deletion through desktop Trash and prune stale entries.
+- Validate generator health responses and stop startup polling on HTTP errors.
+- Reject oversized references before pixel decoding and seed overflow before
+  queueing a Qwen batch. Extend regression coverage and document verification.
+
 ## Unreleased — hygiene review
 
 - Add wizard-selected models to the gateway allow-list and preserve fallback

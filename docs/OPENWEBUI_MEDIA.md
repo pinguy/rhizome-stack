@@ -84,7 +84,7 @@ never an arbitrary filesystem path or remote URL.
 
 - Media calls are serialised; active work is not interrupted.
 - Only a refused connection counts as an offline service. HTTP errors,
-  timeouts and malformed queue responses block hand-off or report cleanup
+  timeouts and malformed health or queue responses block hand-off or report cleanup
   failure; they are not evidence that the engine is idle or stopped.
 - Generation submission is not automatically retried.
 - A failed or timed-out job is reported as a failure, never as a created file.
