@@ -30,6 +30,45 @@ spec.loader.exec_module(adapter)
 
 
 class SetupRegressions(unittest.TestCase):
+    def test_ollama_opt_in_preserves_existing_installation(self):
+        runner = MagicMock(dry_run=False)
+        with patch.object(install.shutil, 'which', return_value='/usr/bin/ollama'):
+            install.install_ollama(runner, 'arch')
+        runner.run.assert_not_called()
+
+    def test_ollama_dry_run_uses_arch_packages_and_never_executes(self):
+        runner = install.Runner(dry_run=True)
+        commands = []
+        with patch.object(install.shutil, 'which', side_effect=lambda name:
+                          '/usr/bin/nvidia-smi' if name == 'nvidia-smi' else None), \
+             patch.object(runner, 'run', side_effect=lambda cmd: commands.append(cmd)):
+            install.install_ollama(runner, 'arch')
+        self.assertEqual(commands, [
+            ['sudo', 'pacman', '-S', '--needed', 'ollama', 'ollama-cuda'],
+            ['sudo', 'systemctl', 'enable', '--now', 'ollama'],
+        ])
+
+    def test_ollama_debian_dry_run_never_downloads(self):
+        runner = install.Runner(dry_run=True)
+        with patch.object(install.shutil, 'which', return_value=None), \
+             patch.object(install.urllib.request, 'urlopen') as download, \
+             patch.object(runner, 'run') as run:
+            install.install_ollama(runner, 'debian')
+        download.assert_not_called()
+        run.assert_called_once_with(['sudo', 'systemctl', 'enable', '--now', 'ollama'])
+
+    def test_ollama_welcome_offers_install_only_when_needed(self):
+        with patch.object(welcome.shutil, 'which', return_value=None), \
+             patch.object(welcome, 'request_json', return_value={'models': []}), \
+             patch.object(welcome, 'yes') as confirm:
+            welcome.ensure_ollama('ollama', 'http://127.0.0.1:11434')
+        confirm.assert_not_called()  # Existing API-only Ollama backend works.
+
+        with patch.object(welcome.shutil, 'which', return_value=None), \
+             patch.object(welcome, 'yes', return_value=False), \
+             self.assertRaisesRegex(ValueError, 'declined'):
+            welcome.ensure_ollama('gguf', 'http://127.0.0.1:11434')
+
     def test_voice_fetch_uses_selected_root_without_downloading_in_tests(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / 'custom/models'

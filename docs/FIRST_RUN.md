@@ -15,9 +15,17 @@ an alias from its catalogue, use the listed ID or configure it manually through
 `openclaw configure`. A successful catalogue check is recorded separately from
 inference: it does not prove quota, chat permissions, tool calling or generation.
 
-Ollama must already be running with a model installed. When a custom Ollama
-endpoint is chosen, the same endpoint is saved to both OpenClaw and the stack
-environment. GGUF files stay where you put them.
+The wizard detects a missing local Ollama CLI when Ollama or GGUF is selected
+and offers to install it and start the system service with your approval.
+You can install in advance with `./install-linux.sh --with-ollama`. Existing
+Ollama installations and services are not changed. On Arch/CachyOS, pacman
+installs Ollama and the separate CUDA package when NVIDIA is detected; on
+Debian/Ubuntu, the opt-in installer downloads and executes Ollama's official
+HTTPS installation script. Review that upstream script if required by your
+security policy. The wizard does not automatically download model weights:
+use `ollama pull <model>` or import a local GGUF. A custom Ollama API endpoint
+is preserved in OpenClaw and the stack environment. GGUF files stay where
+you put them. A real model response must still be tested after setup.
 
 Existing provider logins and customised configurations are best handled with
 `openclaw configure`; the wizard is intended for initial setup.

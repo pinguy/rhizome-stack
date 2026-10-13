@@ -12,7 +12,9 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
+import urllib.request
 from pathlib import Path
 
 from file_utils import atomic_write_text
@@ -162,6 +164,41 @@ def package_command(family: str, *, voice: bool, jupyter: bool, creative: bool) 
     if family == "arch":
         return ["sudo", "pacman", "-S", "--needed", *common_arch]
     return ["sudo", "apt-get", "install", "-y", *common_debian]
+
+
+def install_ollama(runner: Runner, family: str) -> None:
+    """Install Ollama only when explicitly requested and missing."""
+    if shutil.which("ollama"):
+        print("+ preserve existing Ollama installation (no package or service changes)")
+        return
+
+    if family == "arch":
+        packages = ["ollama"]
+        # Arch ships the NVIDIA runtime separately from its base Ollama package.
+        if shutil.which("nvidia-smi"):
+            packages.append("ollama-cuda")
+        runner.run(["sudo", "pacman", "-S", "--needed", *packages])
+    elif family == "debian":
+        url = "https://ollama.com/install.sh"
+        print(f"+ fetch and execute official Ollama installer from {url}")
+        if not runner.dry_run:
+            # Download completely over HTTPS before executing; never pipe a
+            # partial download into a privileged shell.
+            with urllib.request.urlopen(url, timeout=30) as response:
+                script = response.read(256 * 1024 + 1)
+            if not script or len(script) > 256 * 1024:
+                raise InstallError("Ollama installer download was empty or too large")
+            with tempfile.TemporaryDirectory(prefix="rhizome-ollama-") as temp:
+                path = Path(temp) / "install.sh"
+                path.write_bytes(script)
+                runner.run(["sh", str(path)])
+    else:
+        raise InstallError(f"unsupported Ollama installation family: {family}")
+
+    if not runner.dry_run and not shutil.which("ollama"):
+        raise InstallError("Ollama installer finished but the ollama command is missing")
+    # Only manage the service when this invocation installed Ollama.
+    runner.run(["sudo", "systemctl", "enable", "--now", "ollama"])
 
 
 def render_unit(name: str, stack_root: Path) -> str:
@@ -508,6 +545,7 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--skip-packages", action="store_true")
     parser.add_argument("--skip-runtime", action="store_true")
+    parser.add_argument("--with-ollama", action="store_true", help="install Ollama if missing; leave existing installations untouched")
     parser.add_argument("--with-voice", action="store_true")
     parser.add_argument("--download-models", action="store_true", help="download large voice/STT weights; requires --with-voice")
     parser.add_argument("--with-memory", action="store_true")
@@ -531,6 +569,8 @@ def main() -> int:
                 runner.run(["sudo", "apt-get", "update"])
             runner.run(package_command(family, voice=args.with_voice, jupyter=args.with_jupyter,
                                        creative=args.with_creative))
+        if args.with_ollama:
+            install_ollama(runner, family)
         configure_files(runner)
         install_components(runner)
         if args.with_skills:

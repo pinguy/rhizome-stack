@@ -70,6 +70,11 @@ cd rhizome-stack
 ./install-linux.sh --with-skills
 ```
 
+If you want a local Ollama backend, the welcome wizard offers to install
+Ollama when it is missing. You can also install it explicitly before onboarding
+with `./install-linux.sh --with-ollama`. Existing Ollama installations are
+preserved; installing models remains a separate choice.
+
 On WSL2 substitute `./install-wsl.sh`; see [WSL setup](docs/WSL.md).
 System packages use interactive sudo; services are staged but not started.
 
@@ -119,7 +124,12 @@ rhizome-stack import ~/Downloads/conversations.json --type chatgpt
 rhizome-stack import ~/Downloads/memory.jsonl.gz --type rhizomeml
 ```
 
-Ollama and its models are installed separately. Hosted provider credentials are
+Ollama installation is opt-in (`--with-ollama` or the local-backend welcome
+prompt), and models are selected or imported separately. On Arch/CachyOS the
+installer uses pacman (including ollama-cuda when NVIDIA is detected); on
+Debian/Ubuntu it runs Ollama's official HTTPS-downloaded installation script
+after the user opts in. Existing installations are never updated by this path.
+Hosted provider credentials are
 entered on the target machine. Memory, chats, credentials, voice references,
 browser profiles and model weights are never seeded from the reference machine.
 
