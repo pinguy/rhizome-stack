@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -145,6 +146,29 @@ def update_openclaw(provider: str, model: str, base_url: str, env_name: str) -> 
     atomic_write_text(OPENCLAW_CONFIG, json.dumps(config, indent=2) + "\n")
 
 
+def ensure_ollama(provider: str, base_url: str) -> None:
+    """Offer local Ollama installation without changing existing services."""
+    if provider not in {"ollama", "gguf"} or shutil.which("ollama"):
+        return
+    # API-only connections can use an existing server without the local CLI.
+    if provider == "ollama":
+        try:
+            if isinstance(request_json(base_url.rstrip("/") + "/api/tags", {}), dict):
+                return
+        except (OSError, urllib.error.URLError, json.JSONDecodeError):
+            pass
+    hostname = urllib.parse.urlsplit(base_url).hostname
+    if hostname not in {"localhost", "127.0.0.1", "::1"}:
+        raise ValueError("GGUF import requires a local Ollama CLI; install it before continuing")
+    if not yes("Ollama is missing. Install it and start its system service now?", True):
+        raise ValueError("local Ollama setup was declined; install Ollama or choose another backend")
+    from install import InstallError, Runner, distro_family, install_ollama, read_os_release
+    try:
+        install_ollama(Runner(False), distro_family(read_os_release()))
+    except InstallError as exc:
+        raise ValueError(f"Ollama setup failed: {exc}") from exc
+
+
 def configure_gguf(base_url: str) -> tuple[str, bool, str]:
     print("\nGGUF is the advanced local path. The file stays where you put it; it is never packaged.")
     path = Path(ask("Path to the .gguf file")).expanduser().resolve()
@@ -194,6 +218,8 @@ def main() -> int:
         if not key:
             print("No key supplied; provider setup stopped without changing configuration.", file=sys.stderr)
             return 2
+    if provider in {"ollama", "gguf"}:
+        ensure_ollama(provider, base_url)
     if provider == "gguf":
         model, ok, message = configure_gguf(base_url)
     else:
