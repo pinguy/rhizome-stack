@@ -73,7 +73,11 @@ cd rhizome-stack
 If you want a local Ollama backend, the welcome wizard offers to install
 Ollama when it is missing. You can also install it explicitly before onboarding
 with `./install-linux.sh --with-ollama`. Existing Ollama installations are
-preserved; installing models remains a separate choice.
+preserved. In the Ollama welcome flow, you can choose
+[`ornith-1.5:9b`](https://ollama.com/library/ornith-1.5:9b) (6.6 GB),
+[`ornith-1.5:35b`](https://ollama.com/library/ornith-1.5:35b) (23 GB),
+or another model ID. Missing Ornith models are pulled only with explicit
+confirmation (default No); catalogue verification is not an inference test.
 
 On WSL2 substitute `./install-wsl.sh`; see [WSL setup](docs/WSL.md).
 System packages use interactive sudo; services are staged but not started.
