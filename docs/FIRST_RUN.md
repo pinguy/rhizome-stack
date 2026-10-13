@@ -15,6 +15,16 @@ an alias from its catalogue, use the listed ID or configure it manually through
 `openclaw configure`. A successful catalogue check is recorded separately from
 inference: it does not prove quota, chat permissions, tool calling or generation.
 
+The Ollama backend offers **Ornith 1.5 9B** (`ornith-1.5:9b`, about 6.6 GB)
+and **Ornith 1.5 35B-A3B** (`ornith-1.5:35b`, about 23 GB),
+plus any already-installed or custom Ollama model ID. Both tags come from
+[Ollama's Ornith library](https://ollama.com/library/ornith-1.5).
+If the chosen Ornith tag is missing, the wizard asks before any download
+(default **No**), runs `ollama pull <tag>` only after permission, and verifies
+that the selected tag appears in the catalogue. A successful catalogue check
+does not prove inference or available RAM/VRAM. Tags are upstream-managed,
+not content hash-pinned; keep that in mind for reproducible installations.
+
 The wizard detects a missing local Ollama CLI when Ollama or GGUF is selected
 and offers to install it and start the system service with your approval.
 You can install in advance with `./install-linux.sh --with-ollama`. Existing

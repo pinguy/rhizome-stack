@@ -30,6 +30,69 @@ spec.loader.exec_module(adapter)
 
 
 class SetupRegressions(unittest.TestCase):
+    def test_ornith_menu_accepts_exact_library_tags(self):
+        for choice, expected in (('1', 'ornith-1.5:9b'), ('2', 'ornith-1.5:35b')):
+            with self.subTest(choice=choice):
+                with (patch.object(welcome, 'ask', return_value=choice),
+                      patch.object(welcome, 'verify', return_value=(True, 'found')) as verify,
+                      patch.object(welcome, 'yes') as yes,
+                      patch.object(welcome.subprocess, 'run') as run,
+                      contextlib.redirect_stdout(io.StringIO())):
+                    self.assertEqual(welcome.choose_ollama_model('http://127.0.0.1:11434'),
+                                     (expected, True, 'found'))
+                    verify.assert_called_once_with('ollama', 'http://127.0.0.1:11434', '', expected)
+                    yes.assert_not_called()
+                    run.assert_not_called()
+
+    def test_ornith_model_download_declined_by_default(self):
+        with (patch.object(welcome, 'ask', return_value='2'),
+              patch.object(welcome, 'verify', return_value=(False, 'selected Ollama model was not found')),
+              patch.object(welcome, 'yes', return_value=False) as yes,
+              patch.object(welcome.subprocess, 'run') as run,
+              contextlib.redirect_stdout(io.StringIO())):
+            model, ok, message = welcome.choose_ollama_model('http://127.0.0.1:11434')
+        self.assertEqual(model, 'ornith-1.5:35b')
+        self.assertFalse(ok)
+        self.assertIn('ollama pull ornith-1.5:35b', message)
+        self.assertFalse(yes.call_args.args[1])
+        run.assert_not_called()
+
+    def test_ornith_confirmed_pull_checks_catalogue_again(self):
+        with (patch.object(welcome, 'ask', return_value='1'),
+              patch.object(welcome, 'verify', side_effect=[(False, 'selected Ollama model was not found'),
+                                                           (True, 'installed')]) as verify,
+              patch.object(welcome, 'yes', return_value=True),
+              patch.object(welcome.shutil, 'which', return_value='/usr/bin/ollama'),
+              patch.object(welcome.subprocess, 'run') as run,
+              contextlib.redirect_stdout(io.StringIO())):
+            self.assertEqual(welcome.choose_ollama_model('http://127.0.0.1:11434'),
+                             ('ornith-1.5:9b', True, 'installed'))
+        self.assertEqual(verify.call_count, 2)
+        self.assertEqual(run.call_args.args[0], ['ollama', 'pull', 'ornith-1.5:9b'])
+        self.assertEqual(run.call_args.kwargs['env']['OLLAMA_HOST'], 'http://127.0.0.1:11434')
+        self.assertTrue(run.call_args.kwargs['check'])
+
+    def test_ornith_never_pulls_when_server_unreachable(self):
+        with (patch.object(welcome, 'ask', return_value='2'),
+              patch.object(welcome, 'verify', return_value=(False, 'verification failed: URLError')),
+              patch.object(welcome, 'yes') as yes,
+              patch.object(welcome.subprocess, 'run') as run,
+              contextlib.redirect_stdout(io.StringIO())):
+            self.assertEqual(welcome.choose_ollama_model('http://127.0.0.1:11434'),
+                             ('ornith-1.5:35b', False, 'verification failed: URLError'))
+        yes.assert_not_called()
+        run.assert_not_called()
+
+    def test_ollama_other_model_remains_available(self):
+        with (patch.object(welcome, 'ask', side_effect=['3', 'test-local']),
+              patch.object(welcome, 'verify', return_value=(True, 'installed')) as verify,
+              patch.object(welcome.subprocess, 'run') as run,
+              contextlib.redirect_stdout(io.StringIO())):
+            self.assertEqual(welcome.choose_ollama_model('http://127.0.0.1:11434'),
+                             ('test-local', True, 'installed'))
+        verify.assert_called_once_with('ollama', 'http://127.0.0.1:11434', '', 'test-local')
+        run.assert_not_called()
+
     def test_ollama_opt_in_preserves_existing_installation(self):
         runner = MagicMock(dry_run=False)
         with patch.object(install.shutil, 'which', return_value='/usr/bin/ollama'):

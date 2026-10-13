@@ -25,6 +25,13 @@ ENV_PATH = CONFIG_DIR / "stack.env"
 OPENCLAW_CONFIG = Path(os.environ.get("OPENCLAW_CONFIG_PATH", HOME / ".openclaw/openclaw.json"))
 STATE_PATH = CONFIG_DIR / "welcome-state.json"
 
+# Verified library tags; optional downloads require a separate confirmation.
+# https://ollama.com/library/ornith-1.5
+ORNITH_CHOICES = {
+    "1": ("ornith-1.5:9b", "6.6 GB"),
+    "2": ("ornith-1.5:35b", "23 GB"),
+}
+
 PROVIDERS = {
     "1": ("openai", "OpenAI", "OPENAI_API_KEY", "https://api.openai.com/v1"),
     "2": ("anthropic", "Anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com/v1"),
@@ -104,6 +111,38 @@ def verify(provider: str, base_url: str, key: str, model: str) -> tuple[bool, st
     except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
         # Exception strings may echo a URL containing user-supplied credentials.
         return False, f"verification failed: {type(exc).__name__}; check the endpoint, key and model ID"
+
+
+def choose_ollama_model(base_url: str) -> tuple[str, bool, str]:
+    """Choose an installed model or explicitly pull an Ornith library tag."""
+    print("\nChoose an Ollama model:")
+    print("  1. Ornith 1.5 9B (about 6.6 GB download)")
+    print("  2. Ornith 1.5 35B-A3B (about 23 GB download)")
+    print("  3. Existing/other Ollama model")
+    selection = ask("Model choice", "3")
+    if selection == "3":
+        model = ask("Model ID", "qwen3:8b")
+        return model, *verify("ollama", base_url, "", model)
+    if selection not in ORNITH_CHOICES:
+        raise ValueError("model choice must be 1, 2 or 3")
+
+    model, size = ORNITH_CHOICES[selection]
+    ok, message = verify("ollama", base_url, "", model)
+    if ok or message.startswith("verification failed:"):
+        return model, ok, message
+
+    # Selecting a model must never start a multi-gigabyte download by itself.
+    print(f"Official model: https://ollama.com/library/{model}")
+    if not yes(f"Download {model} (about {size}) via Ollama now?", False):
+        return model, False, f"{message}; run 'ollama pull {model}' when ready"
+    if not shutil.which("ollama"):
+        return model, False, "Ollama CLI not found; install it before downloading models"
+    subprocess.run(
+        ["ollama", "pull", model],
+        env={**os.environ, "OLLAMA_HOST": base_url},
+        check=True,
+    )
+    return model, *verify("ollama", base_url, "", model)
 
 
 def update_openclaw(provider: str, model: str, base_url: str, env_name: str) -> None:
@@ -222,10 +261,10 @@ def main() -> int:
         ensure_ollama(provider, base_url)
     if provider == "gguf":
         model, ok, message = configure_gguf(base_url)
+    elif provider == "ollama":
+        model, ok, message = choose_ollama_model(base_url)
     else:
-        if provider == "ollama":
-            print("Ollama must be running with at least one model. Try: ollama pull qwen3:8b")
-        model = ask("Model ID", {"openai": "gpt-5.6", "anthropic": "claude-sonnet-4-6", "nvidia": "nvidia/nemotron-3-super-120b-a12b", "ollama": "qwen3:8b"}.get(provider, ""))
+        model = ask("Model ID", {"openai": "gpt-5.6", "anthropic": "claude-sonnet-4-6", "nvidia": "nvidia/nemotron-3-super-120b-a12b"}.get(provider, ""))
         ok, message = verify(provider, base_url, key, model)
     print(("PASS " if ok else "FAIL ") + message)
     if not ok:
