@@ -1,4 +1,4 @@
-# Known limitations — 0.1.0-alpha.7 candidate
+# Known limitations — 0.1.0-alpha.11 candidate
 
 - Full installation and browser acceptance still need testing in disposable
   native Linux and actual WSL2 environments. Static and mocked-provider tests
@@ -6,7 +6,9 @@
 - OpenClaw 2026.7.1-2 and Open WebUI 0.11.0 remain compatibility pins. Newer
   releases need patch checks and end-to-end testing before adoption.
 - WSL GPU acceleration is not configured; the voice profile defaults to CPU.
-- Ollama itself and LLM weights are not installed or populated.
+- Ollama installation is opt-in (`--with-ollama` or the welcome wizard).
+  Model weights are not bundled; Ornith downloads need separate confirmation,
+  and other models must be pulled or imported explicitly.
 - Provider verification checks the selected model catalogue entry. It does not
   perform inference, check billing/quota or prove tool-calling support.
 - Skills are available as an opt-in profile. Existing differing local copies
@@ -24,13 +26,15 @@
 - Existing RhizomeML L12 indexes cannot be queried with L6 just because both are
   384-dimensional. Import text outputs or explicitly configure the matching model.
 - Open WebUI tool registration needs a locally created admin and token.
-- The packaged Qwen/MiniMax chat tools coordinate the local Ollama and ComfyUI
+- The packaged Qwen/MiniMax/WAN chat tools coordinate the local Ollama and ComfyUI
   runtimes. Their saved-chat persistence and VRAM hand-off were accepted on the
   reference machine, but still require clean native-Linux and WSL2 acceptance.
 - Voice Lab is loopback-only but intentionally writes Chatterbox systemd
   drop-ins when the user selects a default. It verifies and rolls back the
   switch; combining it with another Chatterbox backend owner remains unsupported.
-- Three minified Open WebUI frontend changes use exact hash-guarded replacements.
+- Four minified Open WebUI frontend changes use exact hash-guarded replacements.
+  The MP4 renderer is tied to Open WebUI 0.11.0's generated frontend chunk and
+  must be re-derived and browser-tested before any Open WebUI update.
 - The Jupyter image omits the reference machine's accumulated compilers/caches.
 - Base packages have version pins, but the full transitive dependency graph is
   not locked. A clean dependency install remains a required release check.
@@ -39,12 +43,16 @@
   generation still needs native Linux and WSL2 acceptance.
 - Creative model licences differ from the stack licence. Weights are downloaded
   from their pinned upstream repositories and are never redistributed here.
-- Qwen Image Desk and MiniMax share one ComfyUI endpoint and therefore serialise
-  practical GPU use. Each app may stop only the exact ComfyUI process it started.
+- Qwen Image Desk, MiniMax Music 3 and WAN Video Desk share one ComfyUI endpoint
+  and therefore serialise practical GPU use. Each app may stop only the exact
+  ComfyUI process it started.
   Reference editing accepts PNG/JPEG/WebP up to 20 MB; larger presets and all
   clean-machine GPU paths have not received separate quality acceptance.
 - MiniLM retrieval is opt-in, loopback-only and advisory. It can return an
   irrelevant support item; final relevance and correctness remain Rhizome's job.
+- WAN Video Desk's T2V and I2V paths were accepted on the reference machine,
+  but its roughly 28 GB optional model set and clean-machine GPU path still need
+  separate native-Linux and WSL2 acceptance on each target.
 
 - The optional GLiNER/Ornith workforce is agent-operated through CLI helpers,
   not automatic browser routing. One reference machine has real shadow-mode and

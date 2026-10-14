@@ -27,7 +27,7 @@ they do not train the language model.
 
 Read `VERSION` for release status and `manifests/versions.json` for authoritative
 compatibility pins. Currently OpenClaw is **2026.7.1-2**, Open WebUI is **0.11.0**,
-Python requires **3.11+**, and the bundled Node runtime is **22.22.0**.
+Python requires **3.11–3.12**, and the bundled Node runtime is **22.22.0**.
 OpenClaw 2026.8.1 was deliberately excluded. Do not change pins as routine cleanup:
 an upgrade needs explicit scope, patch compatibility checks and real acceptance
 testing. A source checkout rollback does not undo package or database migrations.

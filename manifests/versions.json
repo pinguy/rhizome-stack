@@ -4,6 +4,7 @@
   "openclaw": "2026.7.1-2",
   "open_webui": "0.11.0",
   "python_min": "3.11",
+  "python_max_exclusive": "3.13",
   "node_min": "22",
   "node_runtime": "22.22.0",
   "chatterbox_git": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",

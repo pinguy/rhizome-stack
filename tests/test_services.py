@@ -62,7 +62,7 @@ def serve(handler, state=None):
 def request(address, method, path, body=None, headers=None):
     connection = http.client.HTTPConnection(*address, timeout=2)
     try:
-        connection.request(method, path, body=body, headers=headers or {})
+        connection.request(method, path, body=body, headers={"Content-Type": "application/json", **(headers or {})})
         response = connection.getresponse()
         return response.status, dict(response.getheaders()), response.read()
     finally:
@@ -70,6 +70,11 @@ def request(address, method, path, body=None, headers=None):
 
 
 class AdapterTest(unittest.TestCase):
+    def setUp(self):
+        token = patch.dict(os.environ, {"RHIZOME_ADAPTER_TOKEN": "synthetic-adapter-secret"})
+        token.start()
+        self.addCleanup(token.stop)
+
     payload = json.dumps({'model': 'openclaw/provider/demo', 'stream': True, 'messages': []})
 
     def test_invalid_requests_do_not_call_gateway(self):
@@ -77,14 +82,14 @@ class AdapterTest(unittest.TestCase):
             for body in ('[]', 'null', '{', '{"model":123}', '{"model":"openclaw/"}',
                          '{"model":"openclaw/provider/demo\\nInjected: x"}'):
                 with self.subTest(body=body):
-                    self.assertEqual(request(address, 'POST', '/v1/chat/completions', body)[0], 400)
+                    self.assertEqual(request(address, 'POST', '/v1/chat/completions', body, {'Authorization': 'Bearer synthetic-adapter-secret'})[0], 400)
             upstream.assert_not_called()
 
     def test_non_json_gateway_error_is_forwarded_once_without_retry(self):
         error = urllib.error.HTTPError('http://gateway/', 429, 'busy', {}, io.BytesIO(b'<html>busy</html>'))
         with patch.object(adapter, 'gateway_token', return_value='synthetic'), \
              patch.object(adapter, 'open_gateway', side_effect=error) as upstream, serve(adapter.Handler) as address:
-            status, _, raw = request(address, 'POST', '/v1/chat/completions', self.payload)
+            status, _, raw = request(address, 'POST', '/v1/chat/completions', self.payload, {'Authorization': 'Bearer synthetic-adapter-secret', 'Content-Type': 'application/json'})
             self.assertEqual(status, 429)
             self.assertIn('429', json.loads(raw)['error']['message'])
             self.assertNotIn(b'<html>', raw)
@@ -94,7 +99,7 @@ class AdapterTest(unittest.TestCase):
         with patch.object(adapter, 'gateway_token', return_value='synthetic'), \
              patch.object(adapter, 'open_gateway', side_effect=urllib.error.URLError('offline')), \
              serve(adapter.Handler) as address:
-            self.assertEqual(request(address, 'POST', '/v1/chat/completions', self.payload)[0], 502)
+            self.assertEqual(request(address, 'POST', '/v1/chat/completions', self.payload, {'Authorization': 'Bearer synthetic-adapter-secret', 'Content-Type': 'application/json'})[0], 502)
 
     def test_sse_first_event_arrives_before_upstream_finishes(self):
         release = threading.Event()
@@ -120,7 +125,7 @@ class AdapterTest(unittest.TestCase):
              patch.object(adapter, 'gateway_token', return_value='synthetic'), serve(adapter.Handler) as address:
             connection = http.client.HTTPConnection(*address, timeout=1)
             try:
-                connection.request('POST', '/v1/chat/completions', self.payload)
+                connection.request('POST', '/v1/chat/completions', self.payload, {'Authorization': 'Bearer synthetic-adapter-secret', 'Content-Type': 'application/json'})
                 response = connection.getresponse()
                 self.assertEqual(response.read(len(first)), first)
                 release.set()
@@ -140,7 +145,7 @@ class AdapterTest(unittest.TestCase):
         upstream.read1.side_effect = [b'data: hello\n\n', OSError('upstream dropped')]
         with patch.object(adapter, 'gateway_token', return_value='synthetic'), \
              patch.object(adapter, 'open_gateway', return_value=upstream), serve(adapter.Handler) as address:
-            status, _, raw = request(address, 'POST', '/v1/chat/completions', self.payload)
+            status, _, raw = request(address, 'POST', '/v1/chat/completions', self.payload, {'Authorization': 'Bearer synthetic-adapter-secret', 'Content-Type': 'application/json'})
             self.assertEqual(status, 200)
             self.assertEqual(raw, b'data: hello\n\n')
 
@@ -326,6 +331,30 @@ class CreativeHTTPTest(unittest.TestCase):
 
 
 class LocalMediaBridgeTest(unittest.TestCase):
+    def test_wan_tool_defaults_and_i2v_validation(self):
+        bridge = types.ModuleType('openwebui_local_media')
+        bridge.generate = unittest.mock.AsyncMock(return_value='synthetic-result')
+        with patch.dict(sys.modules, {'openwebui_local_media': bridge}):
+            wan_tool = load('wan_tool_test', 'components/openwebui-tools/wan_video.py')
+        tools = wan_tool.Tools()
+        result = asyncio.run(tools.create_video(
+            'One continuous shot', __user__={'id': 'user-1'},
+            __metadata__={'chat_id': 'saved-chat', 'message_id': 'message-1'}))
+        self.assertEqual(result, 'synthetic-result')
+        args = bridge.generate.await_args.args
+        self.assertEqual(args[0], 'video')
+        self.assertEqual(args[1]['aspect'], '4:3')
+        self.assertEqual(args[1]['quality'], '480p')
+        self.assertEqual(args[1]['duration_seconds'], 5)
+        self.assertEqual(args[1]['fps'], 16)
+        self.assertEqual(args[1]['steps'], 4)
+        bridge.generate.reset_mock()
+        invalid = asyncio.run(tools.create_video(
+            'Animate this', input_mode='i2v', video_model=wan_tool.T2V_MODEL,
+            reference_file_id='owned-file'))
+        self.assertIn('cannot use Image input', invalid)
+        bridge.generate.assert_not_awaited()
+
     def test_malformed_app_health_is_not_idle(self):
         for value in ({}, [], {'busy': 'false'}):
             with self.subTest(value=value), patch.object(media, 'request', return_value=value):
@@ -381,6 +410,56 @@ class LocalMediaBridgeTest(unittest.TestCase):
             self.assertNotIn('<audio', json.dumps(attached))
             self.assertTrue((upload / f"{result['file_id']}_synthetic.mp3").is_file())
             emitter.assert_awaited_once()
+
+    def test_video_result_uses_mp4_file_attachment_and_wan_project_boundary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / 'projects/wan-video-studio'
+            generated = project / 'generated'
+            upload = root / 'uploads'
+            generated.mkdir(parents=True)
+            upload.mkdir()
+            source = generated / 'take-001.mp4'
+            source.write_bytes(b'\x00\x00\x00\x18ftypmp42 synthetic video')
+
+            config = types.ModuleType('open_webui.config')
+            config.UPLOAD_DIR = str(upload)
+            files_module = types.ModuleType('open_webui.models.files')
+            files_module.FileForm = lambda **values: types.SimpleNamespace(**values)
+            files_module.Files = types.SimpleNamespace(
+                insert_new_file=unittest.mock.AsyncMock(return_value=object()))
+            chats_module = types.ModuleType('open_webui.models.chats')
+            chats_module.Chats = types.SimpleNamespace(
+                add_message_files_by_id_and_message_id=unittest.mock.AsyncMock())
+            chat_id_module = types.ModuleType('open_webui.utils.chat_id')
+            chat_id_module.is_saved_chat_id = lambda value: value == 'saved-chat'
+            modules = {
+                'open_webui': types.ModuleType('open_webui'),
+                'open_webui.config': config,
+                'open_webui.models': types.ModuleType('open_webui.models'),
+                'open_webui.models.files': files_module,
+                'open_webui.models.chats': chats_module,
+                'open_webui.utils': types.ModuleType('open_webui.utils'),
+                'open_webui.utils.chat_id': chat_id_module,
+            }
+            emitter = unittest.mock.AsyncMock()
+            with patch.dict(sys.modules, modules), patch.object(media, 'WAN_PROJECT', project):
+                result = asyncio.run(media.attach_result(
+                    'video', source, {'id': 'user-1'},
+                    {'chat_id': 'saved-chat', 'message_id': 'message-1'}, emitter))
+
+            attached = chats_module.Chats.add_message_files_by_id_and_message_id.await_args.args[2][0]
+            self.assertEqual(attached['type'], 'file')
+            self.assertEqual(attached['content_type'], 'video/mp4')
+            self.assertNotIn('<video', json.dumps(attached))
+            self.assertTrue((upload / f"{result['file_id']}_take-001.mp4").is_file())
+            emitter.assert_awaited_once()
+            outside = root / 'outside.mp4'
+            outside.write_bytes(b'not owned')
+            with patch.dict(sys.modules, modules), patch.object(media, 'WAN_PROJECT', project):
+                with self.assertRaisesRegex(ValueError, 'unexpected output path'):
+                    asyncio.run(media.attach_result(
+                        'video', outside, {'id': 'user-1'}, {}, None))
 
 
 class VoiceLabTest(unittest.TestCase):

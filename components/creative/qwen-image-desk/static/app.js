@@ -15,7 +15,7 @@ const ui = {
   history: $("#historyGrid"), historyCount: $("#historyCount"),
   showFolder: $("#showFolderBtn"), reuse: $("#reuseBtn"), rerun: $("#rerunBtn"),
   rawCount: $("#rawCount"), expandedCount: $("#expandedCount"), toast: $("#toast"),
-  referenceInput: $("#referenceInput"), referencePreview: $("#referencePreview"),
+  referenceInput: $("#referenceInput"), referenceDropZone: $("#referenceDropZone"), referencePreview: $("#referencePreview"),
   referenceImage: $("#referenceImage"), referenceName: $("#referenceName"),
   referenceNote: $("#referenceNote"), removeReference: $("#removeReferenceBtn"),
 };
@@ -166,8 +166,7 @@ function setReference(reference) {
   ui.generate.firstElementChild.textContent = reference ? "Edit with Qwen" : "Generate with Qwen";
 }
 
-async function uploadReference() {
-  const file = ui.referenceInput.files[0];
+async function uploadReference(file = ui.referenceInput.files[0]) {
   if (!file) return;
   if (!file.size || file.size > 20 * 1024 * 1024) {
     ui.referenceInput.value = "";
@@ -352,6 +351,18 @@ function reuseAsset(asset) {
 
 ui.raw.addEventListener("input", updatePromptViews);
 ui.referenceInput.addEventListener("change", uploadReference);
+ui.referenceDropZone.addEventListener("dragover", event => {
+  event.preventDefault();
+  if (!state.busyUpload) ui.referenceDropZone.classList.add("dragging");
+});
+ui.referenceDropZone.addEventListener("dragleave", () => ui.referenceDropZone.classList.remove("dragging"));
+ui.referenceDropZone.addEventListener("drop", event => {
+  event.preventDefault();
+  ui.referenceDropZone.classList.remove("dragging");
+  const file = [...event.dataTransfer.files].find(item => item.type.startsWith("image/"));
+  if (!file) return notify("Drop a PNG, JPEG or WebP image.", true);
+  uploadReference(file);
+});
 ui.removeReference.addEventListener("click", () => { setReference(null); setAction("Reference removed — text-to-image mode."); });
 ui.expanded.addEventListener("input", () => { state.promptMode = "edited"; updatePromptViews(); });
 ui.model.addEventListener("change", () => { localStorage.setItem("qwenDeskModel", ui.model.value); updateModelNote(); });

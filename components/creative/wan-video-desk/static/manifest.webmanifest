@@ -1,0 +1,9 @@
+{
+  "name": "WAN Video Desk",
+  "short_name": "Video Desk",
+  "start_url": "/video-studio/",
+  "display": "standalone",
+  "background_color": "#091019",
+  "theme_color": "#0b1118",
+  "icons": [{"src": "/video-studio/static/icon.svg", "sizes": "any", "type": "image/svg+xml"}]
+}

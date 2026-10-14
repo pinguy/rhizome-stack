@@ -13,13 +13,17 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
 import urllib.parse
 import urllib.request
 import uuid
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from local_http_security import LocalRequestHandler, adapter_headers
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
@@ -69,7 +73,7 @@ def json_request(path: str, payload=None, timeout=30) -> dict:
 def adapter_json(path: str, payload=None, timeout=30) -> dict:
     data = None if payload is None else json.dumps(payload).encode()
     request = urllib.request.Request(OPENCLAW_ADAPTER + path, data=data,
-                                     headers={"Content-Type": "application/json"} if data else {})
+                                     headers=adapter_headers())
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.load(response)
 
@@ -448,7 +452,8 @@ def idle_watchdog():
             ENGINE.stop_owned()
 
 
-class Handler(BaseHTTPRequestHandler):
+class Handler(LocalRequestHandler):
+    binary_upload_paths = frozenset({"/api/image-studio/reference"})
     def log_message(self, *_args):
         return
 

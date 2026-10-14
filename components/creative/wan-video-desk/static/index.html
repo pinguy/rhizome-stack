@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1118">
+  <title>WAN Video Desk</title>
+  <link rel="manifest" href="/video-studio/manifest.webmanifest">
+  <link rel="icon" href="/video-studio/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/video-studio/static/app.css">
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <div><p class="eyebrow">LOCAL MOTION UTILITY</p><h1>WAN Video Desk</h1></div>
+    </div>
+    <div class="system-strip" aria-label="System status">
+      <span class="status-pill" id="openclawStatus">OpenClaw · checking</span>
+      <span class="status-pill" id="wanStatus">WAN · checking</span>
+      <span class="status-pill" id="queueStatus">Queue · idle</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="workbench" aria-label="Video prompt and generation controls">
+      <div class="section-head"><span class="step">01</span><div><p class="eyebrow">DIRECTION</p><h2>Describe one moving shot.</h2></div></div>
+      <label class="field-label" for="rawPrompt">Rough video idea</label>
+      <textarea id="rawPrompt" class="prompt-input" rows="5" placeholder="A paper boat glides across a black studio pool while the camera follows at water level…"></textarea>
+
+      <div class="model-row">
+        <label class="field grow"><span>OpenClaw prompt model</span><select id="modelSelect"><option>Loading models…</option></select></label>
+        <button id="expandBtn" class="button primary" type="button">Build motion prompt</button>
+      </div>
+      <p class="field-note" id="modelNote">The selected model prepares the motion prompt. WAN generates the video locally.</p>
+
+      <div class="prompt-rail">
+        <article class="prompt-card raw-card">
+          <header><span>ORIGINAL</span><span id="rawCount">0 chars</span></header>
+          <p id="originalPreview" class="prompt-preview">Your original wording stays visible here.</p>
+        </article>
+        <article class="prompt-card final-card">
+          <header><span>FINAL FOR WAN</span><span id="expandedCount">0 chars</span></header>
+          <textarea id="expandedPrompt" rows="9" placeholder="Build the motion prompt, use the rough idea unchanged, or edit the final wording here."></textarea>
+          <div class="inline-actions"><button id="reexpandBtn" class="button quiet" type="button">Rebuild</button><button id="rawBtn" class="button quiet" type="button">Use rough idea</button></div>
+        </article>
+      </div>
+
+      <details class="negative-wrap">
+        <summary>Negative guidance <span>optional</span></summary>
+        <label class="sr-only" for="negativePrompt">Negative guidance</label>
+        <textarea id="negativePrompt" rows="3" placeholder="text, watermark, cuts, scene change, flicker, camera shake…"></textarea>
+      </details>
+
+      <div class="section-head exposure-head"><span class="step">02</span><div><p class="eyebrow">FORMAT</p><h2>Set the screen and running time.</h2></div></div>
+
+      <fieldset class="choice-group">
+        <legend>Input</legend>
+        <div class="segmented" id="videoModeChoices">
+          <label><input type="radio" name="videoMode" value="t2v" checked><span><b>Text</b><small>Prompt only</small></span></label>
+          <label><input type="radio" name="videoMode" value="i2v"><span><b>Image</b><small>Prompt + reference image</small></span></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="choice-group">
+        <legend>Model</legend>
+        <div class="segmented generator-grid" id="videoModelChoices">
+          <label><input type="radio" name="videoModel" value="wan2.2-t2v-rapid-aio-v10-nsfw-Q5_K.gguf" checked><span><b id="t2vModelLabel">wan2.2-t2v-rapid-aio-v10-nsfw-Q5_K.gguf</b><small>Text input · Q5_K</small></span></label>
+          <label><input type="radio" name="videoModel" value="wan2.2-i2v-rapid-aio-v10-nsfw-Q5_K.gguf"><span><b id="i2vModelLabel">wan2.2-i2v-rapid-aio-v10-nsfw-Q5_K.gguf</b><small>Text or Image input · Q5_K</small></span></label>
+        </div>
+      </fieldset>
+
+      <section class="reference-panel" id="referencePanel" aria-label="Reference image input">
+        <div class="reference-copy"><p class="eyebrow">REFERENCE INPUT</p><h3>Choose an image when Image input is selected.</h3><p id="referenceHint">Text input does not use a reference image.</p></div>
+        <button id="chooseReferenceBtn" class="button reference-button" type="button">Choose reference image…</button>
+        <label class="reference-drop" id="referenceDropZone" for="referenceInput">
+          <input id="referenceInput" type="file" accept="image/png,image/jpeg,image/webp">
+          <span id="referenceEmpty"><b>Or drop an image here</b><small>PNG, JPEG or WebP · up to 20 MB</small></span>
+          <img id="referenceImage" alt="Reference image to animate" hidden>
+        </label>
+        <div class="reference-meta" id="referenceMeta" hidden><span id="referenceName"></span><button id="removeReferenceBtn" class="button quiet" type="button">Remove reference</button></div>
+      </section>
+
+      <fieldset class="choice-group">
+        <legend>Resolution</legend>
+        <div class="segmented" id="qualityChoices">
+          <label><input type="radio" name="quality" value="480p" checked><span><b>480p</b><small>Fast working clip</small></span></label>
+          <label><input type="radio" name="quality" value="720p"><span><b>720p</b><small>Delivery-size clip</small></span></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="choice-group">
+        <legend>Frame shape</legend>
+        <div class="aspect-grid" id="aspectChoices">
+          <label><input type="radio" name="aspect" value="16:9" checked><span><i class="shape wide"></i><b>16:9</b><small>Widescreen</small></span></label>
+          <label><input type="radio" name="aspect" value="4:3"><span><i class="shape classic"></i><b>4:3</b><small>Classic</small></span></label>
+          <label><input type="radio" name="aspect" value="mobile"><span><i class="shape mobile"></i><b>9:16</b><small>Mobile</small></span></label>
+        </div>
+      </fieldset>
+
+      <div class="duration-block">
+        <div class="duration-copy"><label for="durationInput">Duration</label><span id="durationTimecode">00:03</span></div>
+        <div class="duration-control">
+          <input id="durationRange" type="range" min="1" max="10" step="1" value="3" aria-label="Duration in seconds">
+          <span class="filmstrip" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <div class="seconds-input"><input id="durationInput" type="number" min="1" max="10" step="1" value="3"><span>seconds</span></div>
+        </div>
+        <p id="formatReadout">832 × 480 · 49 frames · 16 fps</p>
+      </div>
+
+      <div class="motion-controls">
+        <fieldset class="choice-group fps-block">
+          <legend>Frame rate</legend>
+          <div class="segmented" id="fpsChoices">
+            <label><input type="radio" name="fps" value="16" checked><span><b>16 fps</b><small>WAN native · faster</small></span></label>
+            <label><input type="radio" name="fps" value="24"><span><b>24 fps</b><small>Smoother · more frames</small></span></label>
+          </div>
+        </fieldset>
+
+        <div class="steps-block">
+          <div class="duration-copy"><label for="stepsInput">Sampling steps</label><span id="stepsReadout">4</span></div>
+          <div class="steps-control">
+            <input id="stepsRange" type="range" min="4" max="20" step="1" value="4" aria-label="Sampling steps">
+            <div class="steps-input"><input id="stepsInput" type="number" min="4" max="20" step="1" value="4"><span>steps</span></div>
+          </div>
+          <p>4 is the Rapid recipe. Higher values cost proportionally more time.</p>
+        </div>
+      </div>
+
+      <div class="controls-grid">
+        <label class="field"><span>Seed</span><span class="seed-row"><input id="seedInput" type="number" min="0" max="9223372036854775807" value="420251006"><button id="randomSeedBtn" class="icon-button" type="button" title="Choose random seed" aria-label="Choose random seed">↻</button></span></label>
+        <label class="field"><span>Takes</span><select id="batchCount"><option value="1">1 take</option><option value="2">2 takes</option><option value="3">3 takes</option><option value="4">4 takes</option></select></label>
+      </div>
+
+      <button id="generateBtn" class="button generate" type="button"><span>Generate video</span><b id="generateSummary">3 sec · 16 fps · 4 steps</b></button>
+      <p id="actionStatus" class="action-status" role="status" aria-live="polite">Ready. Video jobs run one at a time.</p>
+      <div class="generation-clock" aria-live="off"><span><b id="generationTimerLabel">Generation time</b><small id="generationTimerNote">Starts when the WAN job begins.</small></span><strong id="generationTimer">—</strong></div>
+
+      <section class="queue-panel" aria-label="Generation queue">
+        <header><span>QUEUE</span><span id="jobCount">0 jobs</span></header>
+        <div id="jobList" class="job-list"><p class="empty-small">No video jobs yet.</p></div>
+      </section>
+    </section>
+
+    <section class="screening-room" aria-label="Generated video preview">
+      <div class="section-head output-head"><span class="step">03</span><div><p class="eyebrow">SCREENING ROOM</p><h2>Watch the motion, not the poster frame.</h2></div></div>
+      <div class="preview-stage" id="previewStage">
+        <div class="empty-preview" id="emptyPreview"><span class="projector" aria-hidden="true"><i></i></span><strong>No take on the reel</strong><p>Finished videos appear here with playback controls.</p></div>
+        <video id="resultVideo" controls muted playsinline preload="metadata" hidden></video>
+        <span class="preview-timecode" id="previewTimecode" hidden>00:00:00:00</span>
+      </div>
+      <div id="resultMeta" class="result-meta" hidden></div>
+      <div id="resultActions" class="result-actions" hidden>
+        <a id="downloadBtn" class="button primary link-button" download>Download MP4</a>
+        <button id="showFolderBtn" class="button" type="button">Show in folder</button>
+        <button id="reuseBtn" class="button" type="button">Reuse settings</button>
+        <button id="rerunBtn" class="button" type="button">Same seed again</button>
+      </div>
+
+      <div class="history-head"><div><p class="eyebrow">TAKE LIBRARY</p><h3>Generated videos</h3></div><span id="historyCount">0 videos</span></div>
+      <div id="history" class="history-grid"><p class="empty-small">Generated videos stay on disk and collect here.</p></div>
+    </section>
+  </main>
+  <div id="toast" class="toast"></div>
+  <script src="/video-studio/static/app.js" defer></script>
+</body>
+</html>

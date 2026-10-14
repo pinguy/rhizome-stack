@@ -24,6 +24,8 @@ The first overwritten copy of a deployed file is retained with the suffix
 backup system. Workspace notes are seeded only when absent. Existing
 `stack.env` and OpenClaw settings are preserved except for explicitly selected
 configuration steps, such as enabling the memory plugin.
+When a missing OpenClaw configuration is rebuilt, quoted `stack.env` values
+are decoded and safely escaped for JSON; tokens retain their literal value.
 
 The installer does not upgrade the OpenClaw/Open WebUI version pins. Restoring
 an earlier checkout alone does not roll back installed packages or databases.

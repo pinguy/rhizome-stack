@@ -5497,13 +5497,29 @@ ${(De = (Ke = m()) == null ? void 0 : Ke.ui) == null ? void 0 : De.response_wate
                       ),
                     ),
                     At = (nt) => {
+                      var _t;
+                      if (
+                        ((((_t = e(Ge)) == null ? void 0 : _t.content_type) ?? "").startsWith(
+                          "video/",
+                        ))
+                      ) {
+                        const Kt = document.createElement("video");
+                        ((Kt.src = e(Ge).url),
+                          (Kt.controls = !0),
+                          (Kt.preload = "metadata"),
+                          (Kt.playsInline = !0),
+                          (Kt.className = "w-full max-w-2xl my-2 rounded-xl bg-black"),
+                          Kt.setAttribute("aria-label", e(Ge).name || "Generated video"),
+                          n(nt, Kt));
+                        return;
+                      }
                       {
-                        let _t = $e(
+                        let Kt = $e(
                           () => (
                             e(Ge),
                             t(() => {
-                              var Kt;
-                              return (Kt = e(Ge)) == null ? void 0 : Kt.size;
+                              var xr;
+                              return (xr = e(Ge)) == null ? void 0 : xr.size;
                             })
                           ),
                         );
@@ -5521,7 +5537,7 @@ ${(De = (Ke = m()) == null ? void 0 : Ke.ui) == null ? void 0 : De.response_wate
                             return (e(Ge), t(() => e(Ge).type));
                           },
                           get size() {
-                            return e(_t);
+                            return e(Kt);
                           },
                           small: !0,
                         });

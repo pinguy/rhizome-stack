@@ -19,13 +19,21 @@ FORBIDDEN_NAMES = {
     "webui.db", "device-auth.json",
 }
 PATTERNS = {
-    "reference home path": re.compile(r"/home/" + "ping" + r"uy\b", re.I),
-    "reference username/name": re.compile(r"\b(?:" + "ping" + "uy|an" + r"toni(?:\s+nor" + "man)?)" + r"\b", re.I),
-    "reference Telegram id": re.compile(r"\b" + "70797" + "25827" + r"\b"),
+    "reference home path": re.compile(r"/home/" + "ping" + r"uy[0-9]*\b", re.I),
+    "reference username/name": re.compile(r"\b(?:" + "ping" + "uy[0-9]*|an" + r"toni(?:\s+nor" + "man)?)" + r"\b", re.I),
     "email address": re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I),
     "private key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----"),
     "OpenAI-style key": re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
     "GitHub token": re.compile(r"\bgh[oprsu]_[A-Za-z0-9]{30,}\b"),
+    "Hugging Face token": re.compile(r"\bhf_[A-Za-z0-9]{20,}\b"),
+    "Brave API token": re.compile(r"\bBSA[A-Za-z0-9_-]{20,}\b"),
+    "AWS access key": re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
+    "Google API key": re.compile(r"\bAIza[A-Za-z0-9_-]{35}\b"),
+    "Slack token": re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
+    "GitHub fine-grained token": re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
+    "Telegram personal id": re.compile(
+        r"(?i)[\"']?(?:TELEGRAM[_ -])?(?:OWNER|USER|CHAT)[_ -]ID[\"']?\s*[:=]\s*[\"']?-?\d{5,}\b"
+    ),
     "Telegram bot token": re.compile(r"\b\d{8,12}:[A-Za-z0-9_-]{30,}\b"),
     "JWT": re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
 }

@@ -30,6 +30,15 @@ spec.loader.exec_module(adapter)
 
 
 class SetupRegressions(unittest.TestCase):
+    def test_quoted_settings_survive_openclaw_rendering(self):
+        token = 'synthetic token with "quotes" and \\slashes'
+        content = "OPENCLAW_GATEWAY_TOKEN=" + welcome.shlex.quote(token) + "\nDEFAULT_OLLAMA_MODEL='fixture:latest'\n"
+        with patch.object(install, 'STACK_ROOT', Path('/tmp/synthetic "stack"')):
+            config = json.loads(install.render_openclaw(install.parse_env(content)))
+        self.assertEqual(config['gateway']['auth']['token'], token)
+        self.assertEqual(config['agents']['defaults']['model']['primary'], 'ollama/fixture:latest')
+        self.assertEqual(config['agents']['defaults']['workspace'], '/tmp/synthetic "stack"/workspace')
+
     def test_ornith_menu_accepts_exact_library_tags(self):
         for choice, expected in (('1', 'ornith-1.5:9b'), ('2', 'ornith-1.5:35b')):
             with self.subTest(choice=choice):
@@ -262,7 +271,8 @@ class SetupRegressions(unittest.TestCase):
                      contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(registration.main(), 0)
                 self.assertEqual([row['id'] for row in created],
-                             ['rhizome_web_search', 'openclaw_agent', 'minimax_music_3', 'qwen_image'])
+                             ['rhizome_web_search', 'openclaw_agent', 'minimax_music_3',
+                              'qwen_image', 'wan_video'])
                 with self.assertRaisesRegex(RuntimeError, '401'):
                     registration.api(base, 'synthetic', 'GET', '/id/denied')
                 with self.assertRaisesRegex(RuntimeError, '404'):

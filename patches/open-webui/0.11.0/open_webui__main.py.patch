@@ -8,7 +8,7 @@
  from uuid import uuid4
  
  import aiohttp
-@@ -269,6 +270,164 @@
+@@ -269,6 +270,169 @@
  logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
  log = logging.getLogger(__name__)
  
@@ -17,19 +17,24 @@
 +    'rhizome_web_search',
 +    'minimax_music_3',
 +    'qwen_image',
++    'wan_video',
 +]
 +
 +RHIZOME_MEDIA_SYSTEM = (
 +    'LOCAL MEDIA ROUTING: When the user asks to create a song, music, beat or soundtrack, '
 +    'call the attached create_song tool (local MiniMax Music 3). When the user asks to create '
 +    'or edit a picture/image, call the attached create_image tool (local Qwen Image Desk). '
++    'When the user asks to create a video, moving shot or animation, call the attached '
++    'create_video tool (local WAN Video Desk). '
 +    'These are the user-selected generators for this Open WebUI chat; use them instead of '
 +    'remote media generators, SVG/code substitutes, or merely writing lyrics/prompts. '
 +    'Do not generate for discussion or text-only requests. Call once and wait for the result. '
 +    'Return the actual file link; never invent one. The tools attach the finished media to '
 +    'the chat. For music, tell the user the attached MP3 card opens Open WebUI\'s built-in '
 +    'player; do not output raw HTML. For image edits, use the uploaded Open WebUI file ID, '
-+    'not a guessed local path. If a tool fails, report the error.'
++    'not a guessed local path. WAN MP4 attachments render in Open WebUI\'s native HTML5 '
++    'player. Make download_url a clickable Markdown link, never inline code. Include the '
++    'returned WAN Video Desk link for editing, reuse or reruns. If a tool fails, report the error.'
 +)
 +
 +RHIZOME_OPENCLAW_RELAY_TOOL_ID = 'openclaw_agent'
@@ -173,7 +178,7 @@
  
  async def emit_chat_list_event(metadata: dict, chat_id: str):
      if not is_saved_chat_id(chat_id):
-@@ -1083,18 +1242,71 @@
+@@ -1083,18 +1247,71 @@
              model = model_item
              await _set_direct_model(request, model, user)
  
@@ -251,7 +256,7 @@
  
          # Check base model existence for custom models
          if model_info and model_info.base_model_id:
-@@ -1177,6 +1389,73 @@
+@@ -1177,6 +1394,73 @@
          ):
              tool_servers = None
 -

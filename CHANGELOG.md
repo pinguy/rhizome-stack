@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.1.0-alpha.11 candidate — 14 October 2026 security review
+
+- Require a private adapter bearer token, loopback Host and JSON requests;
+  reject browser origins and cross-site calls before forwarding to OpenClaw.
+- Authenticate creative desk adapter calls and protect their local HTTP
+  endpoints against cross-site requests and DNS rebinding.
+- Generate separate adapter and Jupyter secrets; require authenticated Jupyter
+  with Host checks and configure both Open WebUI code execution paths.
+- Select Python 3.11–3.12 before installation and reject incompatible existing
+  environments. Consume both Python bounds from the version manifest.
+- Expand privacy detection for Brave, Hugging Face, AWS, Google and Slack
+  credentials and numbered handles; remove the embedded personal identifier.
+- Add security regressions and document the saved-settings migration required
+  for existing Open WebUI installations in `docs/SECURITY_UPGRADE.md`.
+
+## 0.1.0-alpha.10 candidate — 14 October 2026 hygiene review
+
+- Stop GPU hand-over when Ollama returns a missing or malformed runner list,
+  including the final unload check; unknown state no longer counts as idle.
+- Correct WAN suffix byte ranges for media playback and report file size on
+  rejected ranges. Reject non-object JSON requests with HTTP 400.
+- Preserve seed zero in WAN batches, randomise every take when requested,
+  and reject seed overflow before any batch job is queued.
+- Decode quoted environment settings and JSON-escape template values when
+  creating OpenClaw configuration, preserving tokens and paths accurately.
+- Extend WAN HTTP/batch and three-generator receipt recovery regressions;
+  correct stale Ollama installation and creative output documentation.
+
+## 0.1.0-alpha.9 candidate — 14 October 2026 WAN chat integration
+
+- Add the packaged `wan_video` Open WebUI tool, shared VRAM hand-off and
+  durable MP4 saved-chat attachments alongside Qwen Image and MiniMax Music.
+- Add the pinned Open WebUI 0.11.0 inline HTML5 MP4 renderer replacement and
+  hash verification without changing the existing PNG or MP3 branches.
+- Retain completed WAN takes in Video Desk so chat-generated clips can be
+  inspected, downloaded and reused from the standalone interface.
+- Retry WAN tiled decoding at 48/12 after the normal 64/16 path runs out of
+  memory, reserving 32/12 for a second, tighter-memory attempt.
+- Preserve the newer Ollama welcome/install flow from the reviewed main
+  archive, including explicit confirmation before pulling missing Ornith tags.
+
+## 0.1.0-alpha.8 candidate — 14 October 2026 standalone WAN Video Desk
+
+- Package standalone WAN Video Desk with text-to-video and image-to-video
+  workflows, pinned model assets, gallery provenance and editable takes.
+- Refresh the Qwen Image Desk and MiniMax Music interfaces while preserving
+  their hardened packaged backends and shared ComfyUI ownership boundaries.
+
 ## 0.1.0-alpha.7 candidate — 13 October 2026 integration
 
 - Integrate the reviewed archive with the current repository, retaining its

@@ -6,13 +6,18 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from local_http_security import LocalRequestHandler
 
 
 HOST = "127.0.0.1"
@@ -107,7 +112,9 @@ def refresh_models_forever() -> None:
             print(f"OpenClaw model refresh failed; keeping stale catalogue: {exc}", flush=True)
 
 
-class Handler(BaseHTTPRequestHandler):
+class Handler(LocalRequestHandler):
+    allow_browser_origin = False
+    require_adapter_auth = True
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args: object) -> None:

@@ -9,6 +9,7 @@ import os
 import platform
 import re
 import secrets
+import shlex
 import shutil
 import subprocess
 import sys
@@ -27,6 +28,7 @@ CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "rhizom
 STACK_ROOT = Path(os.environ.get("RHIZOME_STACK_ROOT", HOME / ".local/share/rhizome-stack")).expanduser()
 UNIT_DIR = HOME / ".config/systemd/user"
 OPENCLAW_HOME = HOME / ".openclaw"
+RUNTIME_PYTHON = sys.executable
 
 
 class InstallError(RuntimeError):
@@ -207,18 +209,49 @@ def render_unit(name: str, stack_root: Path) -> str:
             .replace(str(HOME / ".config/rhizome-stack/stack.env"), str(CONFIG_DIR / "stack.env")))
 
 
-def populate_secrets(content: str) -> str:
-    values = {
-        "OPENCLAW_GATEWAY_TOKEN": secrets.token_urlsafe(36),
-        "WEBUI_SECRET_KEY": secrets.token_urlsafe(48),
-    }
+def set_env_values(content: str, updates: dict[str, str]) -> str:
     lines = []
+    pending = dict(updates)
     for line in content.splitlines():
-        key, separator, value = line.partition("=")
-        if separator and key in values and not value:
-            line = f"{key}={values[key]}"
+        key = line.partition("=")[0]
+        if key in updates:
+            line = f"{key}={shlex.quote(updates[key])}"
+            pending.pop(key, None)
         lines.append(line)
+    lines.extend(f"{key}={shlex.quote(value)}" for key, value in pending.items())
     return "\n".join(lines) + "\n"
+
+
+def populate_secrets(content: str) -> str:
+    values = parse_env(content)
+    updates = {}
+    for key in ("OPENCLAW_GATEWAY_TOKEN", "WEBUI_SECRET_KEY", "RHIZOME_ADAPTER_TOKEN", "JUPYTER_TOKEN"):
+        if not values.get(key) or (key == "RHIZOME_ADAPTER_TOKEN" and values[key] == "local-adapter"):
+            updates[key] = secrets.token_urlsafe(48)
+    token = updates.get("RHIZOME_ADAPTER_TOKEN", values.get("RHIZOME_ADAPTER_TOKEN", ""))
+    # Open WebUI uses aligned semicolon-separated URL/key lists. Change only
+    # this stack's loopback adapter slot, preserving other provider credentials.
+    urls = values.get("OPENAI_API_BASE_URLS", "").split(";")
+    keys = values.get("OPENAI_API_KEYS", "").split(";")
+    port = values.get("OPENCLAW_WEBUI_ADAPTER_PORT", values.get("ADAPTER_PORT", "18888"))
+    for index, url in enumerate(urls):
+        if url.rstrip("/") in {f"http://127.0.0.1:{port}/v1", f"http://localhost:{port}/v1"}:
+            while len(keys) <= index:
+                keys.append("")
+            keys[index] = token
+            updates["OPENAI_API_KEYS"] = ";".join(keys)
+    return set_env_values(content, updates)
+
+
+def jupyter_settings(content: str) -> str:
+    token = parse_env(content)["JUPYTER_TOKEN"]
+    updates = {}
+    for prefix in ("CODE_EXECUTION", "CODE_INTERPRETER"):
+        updates.update({f"{prefix}_ENGINE": "jupyter",
+                        f"{prefix}_JUPYTER_URL": "http://127.0.0.1:8889",
+                        f"{prefix}_JUPYTER_AUTH": "token",
+                        f"{prefix}_JUPYTER_AUTH_TOKEN": token})
+    return set_env_values(content, updates)
 
 
 def render_env(existing: str | None = None) -> str:
@@ -235,7 +268,11 @@ def parse_env(content: str) -> dict[str, str]:
         if not line or line.lstrip().startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        values[key] = value
+        try:
+            parsed = shlex.split(value)
+        except ValueError as exc:
+            raise InstallError(f"invalid quoting in stack.env setting {key}") from exc
+        values[key] = " ".join(parsed)
     return values
 
 
@@ -247,15 +284,19 @@ def render_openclaw(env: dict[str, str]) -> str:
         "${OPENCLAW_GATEWAY_TOKEN}": env["OPENCLAW_GATEWAY_TOKEN"],
     }
     for needle, value in replacements.items():
-        content = content.replace(needle, value)
+        # Placeholders live inside JSON strings; shell quoting has already
+        # been removed by parse_env. Preserve quotes and backslashes as data.
+        content = content.replace(needle, json.dumps(value)[1:-1])
     json.loads(content)
     return content
 
 
-def configure_files(runner: Runner) -> None:
+def configure_files(runner: Runner, *, with_jupyter: bool = False) -> None:
     env_path = CONFIG_DIR / "stack.env"
     existing = env_path.read_text() if env_path.is_file() else None
     env_content = render_env(existing)
+    if with_jupyter:
+        env_content = jupyter_settings(env_content)
     runner.write(env_path, env_content, 0o600)
     openclaw_config = OPENCLAW_HOME / "openclaw.json"
     if not openclaw_config.exists():
@@ -342,6 +383,34 @@ def download_atomic(url: str, destination: Path, attempts: int = 3) -> None:
     raise InstallError(f"download failed after {attempts} attempts: {url}: {last_error}")
 
 
+def python_supported(executable: str) -> bool:
+    try:
+        result = subprocess.run([executable, "-c", "import json, sys; print(json.dumps(list(sys.version_info[:2])))"],
+                                capture_output=True, text=True, check=True, timeout=10)
+        version = tuple(json.loads(result.stdout))
+        minimum = tuple(map(int, VERSIONS["python_min"].split(".")))
+        maximum = tuple(map(int, VERSIONS["python_max_exclusive"].split(".")))
+        return minimum <= version < maximum
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        return False
+
+
+def select_runtime_python(explicit: str | None = None) -> str:
+    candidates = [explicit] if explicit else [sys.executable, shutil.which("python3.12"), shutil.which("python3.11")]
+    for candidate in dict.fromkeys(candidates):
+        if candidate and python_supported(candidate):
+            return candidate
+    raise InstallError("Open WebUI requires Python 3.11–3.12. Install Python 3.12 with venv support "
+                       "and retry with --python /path/to/python3.12; Python 3.13+ is unsupported.")
+
+
+def check_existing_venvs() -> None:
+    for config in sorted((STACK_ROOT / "venvs").glob("*/pyvenv.cfg")):
+        if not python_supported(str(config.parent / "bin/python")):
+            raise InstallError(f"Unsupported or broken existing venv: {config.parent}. "
+                               "Back it up and recreate it with Python 3.11–3.12 before retrying; no files changed.")
+
+
 def install_runtime(runner: Runner) -> Path:
     node_bin = install_node_runtime(runner)
     npm_prefix = HOME / ".npm-global"
@@ -368,7 +437,7 @@ def install_runtime(runner: Runner) -> Path:
             wiki_link.symlink_to(wiki_deps / "node_modules", target_is_directory=True)
     webui_venv = STACK_ROOT / "venvs/open-webui"
     if not runner.dry_run and not webui_venv.exists():
-        runner.run([sys.executable, "-m", "venv", str(webui_venv)])
+        runner.run([RUNTIME_PYTHON, "-m", "venv", str(webui_venv)])
     runner.run([str(webui_venv / "bin/pip"), "install", "--upgrade", "pip"])
     runner.run([str(webui_venv / "bin/pip"), "install", f"open-webui=={VERSIONS['open_webui']}"])
     patch_set = PROJECT / "patches/open-webui" / VERSIONS["open_webui"]
@@ -382,7 +451,7 @@ def install_runtime(runner: Runner) -> Path:
         runner.run([sys.executable, str(PROJECT / "tools/apply_patch_set.py"), str(patch_set), site_root])
     components_venv = STACK_ROOT / "venvs/components"
     if not runner.dry_run and not components_venv.exists():
-        runner.run([sys.executable, "-m", "venv", str(components_venv)])
+        runner.run([RUNTIME_PYTHON, "-m", "venv", str(components_venv)])
     runner.run([str(components_venv / "bin/pip"), "install", "-r", str(PROJECT / "components/requirements.txt")])
     return node_bin
 
@@ -390,7 +459,7 @@ def install_runtime(runner: Runner) -> Path:
 def install_voice(runner: Runner, download_models: bool) -> None:
     venv = STACK_ROOT / "venvs/voice"
     if not runner.dry_run and not venv.exists():
-        runner.run([sys.executable, "-m", "venv", str(venv)])
+        runner.run([RUNTIME_PYTHON, "-m", "venv", str(venv)])
     pip = venv / "bin/pip"
     runner.run([str(pip), "install", "--index-url", "https://download.pytorch.org/whl/cpu", "torch==2.10.0"])
     runner.run([str(pip), "install", "-r", str(PROJECT / "components/requirements-voice.txt")])
@@ -416,7 +485,7 @@ def install_voice(runner: Runner, download_models: bool) -> None:
 def install_memory(runner: Runner, node_bin: Path) -> None:
     venv = STACK_ROOT / "venvs/memory"
     if not runner.dry_run and not venv.exists():
-        runner.run([sys.executable, "-m", "venv", str(venv)])
+        runner.run([RUNTIME_PYTHON, "-m", "venv", str(venv)])
     runner.run([str(venv / "bin/pip"), "install", "-r", str(PROJECT / "components/requirements-memory.txt")])
     runner.run([str(venv / "bin/python"), str(PROJECT / "tools/initialise_empty_memory.py")])
     plugin = STACK_ROOT / "components/memory-rhizome"
@@ -456,7 +525,7 @@ def install_routing(runner: Runner) -> None:
     """Install optional CPU classifier dependencies, without fetching model weights."""
     venv = STACK_ROOT / "venvs/routing"
     if runner.dry_run or not venv.exists():
-        runner.run([sys.executable, "-m", "venv", str(venv)])
+        runner.run([RUNTIME_PYTHON, "-m", "venv", str(venv)])
     runner.run([str(venv / "bin/pip"), "install", "--index-url",
                 "https://download.pytorch.org/whl/cpu", "torch==2.10.0"])
     runner.run([str(venv / "bin/pip"), "install", "-r",
@@ -467,7 +536,7 @@ def install_retrieval(runner: Runner) -> None:
     """Install the explicit CPU MiniLM path and enable it in the private config."""
     venv = STACK_ROOT / "venvs/retrieval"
     if runner.dry_run or not venv.exists():
-        runner.run([sys.executable, "-m", "venv", str(venv)])
+        runner.run([RUNTIME_PYTHON, "-m", "venv", str(venv)])
     runner.run([str(venv / "bin/pip"), "install", "--index-url",
                 "https://download.pytorch.org/whl/cpu", "torch==2.10.0"])
     runner.run([str(venv / "bin/pip"), "install", "-r",
@@ -495,7 +564,7 @@ def install_creative(runner: Runner, download_models: bool) -> None:
         runner.run(["git", "-C", str(source), "checkout", "--detach", VERSIONS["comfyui_git"]])
     venv = source / ".venv"
     if runner.dry_run or not venv.exists():
-        runner.run([sys.executable, "-m", "venv", str(venv)])
+        runner.run([RUNTIME_PYTHON, "-m", "venv", str(venv)])
     pip = venv / "bin/pip"
     runner.run([str(pip), "install", "--upgrade", "pip"])
     runner.run([str(pip), "install", "--index-url", VERSIONS["creative_torch_index"],
@@ -540,11 +609,13 @@ def install_components(runner: Runner) -> None:
 
 
 def main() -> int:
+    global RUNTIME_PYTHON
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", choices=["linux", "wsl"], required=True)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--skip-packages", action="store_true")
     parser.add_argument("--skip-runtime", action="store_true")
+    parser.add_argument("--python", help="Python 3.11 or 3.12 interpreter for runtime environments")
     parser.add_argument("--with-ollama", action="store_true", help="install Ollama if missing; leave existing installations untouched")
     parser.add_argument("--with-voice", action="store_true")
     parser.add_argument("--download-models", action="store_true", help="download large voice/STT weights; requires --with-voice")
@@ -552,8 +623,8 @@ def main() -> int:
     parser.add_argument("--with-jupyter", action="store_true")
     parser.add_argument("--with-routing", action="store_true", help="install optional CPU GLiNER dependencies; no model download or routing activation")
     parser.add_argument("--with-retrieval", action="store_true", help="install and enable optional CPU MiniLM workforce retrieval")
-    parser.add_argument("--with-creative", action="store_true", help="install pinned ComfyUI, Qwen Image Desk and MiniMax Music 3")
-    parser.add_argument("--download-creative-models", action="store_true", help="download hash-verified Qwen and MiniMax weights; requires --with-creative")
+    parser.add_argument("--with-creative", action="store_true", help="install pinned ComfyUI plus Qwen, MiniMax and WAN Desks")
+    parser.add_argument("--download-creative-models", action="store_true", help="download hash-verified Qwen, MiniMax and WAN weights; requires --with-creative")
     parser.add_argument("--with-skills", action="store_true", help="install the six core reliability skills")
     args = parser.parse_args()
     runner = Runner(args.dry_run)
@@ -563,6 +634,10 @@ def main() -> int:
         if args.download_creative_models and not args.with_creative:
             raise InstallError("--download-creative-models requires --with-creative")
         family = require_preflight(args.target)
+        if not args.skip_runtime:
+            RUNTIME_PYTHON = select_runtime_python(args.python)
+            check_existing_venvs()
+            print(f"runtime Python: {RUNTIME_PYTHON}")
         print(f"preflight: target={args.target} family={family} architecture={platform.machine()}")
         if not args.skip_packages:
             if family == "debian":
@@ -571,7 +646,7 @@ def main() -> int:
                                        creative=args.with_creative))
         if args.with_ollama:
             install_ollama(runner, family)
-        configure_files(runner)
+        configure_files(runner, with_jupyter=args.with_jupyter)
         install_components(runner)
         if args.with_skills:
             # Use the source copy in dry runs, without writing installed state.

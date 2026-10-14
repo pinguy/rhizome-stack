@@ -16,6 +16,18 @@ NODE = shutil.which('node')
 
 @unittest.skipUnless(NODE, 'Node is required for creative JavaScript checks')
 class CreativeUITest(unittest.TestCase):
+    def test_wan_frontend_syntax_and_independent_controls(self):
+        module_dir = ROOT / 'components/creative/wan-video-desk'
+        for name in ('app.js', 'sw.js'):
+            result = subprocess.run([NODE, '--check', str(module_dir / 'static' / name)],
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        page = (module_dir / 'static/index.html').read_text()
+        script = (module_dir / 'static/app.js').read_text()
+        self.assertIn('name="videoMode"', page)
+        self.assertIn('name="videoModel"', page)
+        self.assertIn('video_model: videoModel, mode, reference_image_id: referenceId', script)
+
     def test_qwen_gallery_prunes_stale_records_and_deletes_via_trash(self):
         with tempfile.TemporaryDirectory() as temporary:
             temporary = Path(temporary)

@@ -16,6 +16,7 @@ TOOLS = {
     "openclaw_agent": ("OpenClaw Agent", "openclaw_agent.py", "Delegate a bounded task to the paired local OpenClaw agent."),
     "minimax_music_3": ("MiniMax Music 3", "minimax_music.py", "Create local songs and attach them as native playable Open WebUI files."),
     "qwen_image": ("Qwen Image Desk", "qwen_image.py", "Create or reference-edit local images and attach them to the saved chat."),
+    "wan_video": ("WAN Video Desk", "wan_video.py", "Create local WAN videos and attach durable MP4s to the saved chat."),
 }
 
 

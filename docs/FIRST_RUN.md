@@ -101,7 +101,7 @@ Use the matching configuration directory if you set `XDG_CONFIG_HOME`.
 Registration preserves matching tool IDs. Select the tools in Open WebUI as
 needed; the token is read from disk rather than supplied in process arguments.
 The registered IDs are `rhizome_memory`, `rhizome_web_search`, `openclaw_agent`,
-`minimax_music_3` and `qwen_image`.
+`minimax_music_3`, `qwen_image` and `wan_video`.
 
 ## 5. Import your own knowledge
 

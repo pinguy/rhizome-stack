@@ -24,7 +24,7 @@ case "$action" in
     printf '  welcome      Configure a provider and optional components\n'
     printf '  skills       List/install bundled skills\n'
     printf '  workforce    Routing advice or a bounded local Ornith job (JSON stdin)\n'
-    printf '  creative     Start Qwen Image Desk or MiniMax Music 3\n'
+    printf '  creative     Start Qwen Image Desk, MiniMax Music 3 or WAN Video Desk\n'
     printf '  voice-lab    Start the local Chatterbox Voice Lab\n'
     printf '  import       Import private documents or chat exports (supports --dry-run)\n'
     printf '  configure    Edit local configuration\n'
@@ -46,14 +46,18 @@ case "$action" in
         systemctl --user start minimax-music-api.service
         xdg-open "http://127.0.0.1:${MINIMAX_MUSIC_PORT:-8830}/" >/dev/null 2>&1 &
         ;;
+      wan|video)
+        systemctl --user start wan-video-desk.service
+        xdg-open "http://127.0.0.1:${WAN_VIDEO_DESK_PORT:-8840}/video-studio/" >/dev/null 2>&1 &
+        ;;
       status)
-        systemctl --user --no-pager status qwen-image-desk.service minimax-music-api.service
+        systemctl --user --no-pager status qwen-image-desk.service minimax-music-api.service wan-video-desk.service
         ;;
       stop)
-        systemctl --user stop qwen-image-desk.service minimax-music-api.service
+        systemctl --user stop qwen-image-desk.service minimax-music-api.service wan-video-desk.service
         ;;
       *)
-        printf 'usage: rhizome-stack creative {qwen|minimax|status|stop}\n' >&2
+        printf 'usage: rhizome-stack creative {qwen|minimax|wan|status|stop}\n' >&2
         exit 64
         ;;
     esac
@@ -105,7 +109,7 @@ case "$action" in
   smoke)
     curl --fail --silent --show-error --connect-timeout 5 --max-time 20 "http://127.0.0.1:${OPENCLAW_PORT:-18789}/" >/dev/null
     curl --fail --silent --show-error --connect-timeout 5 --max-time 20 "http://127.0.0.1:${OPENWEBUI_PORT:-8080}/health" >/dev/null
-    curl --fail --silent --show-error --connect-timeout 5 --max-time 20 "http://127.0.0.1:${ADAPTER_PORT:-18888}/v1/models" >/dev/null
+    curl --fail --silent --show-error --connect-timeout 5 --max-time 20 "http://127.0.0.1:${ADAPTER_PORT:-18888}/health" >/dev/null
     printf 'PASS core HTTP endpoints\n'
     ;;
   *)

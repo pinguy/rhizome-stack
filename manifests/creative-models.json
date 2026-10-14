@@ -48,6 +48,46 @@
       "source_path": "vae/minimax_music3_dav.safetensors",
       "destination": "vae/minimax_music3_dav.safetensors",
       "sha256": "2a32155b769be01445fcc2a8663b910fc9e1751e18dc1c3ec528064512d9ef0c"
+    },
+    {
+      "component": "wan-video-desk",
+      "repository": "befox/WAN2.2-14B-Rapid-AllInOne-GGUF",
+      "revision": "f55c762a5bfae157e3f0ca9e9a959de53dbf2a6d",
+      "source_path": "v10/wan2.2-t2v-rapid-aio-v10-nsfw-Q5_K.gguf",
+      "destination": "diffusion_models/wan2.2-t2v-rapid-aio-v10-nsfw-Q5_K.gguf",
+      "sha256": "d8b621e721f86317622af820e078777511c7e416318df55ab456f70175a7f6f7"
+    },
+    {
+      "component": "wan-video-desk",
+      "repository": "befox/WAN2.2-14B-Rapid-AllInOne-GGUF",
+      "revision": "f55c762a5bfae157e3f0ca9e9a959de53dbf2a6d",
+      "source_path": "v10/wan2.2-i2v-rapid-aio-v10-nsfw-Q5_K.gguf",
+      "destination": "diffusion_models/wan2.2-i2v-rapid-aio-v10-nsfw-Q5_K.gguf",
+      "sha256": "1e0cb2e7df705b03823a5ce8d71c515ab05da96f33fa2117d691ccb22f8e6f3f"
+    },
+    {
+      "component": "wan-video-desk",
+      "repository": "city96/umt5-xxl-encoder-gguf",
+      "revision": "b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7",
+      "source_path": "umt5-xxl-encoder-Q4_K_M.gguf",
+      "destination": "text_encoders/umt5-xxl-encoder-Q4_K_M.gguf",
+      "sha256": "17cf97a5bbbc60a646d6105b832b6f657ce904a8a1ad970e4b59df0c67584a40"
+    },
+    {
+      "component": "wan-video-desk",
+      "repository": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "revision": "ee6f4a40737a995bf5818954cfce6d59443b0f04",
+      "source_path": "split_files/vae/wan_2.1_vae.safetensors",
+      "destination": "vae/wan_2.1_vae.safetensors",
+      "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b"
+    },
+    {
+      "component": "wan-video-desk",
+      "repository": "Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+      "revision": "123acf1cc74bccbb9bfff8ac1ee72edc08c2341d",
+      "source_path": "split_files/clip_vision/clip_vision_h.safetensors",
+      "destination": "clip_vision/clip_vision_h.safetensors",
+      "sha256": "64a7ef761bfccbadbaa3da77366aac4185a6c58fa5de5f589b42a65bcc21f161"
     }
   ]
 }

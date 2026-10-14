@@ -31,6 +31,7 @@
       "comfyui-gguf",
       "qwen-image-desk",
       "minimax-music-3",
+      "wan-video-desk",
       "openwebui-local-media"
     ]
   },

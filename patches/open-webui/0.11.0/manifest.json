@@ -6,7 +6,7 @@
       "path": "open_webui/main.py",
       "action": "modify",
       "clean_sha256": "2e53f5afef53bdc87da2a8f96f4a5437ee6adb18c1f8a66785083f4ba658df33",
-      "patched_sha256": "f7291c0300e80f4a3b0c2b3ac92925e77d4b283cb74074a251456c0673f66ad9",
+      "patched_sha256": "5a37dbfb4eb34c26b863bd8bc4a18a00bce5a26bba070c8ef127cb510f786780",
       "payload": "open_webui__main.py.patch"
     },
     {
@@ -83,7 +83,7 @@
       "path": "open_webui/frontend/_app/immutable/chunks/Bd1cmSN4.js",
       "action": "replace",
       "clean_sha256": "649b3edff6258b0ace9caf18e4f7f90cdef4a338f80f05e18fe459b764e12760",
-      "patched_sha256": "43e482794db580ab949951bf3a80fadacd5623d77dc30bc2aa505c97cb04ea87",
+      "patched_sha256": "08d089be733d63647ce91c2c615dba574702725cdabdacbbb1dc61efa0f0accf",
       "payload": "open_webui__frontend___app__immutable__chunks__Bd1cmSN4.js.replacement.txt"
     },
     {

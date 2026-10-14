@@ -1,31 +1,34 @@
-# Qwen and MiniMax inside Open WebUI
+# Qwen, MiniMax and WAN inside Open WebUI
 
-The creative profile ships more than the standalone Qwen Image Desk and
-MiniMax Music 3 pages. It also connects both generators to ordinary Open WebUI
-chats while safely sharing one local GPU with Ollama.
+The creative profile connects Qwen Image Desk, MiniMax Music 3 and WAN Video
+Desk to ordinary saved Open WebUI chats while safely sharing one local GPU with
+Ollama.
 
 ## What the integration does
 
-From a saved Open WebUI chat, the local model can call:
+The local model can call:
 
-- `qwen_image.create_image` to generate a PNG or edit an uploaded image; and
-- `minimax_music_3.create_song` to generate an MP3.
+- `qwen_image.create_image` to generate a PNG or edit an uploaded image;
+- `minimax_music_3.create_song` to generate an MP3; and
+- `wan_video.create_video` to generate a text-to-video MP4 or condition one on
+  an uploaded image.
 
-Finished PNGs are stored as Open WebUI image attachments and render inline.
-Finished MP3s are stored as native file attachments, so the saved chat keeps
-Open WebUI's File card and built-in Preview player after a reload. The tools do
-not emit temporary paths or raw HTML players as the user-facing result.
+PNGs render inline. MP3s use Open WebUI's native File card and Preview player.
+MP4s are durable file attachments rendered by the pinned Open WebUI 0.11.0
+frontend patch as an inline HTML5 `<video controls>` player. Every completed WAN
+take also remains in WAN Video Desk with its generation settings and provenance,
+so it can be inspected, downloaded, rerun or used as the basis for another take.
 
 ## Runtime flow
 
 ```text
 saved Open WebUI chat
-  -> packaged Qwen or MiniMax tool
+  -> packaged Qwen, MiniMax or WAN tool
   -> shared generation lock
   -> refuse if ComfyUI or another media job is busy
   -> unload every Ollama runner with keep_alive=0
   -> wait until Ollama /api/ps is empty
-  -> start Qwen Image Desk or MiniMax Music 3 on demand
+  -> start the selected packaged generator on demand
   -> submit generation exactly once
   -> retry only read-only status polling
   -> free ComfyUI models and stop the engine owned by that application
@@ -62,10 +65,13 @@ python3 ~/.local/share/rhizome-stack/tools/register_openwebui_tools.py \
   --token-file ~/.config/rhizome-stack/openwebui-admin.token
 ```
 
-The relevant registered IDs are `qwen_image` and `minimax_music_3`.
-The pinned Open WebUI patch attaches them to the default model metadata and
-adds the routing instruction that distinguishes an actual creation request
-from ordinary discussion.
+The relevant registered IDs are `qwen_image`, `minimax_music_3` and
+`wan_video`. The pinned Open WebUI patch attaches them to default model metadata
+and gives the model explicit routing instructions for image, song and video
+creation. A separate hash-guarded replacement modifies only the pinned generated
+frontend chunk needed to render `video/mp4` attachments inline. Open WebUI
+updates require that replacement and all normal image/file branches to be
+re-derived and browser-tested against the new build.
 
 ## Use from chat
 
@@ -75,24 +81,33 @@ Examples:
 - Attach an image, then ask: “Edit this image so the chair is yellow; preserve
   the rest of the scene.”
 - “Create a 30-second instrumental synthwave track called Neon Drive Home.”
+- “Create a five-second 4:3 video of waves rolling over black volcanic sand.”
+- Attach an image, then ask: “Animate this as a subtle five-second WAN video.”
 
-Qwen edits accept only an image upload owned by the authenticated Open WebUI
-user and no larger than 20 MiB. The tool passes the owned Open WebUI file ID,
-never an arbitrary filesystem path or remote URL.
+Qwen edits and WAN image-to-video requests accept only a PNG, JPEG or WebP file
+owned by the authenticated Open WebUI user and no larger than 20 MiB. The tools
+pass the owned Open WebUI file ID, never an arbitrary filesystem path or remote
+URL. WAN defaults to T2V v10 Q5_K, 640×480 (4:3), 480p, 16 FPS, four steps and
+five seconds unless the caller deliberately overrides a supported setting.
 
 ## Failure boundaries
 
 - Media calls are serialised; active work is not interrupted.
 - Only a refused connection counts as an offline service. HTTP errors,
-  timeouts and malformed health or queue responses block hand-off or report cleanup
-  failure; they are not evidence that the engine is idle or stopped.
+  timeouts and malformed health or queue responses block hand-off or report
+  cleanup failure; they are not evidence that the engine is idle or stopped.
+- Ollama must return a valid runner list both before unloading and while
+  checking that the GPU is free. A missing or malformed list blocks hand-off.
 - Generation submission is not automatically retried.
 - A failed or timed-out job is reported as a failure, never as a created file.
-- Result paths must remain under the configured ComfyUI output directory.
+- Result paths must remain under the selected packaged application's output
+  directory.
 - Only the ComfyUI process owned by the selected packaged application is
   stopped.
-- Open WebUI file ownership and saved-chat attachment APIs remain
-  authoritative.
+- Open WebUI file ownership and saved-chat attachment APIs remain authoritative.
+- WAN uses the accepted 64/16 tiled temporal decoder normally. On decoder OOM
+  it tries 48/12 first for better luminance consistency, then 32/12 only as the
+  tighter-memory fallback. Other errors are not retried through this ladder.
 
 The standalone desks remain useful for manual control, but they and the
 Open WebUI tools use the same local services and model files.

@@ -19,14 +19,18 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
 import uuid
 import urllib.request
 import urllib.parse
 import urllib.error
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from local_http_security import LocalRequestHandler, adapter_headers
 
 # ---------------------------------------------------------------------------
 # Config
@@ -126,7 +130,7 @@ def ai_models():
     """Merged list, cloud first then local — same sources Open WebUI uses."""
     out = []
     try:  # OpenClaw adapter (cloud); ids start with "openclaw/"
-        with urllib.request.urlopen(OPENCLAW_API + "/models", timeout=6) as r:
+        with urllib.request.urlopen(urllib.request.Request(OPENCLAW_API + "/models", headers=adapter_headers()), timeout=6) as r:
             data = json.load(r)
         out += [m["id"] for m in data.get("data", []) if m.get("id")]
     except Exception:
@@ -185,7 +189,7 @@ def ai_fill(model, brief, seconds=60):
                    "temperature": 1.0, "top_p": 0.95, "max_tokens": 1200}
         url = OPENCLAW_API + "/chat/completions"
         req = urllib.request.Request(url, data=json.dumps(payload).encode(),
-                                     headers={"Content-Type": "application/json"})
+                                     headers=adapter_headers())
         with urllib.request.urlopen(req, timeout=240) as r:
             data = json.load(r)
         content = ((data.get("choices") or [{}])[0].get("message") or {}).get("content", "")
@@ -566,7 +570,7 @@ def generation_options(body):
     return result
 
 
-class Handler(BaseHTTPRequestHandler):
+class Handler(LocalRequestHandler):
     # in-memory index of submitted jobs {prompt_id: {"t0":..., "meta":...}}
     JOBS = {}
 
@@ -844,10 +848,10 @@ class Handler(BaseHTTPRequestHandler):
 INDEX_HTML = r"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#edf1f4">
+<meta name="theme-color" content="#0b1015">
 <title>MiniMax Music 3</title>
 <style>
-:root{--bg:#edf1f4;--panel:#fff;--field:#f5f7fa;--line:#dce4ea;--ink:#172431;--muted:#546477;--accent:#2855cb;--accent-soft:#e9efff;--library:#172939;--library-card:#213647;--library-line:#3b5062;--library-muted:#b8c8d7;--radius:18px}
+:root{--bg:#e9eff4;--panel:#fff;--field:#f3f6f9;--line:#d6e0e8;--ink:#142737;--muted:#53697b;--accent:#315ed5;--accent-deep:#2347aa;--accent-soft:#e3eaff;--signal:#d58b26;--library:#102638;--library-card:#193448;--library-line:#35546b;--library-muted:#b8cad8;--radius:18px}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 'Adwaita Sans','Segoe UI',sans-serif}
@@ -857,67 +861,104 @@ button,a,summary{touch-action:manipulation}
 button{cursor:pointer}button:disabled{cursor:wait;opacity:.55}
 a{color:var(--accent)}
 :focus-visible{outline:3px solid var(--accent);outline-offset:3px}
-.masthead{max-width:1512px;margin:auto;padding:26px 40px 20px;display:flex;align-items:center;gap:16px}
-.brand-mark{width:44px;height:44px;border-radius:14px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;gap:4px;flex-shrink:0}
+.masthead{max-width:1560px;margin:auto;padding:25px 40px 18px;display:flex;align-items:center;gap:15px}
+.brand-mark{width:44px;height:44px;border-radius:13px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;gap:4px;flex-shrink:0;box-shadow:0 8px 24px #315ed528}
 .brand-mark i{display:block;background:currentColor;width:4px;border-radius:3px;height:14px}.brand-mark i:nth-child(2){height:25px}.brand-mark i:nth-child(3){height:19px}
 h1,h2,h3,p{margin:0}h1,h2,h3{font-family:'Fira Sans Condensed','Adwaita Sans',sans-serif}
 h1{font-size:24px;letter-spacing:-.5px;line-height:1.1;font-weight:600}
-.brand-sub{font-size:12px;color:var(--muted);margin-top:5px}
+.brand-sub{font-size:12px;color:var(--muted);margin-top:4px}
 .engine-tools{margin-left:auto;display:flex;gap:12px;align-items:center}.eng{font-size:12px;color:var(--muted)}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--muted);margin-right:7px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#fff;border:1px solid transparent;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:650;min-height:44px;text-decoration:none;transition:background .15s,box-shadow .15s}
-.btn:hover:not(:disabled){box-shadow:0 3px 10px #17243118;background:#2049b6}
+.btn:hover:not(:disabled){box-shadow:0 5px 15px #1724311c;background:var(--accent-deep)}
 .btn.sec{background:var(--panel);border-color:var(--line);color:var(--ink)}.btn.sec:hover:not(:disabled){background:var(--field)}
 .eng-btn{font-size:12px;padding:8px 12px;min-height:38px}
-.wrap{max-width:1512px;margin:auto;padding:0 40px 40px}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 385px;gap:24px;align-items:start}
-.editor{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 6px 24px #17243104}
-.editor-heading{padding:24px 28px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px}
+.wrap{max-width:1560px;margin:auto;padding:0 40px 40px}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 405px;gap:24px;align-items:start}
+.editor{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 10px 32px #16304708;overflow:hidden}
+.editor-heading{padding:25px 30px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px;background:linear-gradient(120deg,#fff 0%,#f8faff 100%)}
 .eyebrow{color:var(--muted);font-size:10px;font-weight:700;letter-spacing:1.7px;text-transform:uppercase;margin-bottom:5px}
 h2{font-size:29px;letter-spacing:-.6px;line-height:1.2;font-weight:550}.editor-heading p:last-child{color:var(--muted);font-size:13px;margin-top:6px}
-.session-badge{padding:5px 10px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:650;white-space:nowrap}
-.editor-body{padding:24px 28px}.field{margin-bottom:21px}label{display:block;font-size:13px;font-weight:650;margin-bottom:7px}.optional{font-size:12px;color:var(--muted);font-weight:400;margin-left:6px}
+.session-badge{padding:5px 10px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font:600 11px 'Adwaita Mono',monospace;white-space:nowrap}
+.stage{display:grid;grid-template-columns:58px minmax(0,1fr);border-bottom:1px solid var(--line)}.stage:last-child{border-bottom:0}.stage-rail{padding:27px 0 0 25px}.stage-number{display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--field);color:var(--muted);font:700 11px 'Adwaita Mono',monospace}.stage-content{min-width:0;padding:25px 30px 28px 0}.stage-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}.stage-head h3{font-size:20px;letter-spacing:-.25px;font-weight:600}.stage-head p{color:var(--muted);font-size:12px;margin-top:3px}.stage-kicker{font:650 10px 'Adwaita Mono',monospace;color:var(--accent);letter-spacing:1.2px;text-transform:uppercase}
+.field{margin-bottom:21px}.field:last-child{margin-bottom:0}label{display:block;font-size:13px;font-weight:650;margin-bottom:7px}.optional{font-size:12px;color:var(--muted);font-weight:400;margin-left:6px}
 .hint{color:var(--muted);font-size:12px;font-weight:400}.field-help{display:block;margin-top:7px}
 input:not([type=range]),textarea,select{width:100%;min-width:0;border:1px solid var(--line);border-radius:9px;background:var(--field);color:var(--ink);padding:11px 13px;transition:border-color .15s;line-height:1.55}
 input::placeholder,textarea::placeholder{color:#687889;opacity:1}
 input:not([type=range]):focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;background:var(--panel)}
 textarea{resize:vertical;display:block}textarea.cap{min-height:135px}textarea.lyr{min-height:185px;font:13px/1.8 'Adwaita Mono',monospace}
-#title{background:transparent;font-size:18px;font-weight:500;padding:11px 0;border:0;border-bottom:1px solid var(--line);border-radius:0}
-details.assistant{background:var(--field);border:1px solid var(--line);border-radius:11px;margin-bottom:24px}
+#title{background:transparent;font-size:20px;font-weight:500;padding:9px 0;border:0;border-bottom:1px solid var(--line);border-radius:0}
 summary{cursor:pointer;font-size:13px;font-weight:600;list-style:none;display:flex;align-items:center;gap:10px;min-height:46px}summary::-webkit-details-marker{display:none}
 summary::after{content:'+';margin-left:auto;color:var(--muted);font-size:20px;font-weight:400}details[open]>summary::after{content:'−'}
-.assistant summary{padding:13px 16px}.assistant-icon{color:var(--accent);font-size:19px}.assistant summary .hint{margin-left:auto;margin-right:8px}.assistant summary::after{margin-left:0}
-.assistant-content{padding:0 16px 17px}.assistant-content .hint{display:block;margin:0 0 13px}.ai-grid{display:grid;grid-template-columns:1fr;gap:12px}.ai-grid textarea{min-height:80px;background:var(--panel)}
-.ai-model-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}.ai-model-row .btn{min-height:46px}
+.idea-box{border:1px solid #cfdbee;background:linear-gradient(135deg,#f5f8ff 0%,#eef3ff 100%);border-radius:13px;padding:16px}.idea-box textarea{min-height:92px;background:#fff}.idea-actions{display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:12px;align-items:end;margin-top:13px}.writer-field label{display:flex;justify-content:space-between;align-items:baseline}.writer-field label span{font-size:10px;color:var(--muted);font-weight:500}.writer-field select{background:#fff}.idea-actions .btn{min-height:46px;white-space:nowrap}.rhizome-mark{color:var(--accent);font-size:16px;margin-right:4px}
 #aistatus{font-size:12px;color:var(--muted);margin-top:10px;overflow-wrap:anywhere}#aistatus:empty{display:none}
 .field-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.tagbar{display:flex;gap:6px;flex-wrap:wrap;margin:9px 0 0}
 .tag{font:11px/1.5 'Adwaita Mono',monospace;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:6px;padding:5px 8px;min-height:30px}.tag:hover{color:var(--accent);border-color:var(--accent)}
-.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}.settings-row{background:var(--field);border:1px solid var(--line);border-radius:11px;padding:16px;margin-top:23px}.settings-row input:not([type=range]){background:var(--panel)}
+.song-fields{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}.settings-row{background:var(--field);border:1px solid var(--line);border-radius:11px;padding:16px}.settings-row input:not([type=range]){background:var(--panel)}
+.seed-row{display:flex;align-items:stretch;gap:8px}.seed-row input{flex:1}.seed-random{flex:0 0 45px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--accent);font-size:20px;font-weight:700}.seed-random:hover{background:var(--accent-soft);border-color:var(--accent)}
 .slabel{display:flex;justify-content:space-between;align-items:baseline}.slabel b{font:12px 'Adwaita Mono',monospace;color:var(--accent)}
 input[type=range]{accent-color:var(--accent);width:100%;padding:0;height:24px;cursor:pointer}.mmss{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:var(--muted)}.mmss input{width:55px!important;padding:5px 7px!important;text-align:center}
-.advanced{border-top:1px solid var(--line);margin-top:20px;padding-top:5px}.advanced summary{color:var(--muted)}.advanced .row{padding:12px 0}
-.generate-bar{position:sticky;bottom:0;z-index:2;box-shadow:0 -5px 20px #17243108;border-top:1px solid var(--line);padding:18px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px;background:#fafbfd;border-radius:0 0 var(--radius) var(--radius)}
-.generate-note{font-size:12px;color:var(--muted);max-width:250px}.generate-note strong{display:block;color:var(--ink);font-size:13px;margin-bottom:2px}#go{min-width:215px;min-height:48px;font-size:15px}
-#status{display:none;padding:18px 28px;border-top:1px solid var(--line);font-size:13px;overflow-wrap:anywhere}#status.show{display:block}#status audio{margin-top:12px}.pathline{font:11px/1.6 'Adwaita Mono',monospace;color:var(--muted);overflow-wrap:anywhere;margin-top:12px}
+.advanced{border-top:1px solid var(--line);margin-top:20px;padding-top:5px}.advanced summary{color:var(--muted)}.advanced .row{padding:12px 0 0}
+.render-action{margin-top:20px;border:1px solid #cbd8f2;border-radius:13px;padding:15px 16px;display:flex;align-items:center;justify-content:space-between;gap:20px;background:linear-gradient(110deg,#f1f5ff,#e7edff)}.generate-note{font-size:12px;color:var(--muted);max-width:320px}.generate-note strong{display:block;color:var(--ink);font-size:13px;margin-bottom:2px}#go{min-width:215px;min-height:48px;font-size:15px}
+#status{display:none;margin-top:14px;padding:15px 16px;border:1px solid var(--line);border-radius:11px;background:var(--field);font-size:13px;overflow-wrap:anywhere}#status.show{display:block}#status audio{margin-top:12px}.pathline{font:11px/1.6 'Adwaita Mono',monospace;color:var(--muted);overflow-wrap:anywhere;margin-top:12px}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;vertical-align:-2px;margin-right:7px}@keyframes spin{to{transform:rotate(360deg)}}
-.library{background:var(--library);color:#f4f8fc;border:1px solid var(--library);border-radius:var(--radius);padding:23px 20px 20px;position:sticky;top:20px;min-width:0;color-scheme:dark}
-.library .eyebrow{color:var(--library-muted)}.library h2{font-size:25px}.library-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.library .hint{color:var(--library-muted)}
+.library{background:var(--library);color:#f4f8fc;border:1px solid var(--library);border-radius:var(--radius);padding:23px 20px 18px;position:sticky;top:18px;min-width:0;color-scheme:dark;box-shadow:0 12px 34px #10263818}
+.library .eyebrow{color:var(--library-muted)}.library h2{font-size:25px}.library-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.library .hint{color:var(--library-muted)}
 .count-badge{border:1px solid var(--library-line);border-radius:7px;color:var(--library-muted);padding:3px 9px;font:12px 'Adwaita Mono',monospace}
 .library input{background:var(--library-card)!important;border-color:var(--library-line)!important;color:#f4f8fc!important;font-size:13px}.library input::placeholder{color:var(--library-muted)}
-.library-tools{display:flex;gap:8px;align-items:center;margin-bottom:14px}.refresh{background:var(--library-card);border:1px solid var(--library-line);border-radius:9px;color:#f4f8fc;min-width:43px;height:43px;font-size:18px}.refresh:hover{background:#2c4357}
-.hist{display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 310px);min-height:230px;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--library-line) transparent;padding-right:3px}
-.hitem{border:1px solid var(--library-line);border-radius:11px;background:var(--library-card);padding:13px;min-width:0;flex-shrink:0}.track-top{display:flex;gap:10px;align-items:center}.track-number{display:grid;place-items:center;width:33px;height:37px;flex-shrink:0;background:#30495e;border-radius:6px;font:11px 'Adwaita Mono',monospace;color:#d9e8f8}
-.hn{font-size:13px;font-weight:600;overflow-wrap:anywhere;line-height:1.4}.track-date{font-size:10px;color:var(--library-muted);margin-top:3px}.track-info{min-width:0;flex:1}
-audio{width:100%;height:38px;display:block;margin-top:12px}.hrow{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:11px}a.dl,.text-button{font-size:12px;font-weight:600;text-decoration:none;background:transparent;border:0;padding:0;color:var(--accent);cursor:pointer}.library a.dl,.library .text-button{color:#bed6ff}.library a.dl:hover,.text-button:hover{text-decoration:underline}
+.library-tools{display:flex;gap:8px;align-items:center;margin-bottom:12px}.refresh{background:var(--library-card);border:1px solid var(--library-line);border-radius:9px;color:#f4f8fc;min-width:43px;height:43px;font-size:18px}.refresh:hover{background:#28465b}
+.now-playing{border:1px solid #496b82;border-radius:12px;background:linear-gradient(145deg,#1f4056,#183246);padding:14px;margin-bottom:12px}.now-label{font:700 9px 'Adwaita Mono',monospace;letter-spacing:1.2px;text-transform:uppercase;color:#9fbae0}.now-title{font-size:16px;line-height:1.3;margin-top:4px;overflow-wrap:anywhere}.now-meta{font-size:10px;color:var(--library-muted);margin-top:3px}.now-playing audio{width:100%;height:38px;display:block;margin-top:11px}.now-actions{display:flex;gap:15px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.hist{display:flex;flex-direction:column;gap:5px;max-height:calc(100vh - 430px);min-height:180px;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--library-line) transparent;padding-right:3px}
+.track-row{display:grid;grid-template-columns:36px minmax(0,1fr);align-items:center;gap:9px;border:1px solid transparent;border-radius:9px;padding:7px;background:transparent;min-width:0;flex-shrink:0}.track-row:hover{background:var(--library-card);border-color:#29475c}.track-row.selected{background:var(--library-card);border-color:#557890}.play-track{display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--library-line);border-radius:8px;background:#203e53;color:#fff;font-size:12px;padding:0}.play-track:hover{background:#2d5169}.track-select{min-width:0;border:0;background:none;color:inherit;text-align:left;padding:0;cursor:pointer}.track-select>.hn,.track-select>.track-date{display:block}.hn{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35}.track-date{font-size:9px;color:var(--library-muted);margin-top:2px}.track-state{font-size:9px;color:#bcd0ef;margin-left:5px}
+a.dl,.text-button{font-size:12px;font-weight:600;text-decoration:none;background:transparent;border:0;padding:0;color:var(--accent);cursor:pointer}.library a.dl,.library .text-button{color:#c5d9ff}.library a.dl:hover,.text-button:hover{text-decoration:underline}
 .xdel{margin-left:auto;color:var(--library-muted);font-size:11px;background:none;border:0;padding:4px;min-height:28px}.xdel:hover{color:#fff;text-decoration:underline}
 .file-details{margin-top:8px;border-top:1px solid var(--library-line);padding-top:3px}.file-details summary{font-size:10px;font-weight:400;color:var(--library-muted);min-height:26px}.file-details summary::after{font-size:14px;color:var(--library-muted)}
 .hpath{font:10px/1.6 'Adwaita Mono',monospace;color:var(--library-muted);overflow-wrap:anywhere;padding:4px 0}.cp{display:inline-block;margin-top:4px;margin-left:6px;font-size:11px;border:0;background:none;color:var(--accent);cursor:pointer;padding:3px}.library .cp{color:#bed6ff}
-.library-footer{font-size:11px;color:var(--library-muted);padding-top:14px;display:flex;justify-content:space-between;gap:8px}.empty{font-size:13px;color:var(--library-muted);padding:28px 10px;text-align:center}.empty strong{display:block;color:#f4f8fc;font-size:15px;margin-bottom:8px}
+.library-footer{font-size:10px;color:var(--library-muted);padding-top:12px;display:flex;justify-content:space-between;gap:8px}.empty{font-size:13px;color:var(--library-muted);padding:28px 10px;text-align:center}.empty strong{display:block;color:#f4f8fc;font-size:15px;margin-bottom:8px}
 .warn{display:none;margin-bottom:18px;background:#fff4dc;border:1px solid #dfc182;border-radius:10px;padding:12px 16px;color:#684910;font-size:13px}.warn.show{display:block}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-@media(min-width:1500px){.workspace{grid-template-columns:minmax(0,1fr) 420px}}
-@media(max-width:1100px){.masthead{padding:22px 24px 18px}.wrap{padding:0 24px 30px}.workspace{grid-template-columns:minmax(0,1fr) 330px;gap:18px}.editor-body{padding:20px}.editor-heading,.generate-bar,#status{padding:20px}.row{gap:14px}.generate-note{display:none}#go{width:100%}.library{padding:20px 15px}.eng{max-width:230px}}
-@media(max-width:850px){.workspace{grid-template-columns:1fr}.library{position:static}.hist{max-height:650px}.engine-tools{gap:8px}.eng{max-width:190px}.masthead{padding-top:20px}.brand-sub{display:none}}
-@media(max-width:520px){.masthead{padding:20px 16px 15px;gap:10px;flex-wrap:wrap}.brand-mark{width:37px;height:37px;border-radius:11px}h1{font-size:22px}.engine-tools{width:100%;justify-content:space-between;margin-top:3px}.eng{max-width:none}.wrap{padding:0 12px 24px}.editor-heading{padding:20px 18px}.editor-heading h2{font-size:26px}.editor-body{padding:18px}.session-badge{display:none}.row{grid-template-columns:1fr}.settings-row{gap:18px}.assistant summary .hint{display:none}.assistant summary::after{margin-left:auto}.ai-model-row{grid-template-columns:1fr}.generate-bar{padding:18px}.tagbar{gap:5px}}
+@media(min-width:1500px){.workspace{grid-template-columns:minmax(0,1fr) 430px}}
+@media(max-width:1100px){.masthead{padding:22px 24px 18px}.wrap{padding:0 24px 30px}.workspace{grid-template-columns:minmax(0,1fr) 350px;gap:18px}.editor-heading{padding:22px 24px}.stage-content{padding-right:24px}.stage-rail{padding-left:20px}.row{gap:14px}.library{padding:20px 15px}.eng{max-width:230px}.idea-actions{grid-template-columns:1fr}.idea-actions .btn{width:100%}.render-action{align-items:stretch;flex-direction:column}.generate-note{max-width:none}#go{width:100%}}
+@media(max-width:850px){.workspace{grid-template-columns:1fr}.library{position:static}.hist{max-height:520px}.engine-tools{gap:8px}.eng{max-width:190px}.masthead{padding-top:20px}.brand-sub{display:none}}
+@media(max-width:520px){.masthead{padding:18px 16px 14px;gap:10px;flex-wrap:wrap}.brand-mark{width:37px;height:37px;border-radius:11px}h1{font-size:22px}.engine-tools{width:100%;justify-content:space-between;margin-top:3px}.eng{max-width:none}.wrap{padding:0 10px 24px}.editor-heading{padding:20px 17px}.editor-heading h2{font-size:26px}.session-badge{display:none}.stage{grid-template-columns:1fr}.stage-rail{padding:18px 17px 0}.stage-number{width:auto;height:auto;display:inline;border:0;background:none;color:var(--accent);font-size:10px}.stage-number::before{content:'STEP '}.stage-content{padding:8px 17px 24px}.stage-head{margin-bottom:14px}.row{grid-template-columns:1fr}.settings-row{gap:18px}.field-heading .hint{display:none}.idea-box{padding:13px}.idea-actions{grid-template-columns:1fr}.render-action{padding:14px}.tagbar{gap:5px}.library{border-radius:14px}.now-actions{gap:12px}}
+
+/* Shared creative-desk skin: visual alignment with Qwen Image Desk and WAN Video Desk. */
+:root{color-scheme:dark;--bg:#0b1015;--panel:#111820;--field:#0c131a;--line:#2a3743;--ink:#eef3f7;--muted:#94a4b3;--accent:#66c7e8;--accent-deep:#4ca8c9;--accent-soft:#122936;--signal:#ffc45e;--library:#111b25;--library-card:#172532;--library-line:#344858;--library-muted:#9db0c0;--radius:0}
+body{background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI',system-ui,sans-serif}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--signal);outline-offset:3px}
+.masthead{max-width:none;min-height:92px;margin:0;padding:18px clamp(24px,3vw,48px);position:sticky;top:0;z-index:20;background:rgba(8,13,18,.96);border-bottom:1px solid var(--line);backdrop-filter:blur(16px);box-shadow:none}
+.brand-mark{width:48px;height:48px;border:1px solid #8b6727;border-radius:50%;background:transparent;color:var(--signal);box-shadow:inset 0 0 0 5px var(--bg),inset 0 0 0 6px #49391f}
+.brand-mark i{width:3px;border-radius:1px}
+h1,h2,h3{font-family:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;font-weight:500;letter-spacing:-.025em}
+h1{font-size:31px;font-weight:500}.brand-sub{margin-top:1px;color:var(--signal);font:700 10px/1.4 'Adwaita Mono','SFMono-Regular',monospace;letter-spacing:1.6px;text-transform:uppercase}
+.engine-tools{gap:8px}.eng{padding:7px 12px;border:1px solid #31506a;border-radius:999px;color:#a9bac8;font:11px 'Adwaita Mono','SFMono-Regular',monospace}.dot{background:var(--accent);box-shadow:0 0 0 3px #66c7e817}.eng-btn{border-radius:999px!important;min-height:32px!important;padding:6px 12px!important}
+.wrap{max-width:none;margin:0;padding:0}.workspace{grid-template-columns:minmax(560px,1.05fr) minmax(420px,.8fr);gap:0;align-items:start;min-height:calc(100vh - 92px)}
+.editor{background:linear-gradient(145deg,#111820 0%,#0e151c 100%);border:0;border-right:1px solid var(--line);border-radius:0;box-shadow:none;overflow:hidden}
+.editor-heading{min-height:154px;padding:36px clamp(28px,4vw,64px);border-bottom:1px solid var(--line);background:radial-gradient(circle at 92% 12%,#173142 0,transparent 31%),linear-gradient(145deg,#111820,#0f171e)}
+.eyebrow{color:var(--signal);font:700 10px/1.4 'Adwaita Mono','SFMono-Regular',monospace;letter-spacing:1.7px}.editor-heading p:last-child{color:var(--muted)}
+h2{font-size:31px;font-weight:500}.session-badge{border:1px solid #31506a;border-radius:999px;background:#0b141c;color:#b6c7d5;padding:6px 11px}
+.stage{grid-template-columns:68px minmax(0,1fr);border-bottom:1px solid var(--line)}.stage-rail{padding:32px 0 0 clamp(24px,3vw,48px)}.stage-number{display:block;width:31px;height:auto;padding-top:7px;border:0;border-top:2px solid var(--accent);border-radius:0;background:transparent;color:#93a5b3;text-align:left}.stage-content{padding:30px clamp(28px,4vw,64px) 38px 14px}.stage-head{margin-bottom:20px}.stage-head h3{font-size:25px;font-weight:500}.stage-head p{color:var(--muted)}.stage-kicker{color:var(--signal);letter-spacing:1.4px}
+label{color:#dbe4ea} .optional,.hint{color:var(--muted)}
+input:not([type=range]),textarea,select{border-color:var(--line);border-radius:8px;background:#0a1117;color:var(--ink);box-shadow:inset 0 1px 0 #ffffff05}
+input::placeholder,textarea::placeholder{color:#70818f}
+input:not([type=range]):focus,textarea:focus,select:focus{outline:1px solid var(--accent);border-color:var(--accent);background:#0b131a}
+#title{color:var(--ink);border-bottom-color:var(--line)}
+.idea-box,.settings-row{border:1px solid var(--line);border-radius:10px;background:linear-gradient(145deg,#13202a,#101820)}.idea-box textarea,.writer-field select,.settings-row input:not([type=range]){background:#091017}
+.btn{border-radius:7px;background:var(--accent);color:#061117;box-shadow:none}.btn:hover:not(:disabled){background:#82d6f1;box-shadow:none}.btn.sec{border-color:var(--line);background:#17222c;color:var(--ink)}.btn.sec:hover:not(:disabled){background:#202e3a}
+.tag{border-color:var(--line);border-radius:5px;background:#131d26;color:#a9b7c3}.tag:hover{border-color:var(--signal);color:var(--signal)}
+.seed-random{border-color:var(--line);border-radius:7px;background:#17222c;color:var(--signal)}.seed-random:hover{border-color:var(--signal);background:#202d36}.slabel b{color:var(--signal)}input[type=range]{accent-color:var(--accent)}
+.advanced{border-top-color:var(--line)}.advanced summary{color:#b4c1cb}
+.render-action{border:1px solid #4e452e;border-radius:10px;background:linear-gradient(110deg,#181d1d,#242116)}.generate-note{color:var(--muted)}.generate-note strong{color:var(--ink)}#go{background:var(--signal);color:#201706}#go:hover:not(:disabled){background:#ffd47e}
+#status{border-color:var(--line);background:#0d161e}.warn{border-color:#765b28;background:#2a2112;color:#ffe0a0}
+.library{height:calc(100vh - 92px);top:92px;padding:36px clamp(24px,3vw,48px) 22px;position:sticky;border:0;border-radius:0;background:radial-gradient(circle at 100% 0,#183347 0,transparent 35%),linear-gradient(155deg,#152330 0%,#0f1922 72%);box-shadow:none;color:var(--ink)}
+.library .eyebrow{color:var(--signal)}.library h2{font-size:31px;font-weight:500}.library-head{padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid var(--library-line)}.count-badge{border-color:#3a586f;border-radius:999px;color:#b0c2cf}
+.library input{border-color:var(--library-line)!important;border-radius:7px!important;background:#0c1821!important}.refresh{border-color:var(--library-line);border-radius:7px;background:#182b39;color:var(--accent)}.refresh:hover{background:#213b4e}
+.now-playing{border:1px solid #3b5d74;border-radius:10px;background:linear-gradient(145deg,#193348,#132736);box-shadow:0 12px 30px #050a0e35}.now-label{color:var(--signal)}.now-title{font-family:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;font-size:19px;font-weight:500}.now-meta{color:var(--library-muted)}
+.hist{max-height:calc(100vh - 452px);gap:5px}.track-row{border-radius:7px}.track-row:hover,.track-row.selected{background:#192c3a}.track-row:hover{border-color:#34556d}.track-row.selected{border-color:var(--accent)}.play-track{border-color:#3a586d;border-radius:6px;background:#1b3b4f;color:var(--accent)}.play-track:hover{background:#27536c}.library a.dl,.library .text-button,.library .cp{color:#91dafa}.track-state{color:#b8dded}
+.library-footer{border-top:1px solid var(--library-line);margin-top:9px;padding-top:12px}
+@media(max-width:1100px){.masthead{padding:18px 24px}.workspace{grid-template-columns:minmax(0,1fr) 365px}.wrap{padding:0}.editor-heading{padding:30px 28px}.stage-content{padding-right:28px}.library{padding:30px 20px 20px}.idea-actions{grid-template-columns:1fr}}
+@media(max-width:850px){.workspace{grid-template-columns:1fr}.editor{border-right:0}.library{position:static;height:auto;min-height:560px;border-top:1px solid var(--line)}.hist{max-height:520px}.brand-sub{display:block}}
+@media(max-width:520px){.masthead{padding:14px 16px}.brand-mark{width:40px;height:40px;border-radius:50%}h1{font-size:25px}.wrap{padding:0}.editor-heading{padding:26px 18px}.editor-heading h2{font-size:28px}.stage{grid-template-columns:1fr}.stage-rail{padding:22px 18px 0}.stage-number{width:31px}.stage-content{padding:9px 18px 28px}.library{border-radius:0;padding:28px 18px}.render-action{padding:14px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style></head><body>
 <header class="masthead">
@@ -929,38 +970,62 @@ audio{width:100%;height:38px;display:block;margin-top:12px}.hrow{display:flex;ga
   <div class="warn" id="warn" role="alert"></div>
   <div class="workspace">
     <section class="editor" aria-labelledby="editorTitle">
-      <div class="editor-heading"><div><p class="eyebrow">Composition</p><h2 id="editorTitle">Compose a track.</h2><p>Describe the sound. Shape the song.</p></div><span class="session-badge">Music 3 · local</span></div>
-      <div class="editor-body">
-        <div class="field"><label for="title">Song name <span class="optional">optional</span></label><input type="text" id="title" placeholder="Give this track a name…" spellcheck="true" autocomplete="off"></div>
-        <details class="assistant" id="aicard">
-          <summary><span class="assistant-icon" aria-hidden="true">✧</span>AI songwriting assistant <span class="hint">Start from an idea</span></summary>
-          <div class="assistant-content"><p class="hint">Turn a brief into a name, music description and lyrics. Review and edit anything before generating.</p>
-            <div class="ai-grid"><div><label for="brief">Your idea</label><textarea id="brief" spellcheck="true" placeholder="Disco-house, a driving bassline and a powerful female vocal. A song about leaving a dead-end town behind."></textarea></div>
-            <div class="ai-model-row"><div><label for="aimodel">Writing model</label><select id="aimodel"><option value="">Loading models…</option></select></div><button class="btn sec" id="aifill">Write song details</button></div></div>
+      <div class="editor-heading"><div><p class="eyebrow">Studio session</p><h2 id="editorTitle">Take an idea to a finished track.</h2><p>Draft it, shape it, then render locally.</p></div><span class="session-badge">MUSIC 3 · LOCAL</span></div>
+      <section class="stage" aria-labelledby="ideaTitle">
+        <div class="stage-rail"><span class="stage-number">01</span></div>
+        <div class="stage-content">
+          <div class="stage-head"><div><span class="stage-kicker">Start here</span><h3 id="ideaTitle">Give Rhizome the rough idea.</h3><p>A genre, a feeling and what the song is about is enough.</p></div></div>
+          <div class="idea-box">
+            <label for="brief">Song brief</label><textarea id="brief" spellcheck="true" placeholder="Disco-house with a driving bassline and a powerful female vocal. A song about leaving a dead-end town behind."></textarea>
+            <div class="idea-actions">
+              <div class="writer-field"><label for="aimodel">Writing with <span>cloud models use no local VRAM</span></label><select id="aimodel"><option value="">Loading writers…</option></select></div>
+              <button class="btn" id="aifill"><span class="rhizome-mark" aria-hidden="true">✦</span> Draft the song</button>
+            </div>
             <div id="aistatus" role="status" aria-live="polite"></div>
           </div>
-        </details>
-        <div class="field"><label for="caption">Describe the sound</label><textarea class="cap" id="caption" spellcheck="true" aria-describedby="captionHelp"></textarea><span class="hint field-help" id="captionHelp">Genre, mood, instruments and vocals. Specific details shape the result.</span></div>
-        <div class="field"><div class="field-heading"><label for="lyrics">Lyrics &amp; structure</label><span class="hint">Your song, section by section</span></div><textarea class="lyr" id="lyrics" spellcheck="true" aria-describedby="lyricsHelp"></textarea>
-          <div class="tagbar" aria-label="Insert song section"><button class="tag" data-tag="Intro" type="button">+ Intro</button><button class="tag" data-tag="Verse" type="button">+ Verse</button><button class="tag" data-tag="Chorus" type="button">+ Chorus</button><button class="tag" data-tag="Instrumental" type="button">+ Instrumental</button><button class="tag" data-tag="Bridge" type="button">+ Bridge</button><button class="tag" data-tag="Outro" type="button">+ Outro</button></div>
-          <span class="hint field-help" id="lyricsHelp">Insert a section at the cursor. For an instrumental, keep the section tags and leave out lyric lines.</span>
         </div>
-        <div class="row settings-row">
-          <div><div class="slabel"><label for="seconds">Track length</label><b id="seclab">1m 00s</b></div><input type="range" id="seconds" min="8" max="300" step="1" value="60"><div class="mmss"><input type="number" id="mins" min="0" max="5" step="1" value="1" aria-label="Minutes"><span>min</span><input type="number" id="secs" min="0" max="59" step="1" value="0" aria-label="Seconds"><span>sec</span><span style="margin-left:auto">Up to 5 min</span></div></div>
-          <div><label for="seed">Seed <span class="optional">optional</span></label><input type="text" id="seed" placeholder="Random each time" inputmode="numeric"><span class="hint field-help">Reuse a seed to revisit the same starting point.</span></div>
+      </section>
+      <section class="stage" aria-labelledby="songTitle">
+        <div class="stage-rail"><span class="stage-number">02</span></div>
+        <div class="stage-content">
+          <div class="stage-head"><div><span class="stage-kicker">Song sheet</span><h3 id="songTitle">Shape what gets performed.</h3><p>Rhizome fills these in; every word stays editable.</p></div></div>
+          <div class="song-fields">
+            <div class="field"><label for="title">Song name <span class="optional">optional</span></label><input type="text" id="title" placeholder="Give this track a name…" spellcheck="true" autocomplete="off"></div>
+            <div class="field"><label for="caption">Sound &amp; performance</label><textarea class="cap" id="caption" spellcheck="true" aria-describedby="captionHelp"></textarea><span class="hint field-help" id="captionHelp">Genre, mood, instruments, vocal character and arrangement.</span></div>
+            <div class="field"><div class="field-heading"><label for="lyrics">Lyrics &amp; structure</label><span class="hint">Section by section</span></div><textarea class="lyr" id="lyrics" spellcheck="true" aria-describedby="lyricsHelp"></textarea>
+              <div class="tagbar" aria-label="Insert song section"><button class="tag" data-tag="Intro" type="button">+ Intro</button><button class="tag" data-tag="Verse" type="button">+ Verse</button><button class="tag" data-tag="Chorus" type="button">+ Chorus</button><button class="tag" data-tag="Instrumental" type="button">+ Instrumental</button><button class="tag" data-tag="Bridge" type="button">+ Bridge</button><button class="tag" data-tag="Outro" type="button">+ Outro</button></div>
+              <span class="hint field-help" id="lyricsHelp">For an instrumental, keep the section tags and leave out lyric lines.</span>
+            </div>
+          </div>
         </div>
-        <details class="advanced" id="advanced"><summary>Fine-tune generation <span class="hint">Quality &amp; output</span></summary><div class="row">
-          <div><div class="slabel"><label for="steps">Steps</label><b id="steplab">30</b></div><input type="range" id="steps" min="8" max="60" step="1" value="30"></div>
-          <div><div class="slabel"><label for="cfg">Guidance</label><b id="cfglab">1.7</b></div><input type="range" id="cfg" min="1" max="6" step="0.1" value="1.7"></div>
-          <div><label for="tiled">Memory-saving decode</label><select id="tiled"><option value="0">Off</option><option value="1">On · useful for long songs</option></select></div>
-          <div><label for="quality">MP3 quality</label><select id="quality"><option value="V0">V0 · high quality, variable bitrate</option><option value="320k">320 kbps · maximum bitrate</option><option value="128k">128 kbps · smaller file</option></select></div>
-        </div></details>
-      </div>
-      <div class="generate-bar"><p class="generate-note"><strong>Ready when you are.</strong>The music engine starts automatically.</p><button class="btn" id="go">Generate music</button></div>
-      <div id="status" role="status" aria-live="polite"></div>
+      </section>
+      <section class="stage" aria-labelledby="renderTitle">
+        <div class="stage-rail"><span class="stage-number">03</span></div>
+        <div class="stage-content">
+          <div class="stage-head"><div><span class="stage-kicker">Render</span><h3 id="renderTitle">Set the take and generate.</h3><p>The music engine starts automatically and rests when idle.</p></div></div>
+          <div class="row settings-row">
+            <div><div class="slabel"><label for="seconds">Track length</label><b id="seclab">1m 00s</b></div><input type="range" id="seconds" min="8" max="300" step="1" value="60"><div class="mmss"><input type="number" id="mins" min="0" max="5" step="1" value="1" aria-label="Minutes"><span>min</span><input type="number" id="secs" min="0" max="59" step="1" value="0" aria-label="Seconds"><span>sec</span><span style="margin-left:auto">Up to 5 min</span></div></div>
+            <div><label for="seed">Seed <span class="optional">optional</span></label><div class="seed-row"><input type="text" id="seed" placeholder="Random each time" inputmode="numeric"><button class="seed-random" id="randomSeed" type="button" title="Choose random seed" aria-label="Choose random music seed">↻</button></div><span class="hint field-help">Reuse a seed to revisit the same starting point.</span></div>
+          </div>
+          <details class="advanced" id="advanced"><summary>Fine-tune generation <span class="hint">Quality &amp; output</span></summary><div class="row">
+            <div><div class="slabel"><label for="steps">Steps</label><b id="steplab">30</b></div><input type="range" id="steps" min="8" max="60" step="1" value="30"></div>
+            <div><div class="slabel"><label for="cfg">Guidance</label><b id="cfglab">1.7</b></div><input type="range" id="cfg" min="1" max="6" step="0.1" value="1.7"></div>
+            <div><label for="tiled">Memory-saving decode</label><select id="tiled"><option value="0">Off</option><option value="1">On · useful for long songs</option></select></div>
+            <div><label for="quality">MP3 quality</label><select id="quality"><option value="V0">V0 · high quality, variable bitrate</option><option value="320k">320 kbps · maximum bitrate</option><option value="128k">128 kbps · smaller file</option></select></div>
+          </div></details>
+          <div class="render-action"><p class="generate-note"><strong>Everything stays on this machine.</strong>Your settings and audio are saved with the track.</p><button class="btn" id="go">Generate music</button></div>
+          <div id="status" role="status" aria-live="polite"></div>
+        </div>
+      </section>
     </section>
     <aside class="library" aria-labelledby="libraryTitle">
       <div class="library-head"><div><p class="eyebrow">Listening room</p><h2 id="libraryTitle">Your tracks</h2></div><span class="count-badge" id="trackCount" aria-label="Track count">—</span></div>
+      <div class="now-playing" id="nowPlaying" hidden>
+        <p class="now-label">On the deck</p><h3 class="now-title" id="nowTitle"></h3><p class="now-meta" id="nowMeta"></p>
+        <audio id="libraryPlayer" controls preload="metadata"></audio>
+        <div class="now-actions"><a class="dl" id="nowDownload" href="#" download>Download</a><button class="text-button" id="nowLoad" type="button">Load settings</button><button class="xdel" id="nowDelete" type="button">Delete</button></div>
+        <details class="file-details"><summary>File details</summary><div class="hpath" id="nowPath"></div></details>
+      </div>
       <div class="library-tools"><label for="trackSearch" class="sr-only">Search recent tracks</label><input id="trackSearch" type="search" placeholder="Find a track…" autocomplete="off"><button id="refreshTracks" class="refresh" title="Refresh tracks" aria-label="Refresh tracks">↻</button></div>
       <div class="hist" id="hist"><p class="empty">Loading your tracks…</p></div>
       <p id="noMatches" class="empty" hidden>No matching tracks. Try another name.</p>
@@ -975,8 +1040,21 @@ const DEF_CAP=`__CAP__`, DEF_LYR=`__LYR__`;
 $('#caption').value=DEF_CAP; $('#lyrics').value=DEF_LYR;
 
 // ---- AI brief -> autofill ----
-// Model dropdown from OpenClaw (cloud) + Ollama (local), grouped. Refreshes on a
-// loop so it tracks the live list — same sources Open WebUI uses.
+// The backend exposes every live route/tag. The studio deliberately presents a
+// short writing roster; long-context aliases are useful elsewhere but only make
+// this one-job picker noisy.
+const DEFAULT_WRITER='openclaw/openai/gpt-5.6-sol';
+const WRITERS=[
+  {id:DEFAULT_WRITER,label:'Rhizome · GPT-5.6 Sol',group:'Recommended'},
+  {id:'openclaw/openai/gpt-5.6-luna',label:'GPT-5.6 Luna · quicker',group:'Cloud'},
+  {id:'openclaw/openai/gpt-5.6-terra',label:'GPT-5.6 Terra · deeper',group:'Cloud'},
+  {id:'openclaw/openai/gpt-6-astra',label:'GPT-6 Astra · long context',group:'Cloud'},
+  {id:'openclaw/anthropic/claude-sonnet-4-6',label:'Claude Sonnet 4.6',group:'Cloud'},
+  {id:'openclaw/anthropic/claude-opus-4-6',label:'Claude Opus 4.6',group:'Cloud'},
+  {id:'qwen3-8-27b-turbofcfusion-735-882-here--dec14241:fast16k',label:'TurboFusion 27B · fast 16K',group:'Local · uses VRAM'},
+  {id:'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed:fast16k',label:'Fable 27B · fast 16K',group:'Local · uses VRAM'},
+  {id:'ornith-1.5:35b',label:'Ornith 35B',group:'Local · uses VRAM'}
+];
 let _modelSig='';
 async function loadModels(){
   try{
@@ -987,16 +1065,17 @@ async function loadModels(){
     _modelSig=sig;
     const sel=$('#aimodel'); const prev=sel.value; sel.innerHTML='';
     if(!ms.length){sel.innerHTML='<option value="">no models (OpenClaw/Ollama offline)</option>';return;}
-    const grp=(label,items,strip)=>{
+    const available=WRITERS.filter(writer=>ms.includes(writer.id));
+    const grp=(label,items)=>{
       if(!items.length)return;
       const g=document.createElement('optgroup'); g.label=label;
-      items.forEach(m=>{const o=document.createElement('option');o.value=m;
-        o.textContent=strip?m.replace(/^openclaw\//,''):m; g.appendChild(o);});
+      items.forEach(writer=>{const o=document.createElement('option');o.value=writer.id;
+        o.textContent=writer.label; g.appendChild(o);});
       sel.appendChild(g);
     };
-    grp('OpenClaw · cloud', ms.filter(m=>m.startsWith('openclaw/')), true);
-    grp('Ollama · local (uses VRAM)', ms.filter(m=>!m.startsWith('openclaw/')), false);
-    if(prev && ms.includes(prev)) sel.value=prev;   // preserve current selection
+    [...new Set(available.map(writer=>writer.group))].forEach(group=>grp(group,available.filter(writer=>writer.group===group)));
+    if(!available.length){sel.innerHTML='<option value="">no supported writing models online</option>';return;}
+    sel.value=(prev && available.some(writer=>writer.id===prev))?prev:(available.some(writer=>writer.id===DEFAULT_WRITER)?DEFAULT_WRITER:available[0].id);
   }catch(e){ if(!_modelSig) $('#aimodel').innerHTML='<option value="">models unavailable</option>'; }
 }
 loadModels(); setInterval(loadModels, 30000);
@@ -1005,7 +1084,7 @@ $('#aifill').addEventListener('click',async()=>{
   if(!model){$('#aistatus').textContent='⚠ pick a model';return;}
   if(!brief){$('#aistatus').textContent='⚠ give it a brief first';return;}
   const btn=$('#aifill'); btn.disabled=true;
-  $('#aistatus').innerHTML='<span class="spin"></span>Writing with '+esc(model)+'…';
+  $('#aistatus').innerHTML='<span class="spin"></span>Writing with '+esc($('#aimodel').selectedOptions[0]?.textContent||model)+'…';
   try{
     const secs=parseInt($('#seconds').value)||60;
     const r=await fetch('/api/ai_fill',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1051,6 +1130,11 @@ $('#mins').addEventListener('blur',event=>{if(event.relatedTarget!==$('#secs'))r
 $('#secs').addEventListener('blur',event=>{if(event.relatedTarget!==$('#mins'))reflect();});
 setLen(60);
 
+$('#randomSeed').addEventListener('click',()=>{
+  const values=new Uint32Array(2);crypto.getRandomValues(values);
+  $('#seed').value=String((BigInt(values[0])<<16n)+BigInt(values[1]&0xffff));
+});
+
 let engineOK=false, engBusy=false;
 function fmtIdle(s){ if(s==null)return''; const m=Math.floor(s/60),ss=s%60; return m>0?(m+'m '+ss+'s'):(ss+'s'); }
 async function health(){
@@ -1080,7 +1164,7 @@ $('#engbtn').addEventListener('click',async()=>{
   const btn=$('#engbtn'); btn.disabled=true;
   btn.textContent = act==='stop'?'Stopping…':'Starting…';
   try{
-    const r=await fetch('/api/engine/'+act,{method:'POST'});
+    const r=await fetch('/api/engine/'+act,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
     const d=await r.json();
     if(!r.ok && d.error) alert(d.error);
   }catch(e){alert('failed: '+e.message);}
@@ -1174,9 +1258,44 @@ async function loadRecipe(fn){
     st.innerHTML='↻ Loaded settings from <b>'+esc(fn)+'</b> — tweak anything and hit Generate.';
   }catch(e){alert('could not load settings: '+e.message);}
 }
+let historyItems=[],currentTrack=null;
+const libraryPlayer=$('#libraryPlayer');
+function trackView(it){
+  return {
+    name:it.filename.replace(/\.(mp3|flac|wav)$/i,'').replace(/_\d+_?$/,'').replace(/_/g,' '),
+    date:new Date(it.mtime*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),
+    size:it.size<1048576 ? `${Math.round(it.size/1024)} KB` : `${(it.size/1048576).toFixed(1)} MB`
+  };
+}
+function refreshTrackStates(){
+  $('#hist').querySelectorAll('.track-row').forEach(row=>{
+    const selected=currentTrack&&row.dataset.filename===currentTrack.filename;
+    row.classList.toggle('selected',Boolean(selected));
+    row.querySelector('.track-state').textContent=selected?'Selected':'';
+    const play=row.querySelector('.play-track');
+    const playing=selected&&!libraryPlayer.paused;
+    play.textContent=playing?'Ⅱ':'▶';
+    play.setAttribute('aria-label',(playing?'Pause ':'Play ')+row.dataset.title);
+  });
+}
+function selectTrack(it,autoplay=false){
+  const view=trackView(it),same=currentTrack&&currentTrack.filename===it.filename;
+  currentTrack=it;
+  $('#nowPlaying').hidden=false;$('#nowTitle').textContent=view.name;$('#nowMeta').textContent=view.date+' · '+view.size;
+  if(!same){libraryPlayer.src=it.url;libraryPlayer.setAttribute('aria-label','Play '+view.name);}
+  const download=$('#nowDownload');download.href=it.url;download.download=it.filename;
+  const load=$('#nowLoad');load.hidden=!it.recipe;load.onclick=()=>loadRecipe(it.filename);
+  $('#nowDelete').onclick=()=>deleteGen(it.filename,$('#nowDelete'));
+  $('#nowPath').innerHTML=esc(it.path)+'<button type="button" class="cp" data-copy="'+esc(it.path)+'">Copy path</button>';
+  wireCopy($('#nowPlaying'));refreshTrackStates();
+  if(autoplay){
+    if(same&&!libraryPlayer.paused)libraryPlayer.pause();
+    else libraryPlayer.play().catch(()=>{});
+  }
+}
 function filterHistory(){
   const query=$('#trackSearch').value.trim().toLocaleLowerCase();
-  const tracks=[...$('#hist').querySelectorAll('.hitem')];
+  const tracks=[...$('#hist').querySelectorAll('.track-row')];
   let visible=0;
   tracks.forEach(el=>{el.hidden=!el.dataset.filename.toLocaleLowerCase().includes(query);if(!el.hidden)visible++;});
   $('#trackCount').textContent=query ? `${visible}/${tracks.length}` : String(tracks.length);
@@ -1190,38 +1309,35 @@ async function loadHist(){
     if(!r.ok)throw new Error('Could not load tracks');
     const d=await r.json();
     const box=$('#hist');box.innerHTML='';
+    historyItems=d.items||[];
     $('.library-footer span').textContent=d.items?.length===40?'Latest 40 tracks · newest first':'Recent tracks · newest first';
     if(!d.items||!d.items.length){
+      currentTrack=null;libraryPlayer.pause();libraryPlayer.removeAttribute('src');$('#nowPlaying').hidden=true;
       box.innerHTML='<p class="empty"><strong>Your first track starts here.</strong>Describe a sound and generate music. Your recordings will appear here.</p>';
       filterHistory();return;
     }
     d.items.forEach((it,index)=>{
-      const el=document.createElement('article');el.className='hitem';el.dataset.filename=it.filename;
-      const name=it.filename.replace(/\.(mp3|flac|wav)$/i,'').replace(/_\d+_?$/,'').replace(/_/g,' ');
-      const date=new Date(it.mtime*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
-      const size=it.size<1048576 ? `${Math.round(it.size/1024)} KB` : `${(it.size/1048576).toFixed(1)} MB`;
+      const view=trackView(it),el=document.createElement('article');el.className='track-row';el.dataset.filename=it.filename;el.dataset.title=view.name;
       el.innerHTML=
-        '<div class="track-top"><span class="track-number" aria-hidden="true">'+String(index+1).padStart(2,'0')+'</span><div class="track-info"><h3 class="hn">'+esc(name)+'</h3><p class="track-date">'+esc(date)+' · '+esc(size)+'</p></div></div>'+
-        '<audio controls preload="none" aria-label="Play '+esc(name)+'" src="'+esc(it.url)+'"></audio>'+
-        '<div class="hrow"><a class="dl" href="'+esc(it.url)+'" download="'+esc(it.filename)+'">Download</a>'+
-        (it.recipe?'<button class="text-button load" type="button">Load settings</button>':'')+
-        '<button class="xdel" type="button" aria-label="Delete '+esc(name)+'">Delete</button></div>'+
-        '<details class="file-details"><summary>File details</summary><div class="hpath">'+esc(it.path)+'<button type="button" class="cp" data-copy="'+esc(it.path)+'">Copy path</button></div></details>';
-      el.querySelector('.xdel').onclick=()=>deleteGen(it.filename,el.querySelector('.xdel'));
-      const lb=el.querySelector('.load');
-      if(lb)lb.onclick=()=>loadRecipe(it.filename);
-      wireCopy(el);box.appendChild(el);
+        '<button class="play-track" type="button" aria-label="Play '+esc(view.name)+'">▶</button>'+
+        '<button class="track-select" type="button"><span class="hn">'+esc(view.name)+'<span class="track-state"></span></span><span class="track-date">'+esc(view.date)+' · '+esc(view.size)+'</span></button>';
+      el.querySelector('.play-track').onclick=()=>selectTrack(it,true);
+      el.querySelector('.track-select').onclick=()=>selectTrack(it,false);
+      box.appendChild(el);
     });
+    const keep=currentTrack&&d.items.find(it=>it.filename===currentTrack.filename);
+    selectTrack(keep||d.items[0],false);
     filterHistory();
   }catch(e){
     $('#trackCount').textContent='—';
     $('#noMatches').hidden=true;
-    if(!$('#hist').querySelector('.hitem'))$('#hist').innerHTML='<p class="empty">Could not load tracks. Use Refresh to try again.</p>';
+    if(!$('#hist').querySelector('.track-row'))$('#hist').innerHTML='<p class="empty">Could not load tracks. Use Refresh to try again.</p>';
     else{ $('#noMatches').textContent='Could not refresh tracks. Your previous list is still shown.';$('#noMatches').hidden=false; }
   }finally{refresh.disabled=false;}
 }
 $('#trackSearch').addEventListener('input',filterHistory);
 $('#refreshTracks').addEventListener('click',loadHist);
+libraryPlayer.addEventListener('play',refreshTrackStates);libraryPlayer.addEventListener('pause',refreshTrackStates);libraryPlayer.addEventListener('ended',refreshTrackStates);
 document.addEventListener('play',event=>{
   if(event.target.tagName==='AUDIO')document.querySelectorAll('audio').forEach(audio=>{if(audio!==event.target)audio.pause();});
 },true);

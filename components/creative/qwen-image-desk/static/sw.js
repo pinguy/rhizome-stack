@@ -1,4 +1,4 @@
-const CACHE = "qwen-image-desk-v5";
+const CACHE = "qwen-image-desk-v7-4k-drop";
 const SHELL = ["/image-studio/", "/image-studio/static/app.css", "/image-studio/static/app.js", "/image-studio/static/icon.svg"];
 self.addEventListener("install", event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener("activate", event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));

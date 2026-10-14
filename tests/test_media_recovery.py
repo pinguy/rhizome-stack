@@ -30,6 +30,30 @@ def http_error(code):
 
 
 class QueueSafetyTest(unittest.TestCase):
+    def test_unknown_ollama_state_never_counts_as_free_gpu(self):
+        malformed = ({}, {'models': None}, {'models': {}}, {'models': [None]},
+                     {'models': [{}]}, {'models': [{'name': 42}]})
+        for value in malformed:
+            for during_poll in (False, True):
+                with self.subTest(value=value, during_poll=during_poll):
+                    replies = [{'models': []}, value] if during_poll else [value]
+                    with patch.object(media, 'health', return_value={'busy': False}), \
+                         patch.object(media, 'comfy_idle', return_value=True), \
+                         patch.object(media, 'request', side_effect=replies) as request:
+                        with self.assertRaisesRegex(RuntimeError, 'Ollama'):
+                            media.hand_over()
+                        self.assertTrue(all(call.args[0] == 'GET' for call in request.call_args_list))
+
+    def test_valid_ollama_runners_are_unloaded_and_checked_again(self):
+        with patch.object(media, 'health', return_value={'busy': False}), \
+             patch.object(media, 'comfy_idle', return_value=True), \
+             patch.object(media, 'request', side_effect=[{'models': [{'model': 'fixture:latest'}]},
+                                                       {}, {'models': []}]) as request:
+            self.assertEqual(media.hand_over(), ['fixture:latest'])
+        self.assertEqual(request.call_args_list[1].args[:3],
+                         ('POST', media.OLLAMA + '/api/generate',
+                          {'model': 'fixture:latest', 'keep_alive': 0}))
+
     def test_startup_http_error_is_not_retried_as_offline(self):
         refused = urllib.error.URLError(ConnectionRefusedError())
         with patch.object(media, 'health', side_effect=[refused, http_error(503)]) as health, \
@@ -134,8 +158,8 @@ class RecoveryTest(unittest.IsolatedAsyncioTestCase):
         self.user = {'id': 'user-1'}
         self.metadata = {'chat_id': 'chat-1', 'message_id': 'message-1'}
 
-    async def test_completed_file_survives_attachment_failure_for_both_generators(self):
-        for kind in ('music', 'image'):
+    async def test_completed_file_survives_attachment_failure_for_all_generators(self):
+        for kind in ('music', 'image', 'video'):
             with self.subTest(kind=kind):
                 payload = {'prompt': 'synthetic'}
                 output = str(self.state / (kind + '.output'))
@@ -144,11 +168,14 @@ class RecoveryTest(unittest.IsolatedAsyncioTestCase):
                         return {'prompt_id': 'job-1'} if kind == 'music' else {'jobs': [{'id': 'job-1'}]}
                     if kind == 'music':
                         return {'state': 'done', 'path': output}
+                    if kind == 'video':
+                        return {'jobs': [{'id': 'job-1', 'status': 'complete',
+                                          'result': {'path': output, 'id': 'take-1'}}]}
                     return {'jobs': [{'id': 'job-1', 'status': 'complete', 'asset_id': 'asset-1'}],
                             'assets': [{'id': 'asset-1', 'absolute_path': output}]}
                 with patch.object(media, 'request', side_effect=upstream) as request, \
                      patch.object(media, 'attach_result', AsyncMock(side_effect=[OSError('upload unavailable'),
-                                                                                {'file_id': 'file-1'}])) as attach:
+                                                                                {'file_id': 'file-1', 'url': '/fixture'}])) as attach:
                     first = json.loads(await media.generate(kind, payload, self.user, self.metadata))
                     self.assertEqual(first['status'], 'error')
                     receipts = [json.loads(p.read_text()) for p in self.state.glob('*.json')]
@@ -161,6 +188,8 @@ class RecoveryTest(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(request.call_count, 2, 'Recovery must not submit or poll a stopped engine')
                     self.assertEqual(attach.await_count, 2)
                     self.assertEqual(attach.await_args.args[1], output)
+                    if kind == 'video':
+                        self.assertEqual(second['take_id'], 'take-1')
 
     async def test_uncertain_submission_is_not_replayed(self):
         with patch.object(media, 'request', side_effect=TimeoutError('acknowledgement lost')) as request:

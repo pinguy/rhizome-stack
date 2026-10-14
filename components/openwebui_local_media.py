@@ -1,4 +1,4 @@
-"""Shared Open WebUI bridge for local MiniMax Music 3 and Qwen Image Desk."""
+"""Shared Open WebUI bridge for local MiniMax, Qwen and WAN generation."""
 from __future__ import annotations
 
 import asyncio
@@ -21,14 +21,24 @@ import uuid
 STACK_ROOT = Path(os.environ.get("RHIZOME_STACK_ROOT", "~/.local/share/rhizome-stack")).expanduser()
 MUSIC = os.environ.get("MINIMAX_MUSIC_URL", "http://127.0.0.1:8830").rstrip("/")
 IMAGE = os.environ.get("QWEN_IMAGE_DESK_URL", "http://127.0.0.1:8841").rstrip("/")
+VIDEO = os.environ.get("WAN_VIDEO_DESK_API_URL", "http://127.0.0.1:8840").rstrip("/")
+VIDEO_DESK = os.environ.get("WAN_VIDEO_DESK_URL", VIDEO + "/video-studio/").rstrip("/") + "/"
 COMFY = os.environ.get("COMFY_URL", "http://127.0.0.1:8188").rstrip("/")
 OLLAMA = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+OPENWEBUI_PUBLIC = os.environ.get("OPENWEBUI_PUBLIC_URL", "http://127.0.0.1:8080").rstrip("/")
 COMFY_OUTPUT = Path(os.environ.get("COMFY_OUTPUT", STACK_ROOT / "creative/ComfyUI/output"))
+WAN_PROJECT = (Path(os.environ.get("WAN_DESK_STATE", STACK_ROOT / "creative/state/wan-video-desk"))
+               / "projects/wan-video-studio")
 STATE = STACK_ROOT / "state/openwebui-media-jobs"
 SERVICES = {
     "music": os.environ.get("MINIMAX_MUSIC_SERVICE", "minimax-music-api.service"),
     "image": os.environ.get("QWEN_IMAGE_DESK_SERVICE", "qwen-image-desk.service"),
+    "video": os.environ.get("WAN_VIDEO_DESK_SERVICE", "wan-video-desk.service"),
 }
+APP_URLS = {"music": MUSIC, "image": IMAGE, "video": VIDEO}
+HEALTH_ENDPOINTS = {"music": "/api/health", "image": "/api/image-studio/health", "video": "/api/health"}
+STOP_ENDPOINTS = {"music": "/api/engine/stop", "image": "/api/image-studio/engine/stop",
+                  "video": "/api/engine/stop"}
 
 
 def request(method, url, body=None, timeout=30, headers=None):
@@ -41,8 +51,9 @@ def request(method, url, body=None, timeout=30, headers=None):
 
 
 def health(kind):
-    endpoint = "/api/health" if kind == "music" else "/api/image-studio/health"
-    value = request("GET", (MUSIC if kind == "music" else IMAGE) + endpoint, timeout=5)
+    if kind not in APP_URLS:
+        raise ValueError(f"Unknown local media kind: {kind}")
+    value = request("GET", APP_URLS[kind] + HEALTH_ENDPOINTS[kind], timeout=5)
     if not isinstance(value, dict) or not isinstance(value.get("busy"), bool):
         raise RuntimeError("Generation app returned an invalid health response")
     return value
@@ -87,8 +98,22 @@ def comfy_idle():
     return not value["queue_running"] and not value["queue_pending"]
 
 
+def ollama_runners():
+    """An unknown runner catalogue must never count as an available GPU."""
+    value = request("GET", OLLAMA + "/api/ps", timeout=8)
+    if not isinstance(value, dict) or not isinstance(value.get("models"), list):
+        raise RuntimeError("Could not establish Ollama runner state; GPU hand-over stopped")
+    names = []
+    for model in value["models"]:
+        name = (model.get("name") or model.get("model")) if isinstance(model, dict) else None
+        if not isinstance(name, str) or not name.strip():
+            raise RuntimeError("Ollama returned an invalid runner; GPU hand-over stopped")
+        names.append(name)
+    return names
+
+
 def hand_over():
-    for kind in ("music", "image"):
+    for kind in ("music", "image", "video"):
         try:
             value = health(kind)
         except urllib.error.URLError as exc:
@@ -101,21 +126,18 @@ def hand_over():
             raise RuntimeError("A local media job is already running. Let it finish before requesting another.")
     if not comfy_idle():
         raise RuntimeError("ComfyUI is busy with another job; no work was interrupted.")
-    loaded = request("GET", OLLAMA + "/api/ps", timeout=8).get("models", [])
+    loaded = ollama_runners()
     names = []
-    for model in loaded:
-        name = model.get("name") or model.get("model")
-        if name:
-            request("POST", OLLAMA + "/api/generate", {"model": name, "keep_alive": 0}, timeout=60)
-            names.append(name)
+    for name in loaded:
+        request("POST", OLLAMA + "/api/generate", {"model": name, "keep_alive": 0}, timeout=60)
+        names.append(name)
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
-        remaining = request("GET", OLLAMA + "/api/ps", timeout=8).get("models", [])
+        remaining = ollama_runners()
         if not remaining:
             return names
         time.sleep(0.5)
-    remaining_names = [item.get("name") or item.get("model") for item in remaining]
-    raise RuntimeError(f"Could not free the local GPU: Ollama still has models loaded: {remaining_names}")
+    raise RuntimeError(f"Could not free the local GPU: Ollama still has models loaded: {remaining}")
 
 
 def release_models(kind):
@@ -127,9 +149,9 @@ def release_models(kind):
         if connection_refused(exc):
             return
         raise
-    app = MUSIC if kind == "music" else IMAGE
-    endpoint = "/api/engine/stop" if kind == "music" else "/api/image-studio/engine/stop"
-    request("POST", app + endpoint, {}, timeout=45)
+    if kind not in APP_URLS:
+        raise ValueError(f"Unknown local media kind: {kind}")
+    request("POST", APP_URLS[kind] + STOP_ENDPOINTS[kind], {}, timeout=45)
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         try:
@@ -184,7 +206,7 @@ def save_job(path, record):
             temporary.unlink(missing_ok=True)
 
 
-async def import_reference(file_id, user):
+async def import_reference(kind, file_id, user):
     from open_webui.config import UPLOAD_DIR
     from open_webui.models.files import Files
     entry = await Files.get_file_by_id(file_id)
@@ -193,8 +215,10 @@ async def import_reference(file_id, user):
     path = Path(entry.path).resolve(strict=True)
     if not path.is_relative_to(Path(UPLOAD_DIR).resolve()) or path.stat().st_size > 20 * 1024**2:
         raise ValueError("Reference must be a stored upload no larger than 20 MB")
+    endpoint = "/api/video-studio/reference" if kind == "video" else "/api/image-studio/reference"
+    app = VIDEO if kind == "video" else IMAGE
     return await asyncio.to_thread(
-        request, "POST", IMAGE + "/api/image-studio/reference", path.read_bytes(), 30,
+        request, "POST", app + endpoint, path.read_bytes(), 30,
         {"Content-Type": "application/octet-stream", "X-Filename": urllib.parse.quote(entry.filename)},
     )
 
@@ -205,23 +229,30 @@ async def attach_result(kind, source, user, metadata, emitter):
     from open_webui.models.chats import Chats
     from open_webui.utils.chat_id import is_saved_chat_id
     path = Path(source).resolve(strict=True)
-    if not path.is_relative_to(COMFY_OUTPUT.resolve()):
+    media = {
+        "music": (COMFY_OUTPUT, "audio/mpeg", "MiniMax Music 3", "file"),
+        "image": (COMFY_OUTPUT, "image/png", "Qwen Image Desk", "image"),
+        "video": (WAN_PROJECT / "generated", "video/mp4", "WAN Video Desk", "file"),
+    }
+    if kind not in media:
+        raise ValueError(f"Unknown local media kind: {kind}")
+    allowed, mime, source_label, attachment_type = media[kind]
+    if not path.is_relative_to(allowed.resolve()):
         raise ValueError("Generator returned an unexpected output path")
     file_id = str(uuid.uuid4())
     target = Path(UPLOAD_DIR) / (file_id + "_" + path.name)
     await asyncio.to_thread(shutil.copy2, path, target)
-    mime = "audio/mpeg" if kind == "music" else "image/png"
     entry = await Files.insert_new_file(user["id"], FileForm(
         id=file_id, filename=path.name, path=str(target), data={"status": "completed"},
         meta={"name": path.name, "content_type": mime, "size": target.stat().st_size,
-              "source": "MiniMax Music 3" if kind == "music" else "Qwen Image Desk"},
+              "source": source_label},
     ))
     if not entry:
         raise RuntimeError("Could not register the generated file with Open WebUI")
     url = f"/api/v1/files/{file_id}/content"
     # Open WebUI's supported audio path is a native File card. Its Preview
     # action renders the MP3 player and survives saved-chat reloads.
-    attached = {"id": file_id, "type": "file" if kind == "music" else "image",
+    attached = {"id": file_id, "type": attachment_type,
                 "url": url, "name": path.name, "content_type": mime}
     chat_id, message_id = metadata.get("chat_id"), metadata.get("message_id")
     if is_saved_chat_id(chat_id) and message_id:
@@ -242,7 +273,10 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
 
     if not user or not user.get("id"):
         return json.dumps({"status": "error", "error": "An authenticated Open WebUI user is required"})
-    label = "MiniMax Music 3" if kind == "music" else "Qwen Image Desk"
+    labels = {"music": "MiniMax Music 3", "image": "Qwen Image Desk", "video": "WAN Video Desk"}
+    if kind not in labels:
+        return json.dumps({"status": "error", "error": f"Unknown local media kind: {kind}"})
+    label = labels[kind]
     identity = [user["id"], metadata.get("chat_id"), metadata.get("message_id") or str(uuid.uuid4()),
                 kind, payload, reference_file_id]
     key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
@@ -261,7 +295,7 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
                 await status(f"Preparing {label} locally…")
                 unloaded = await asyncio.to_thread(hand_over)
                 if reference_file_id:
-                    reference = await import_reference(reference_file_id, user)
+                    reference = await import_reference(kind, reference_file_id, user)
                     payload["reference_image_id"] = reference["id"]
                 record = {"status": "submitting", "kind": kind, "created_at": time.time(),
                           "unloaded_chat_models": unloaded}
@@ -269,9 +303,13 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
                 if kind == "music":
                     submitted = await asyncio.to_thread(request, "POST", MUSIC + "/api/generate", payload, 150)
                     record["job_id"] = submitted["prompt_id"]
-                else:
-                    payload["seed"] = secrets.randbits(48)
+                elif kind == "image":
+                    payload.setdefault("seed", secrets.randbits(48))
                     submitted = await asyncio.to_thread(request, "POST", IMAGE + "/api/image-studio/generate", payload, 30)
+                    record["job_id"] = submitted["jobs"][0]["id"]
+                else:
+                    payload.setdefault("seed", secrets.randbits(48))
+                    submitted = await asyncio.to_thread(request, "POST", VIDEO + "/api/video-studio/generate", payload, 30)
                     record["job_id"] = submitted["jobs"][0]["id"]
                 record["status"] = "running"
                 save_job(receipt, record)
@@ -291,7 +329,7 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
                             request, "GET", MUSIC + "/api/status?" + urllib.parse.urlencode({"prompt_id": record["job_id"]}), None, 20)
                         done, failed = result.get("state") == "done", result.get("state") == "error"
                         source, stage = result.get("path"), "Generating music"
-                    else:
+                    elif kind == "image":
                         snapshot = await asyncio.to_thread(request, "GET", IMAGE + "/api/image-studio/health", None, 20)
                         result = next((item for item in snapshot.get("jobs", []) if item["id"] == record["job_id"]), None)
                         if not result:
@@ -300,6 +338,16 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
                         failed = result["status"] in ("failed", "cancelled")
                         asset = next((item for item in snapshot.get("assets", []) if item["id"] == result.get("asset_id")), {})
                         source, stage = asset.get("absolute_path"), result.get("stage", "Generating image")
+                    else:
+                        snapshot = await asyncio.to_thread(request, "GET", VIDEO + "/api/video-studio/state", None, 20)
+                        result = next((item for item in snapshot.get("jobs", []) if item["id"] == record["job_id"]), None)
+                        if not result:
+                            raise RuntimeError("WAN Video Desk job disappeared; it has not been resubmitted")
+                        done = result["status"] == "complete"
+                        failed = result["status"] in ("failed", "cancelled")
+                        result_path = str((result.get("result") or {}).get("path") or "")
+                        source = str(WAN_PROJECT / result_path) if result_path else None
+                        stage = result.get("stage", "Generating video")
                 except (urllib.error.URLError, TimeoutError):
                     continue
                 if failed:
@@ -310,7 +358,8 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
                 if done:
                     if not source:
                         raise RuntimeError("Generator completed without a result path")
-                    record.update(status="generated", source=source)
+                    record.update(status="generated", source=source,
+                                  generator_result=result.get("result") or {})
                     save_job(receipt, record)
                     break
                 if stage != previous_stage:
@@ -325,6 +374,17 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
                       "message": "The generated file is attached to this chat. Briefly confirm completion and include the download link. Do not generate again."}
             if kind == "music":
                 answer["message"] += " Tell the user the attached MP3 card opens the built-in player. Do not output raw HTML."
+            elif kind == "video":
+                answer.update(
+                    desk_url=VIDEO_DESK,
+                    take_id=(record.get("generator_result") or {}).get("id"),
+                    download_url=OPENWEBUI_PUBLIC + media["url"],
+                )
+                answer["message"] += (
+                    " Open WebUI embeds the attached MP4 in its native HTML5 video player. "
+                    "Make download_url a clickable Markdown link, not inline code. Also include "
+                    "the WAN Video Desk link so the user can open, edit, reuse or rerun the take."
+                )
             record.update(status="done", result=answer, finished_at=time.time())
             save_job(receipt, record)
             await status(f"{label} complete.", True)

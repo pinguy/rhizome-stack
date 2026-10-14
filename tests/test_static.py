@@ -117,7 +117,7 @@ def main() -> int:
     register_spec.loader.exec_module(register)
     expected_tools = {
         "rhizome_memory", "rhizome_web_search", "openclaw_agent",
-        "minimax_music_3", "qwen_image",
+        "minimax_music_3", "qwen_image", "wan_video",
     }
     check(set(register.TOOLS) == expected_tools, "packaged Open WebUI tool IDs changed")
     main_patch = (ROOT / "patches/open-webui/0.11.0/open_webui__main.py.patch").read_text()
@@ -126,11 +126,20 @@ def main() -> int:
     check("RHIZOME_MEDIA_SYSTEM" in main_patch, "Open WebUI patch lacks local media routing")
     media_doc = (ROOT / "docs/OPENWEBUI_MEDIA.md").read_text()
     for required in (
-        "qwen_image.create_image", "minimax_music_3.create_song",
+        "qwen_image.create_image", "minimax_music_3.create_song", "wan_video.create_video",
         "unload every Ollama runner", "attach it to the saved message",
         "Open WebUI reloads the local chat model",
     ):
         check(required in media_doc, f"Open WebUI local-media shipping contract is missing: {required}")
+    renderer_manifest = json.loads(
+        (ROOT / "patches/open-webui/0.11.0/manifest.json").read_text())
+    renderer_item = next(item for item in renderer_manifest["files"]
+                         if item["path"].endswith("Bd1cmSN4.js"))
+    renderer = (ROOT / "patches/open-webui/0.11.0" / renderer_item["payload"]).read_text()
+    for required in ('content_type) ?? "").startsWith(', '"video/",',
+                     'document.createElement("video")', 'Kt.controls = !0',
+                     'Kt.preload = "metadata"'):
+        check(required in renderer, f"inline MP4 renderer contract is missing: {required}")
     print("PASS Voice Lab and local media registration invariants")
     for manifest_path in sorted((ROOT / "patches").glob("*/*/manifest.json")):
         manifest = json.loads(manifest_path.read_text())

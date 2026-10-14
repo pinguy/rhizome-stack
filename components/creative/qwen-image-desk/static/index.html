@@ -35,9 +35,10 @@
       <label class="field-label" for="rawPrompt">Rough prompt</label>
       <textarea id="rawPrompt" class="prompt-input" rows="5" placeholder="A tired astronaut having tea in a council-flat kitchen at night…"></textarea>
 
-      <div class="reference-panel">
+      <div class="reference-panel" id="referenceDropZone">
         <label class="field-label" for="referenceInput">Reference image <span>optional · edit an existing image</span></label>
         <input id="referenceInput" type="file" accept="image/png,image/jpeg,image/webp">
+        <p class="reference-drop-copy">Drop a PNG, JPEG or WebP here, or click to choose one.</p>
         <p class="field-note" id="referenceNote">No reference — create a new image from your prompt. PNG, JPEG or WebP, up to 20 MB. Images stay on this workstation.</p>
         <div id="referencePreview" hidden>
           <img id="referenceImage" alt="Reference image to edit">
@@ -78,7 +79,7 @@
       </div>
 
       <div class="controls-grid">
-        <label class="field"><span>Frame</span><select id="presetSelect"><option value="">Loading shared sizes…</option></select><span id="customSize" class="custom-size" hidden><input id="customWidth" type="number" min="256" max="1792" step="64" value="1024" aria-label="Custom width"><b>×</b><input id="customHeight" type="number" min="256" max="1792" step="64" value="576" aria-label="Custom height"></span></label>
+        <label class="field"><span>Frame</span><select id="presetSelect"><option value="">Loading shared sizes…</option></select><span id="customSize" class="custom-size" hidden><input id="customWidth" type="number" min="256" max="4096" step="64" value="1024" aria-label="Custom width"><b>×</b><input id="customHeight" type="number" min="256" max="4096" step="64" value="576" aria-label="Custom height"></span></label>
         <label class="field"><span>Seed</span><div class="seed-row"><input id="seedInput" type="number" min="0" max="9223372036854775807" value="420251006"><button id="randomSeedBtn" class="icon-button" type="button" title="Choose random seed" aria-label="Choose random seed">↻</button></div></label>
         <label class="field"><span>Variants</span><select id="batchSelect"><option value="1">1 image</option><option value="2">2 images</option><option value="3">3 images</option><option value="4">4 images</option></select></label>
       </div>
