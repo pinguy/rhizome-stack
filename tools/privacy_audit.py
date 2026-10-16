@@ -49,6 +49,17 @@ PUBLIC_REPO_PATTERN = re.compile(
     r"(?:https://github\.com/|(?<![\w/]))" + "ping" + "uy/"
     + r"(?:" + "|".join(map(re.escape, PUBLIC_REPOSITORIES)) + r")(?=[/#\s\x60\x22.,)?]|$)"
 )
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def is_public_screenshot(relative: Path, data: bytes) -> bool:
+    """Allow only real PNGs in the explicit documentation screenshot tree."""
+    return (
+        len(relative.parts) == 3
+        and relative.parts[:2] == ("docs", "screenshots")
+        and relative.suffix.lower() == ".png"
+        and data.startswith(PNG_SIGNATURE)
+    )
 
 
 def looks_binary(data: bytes) -> bool:
@@ -80,7 +91,8 @@ def audit(root: Path) -> list[str]:
             continue
         data = path.read_bytes()
         if looks_binary(data):
-            findings.append(f"unexpected binary file: {relative}")
+            if not is_public_screenshot(relative, data):
+                findings.append(f"unexpected binary file: {relative}")
             continue
         text = data.decode("utf-8", errors="replace")
         for permitted in PUBLIC_ATTRIBUTION_EXEMPTIONS.get(relative, ()):

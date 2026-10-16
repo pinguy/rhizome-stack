@@ -67,7 +67,7 @@ testing. A source checkout rollback does not undo package or database migrations
   Never run a full installer on the owner's machine merely to test a code change.
 - Preserve patch hash guards. An unexpected upstream file is a compatibility
   failure to investigate, not a reason to force a patch or remove its checks.
-- The twelve upstream Skills are complete, byte-identical snapshots of a pinned
+- The thirteen upstream Skills are complete, byte-identical snapshots of a pinned
   upstream revision. Owner-supplied stack skills have explicit per-entry
   source/licence overrides and original hashes in `manifests/skills.json`.
   Do not casually edit upstream snapshots in place. A deliberate refresh must retain

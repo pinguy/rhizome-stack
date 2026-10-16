@@ -98,9 +98,14 @@ class ComfyEngine:
     def owned_pid(self) -> int | None:
         try:
             pid = int(self.pid_file.read_text().strip())
-            cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
             main = str((COMFY_DIR / "main.py").resolve())
-            if main in cmdline and "--port 8188" in cmdline and os.getpgid(pid) == pid:
+            # Match argv boundaries, not substrings of another program or port.
+            if (pid > 1 and pid != os.getpid() and len(cmdline) > 2
+                    and cmdline[1] == os.fsencode(main)
+                    and any(cmdline[i:i + 2] == [b"--port", b"8188"]
+                            for i in range(2, len(cmdline) - 1))
+                    and os.getpgid(pid) == pid):
                 return pid
         except (OSError, ValueError, ProcessLookupError):
             pass
@@ -461,7 +466,10 @@ class Handler(LocalRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         if self.headers.get("Transfer-Encoding") or not 0 <= length <= 128 * 1024:
             raise ValueError("request requires Content-Length between 0 and 128 KiB")
-        value = json.loads(self.rfile.read(length) or b"{}")
+        raw = self.rfile.read(length)
+        if len(raw) != length:
+            raise ValueError("incomplete request body")
+        value = json.loads(raw or b"{}")
         if not isinstance(value, dict):
             raise ValueError("request body must be an object")
         return value

@@ -18,7 +18,7 @@ import unittest
 import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, mock_open
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -208,6 +208,73 @@ class WorkforceHTTPTest(unittest.TestCase):
 
 
 class CreativeHTTPTest(unittest.TestCase):
+    def test_qwen_truncated_json_never_reaches_prompt_helper(self):
+        body = b'{"model":"fixture","prompt":"fixture"}'
+        with patch.object(qwen, 'expand_prompt', return_value={}) as helper, serve(qwen.Handler) as address:
+            connection = socket.create_connection(address, timeout=2)
+            with connection:
+                headers = (f'POST /api/image-studio/expand HTTP/1.0\r\nHost: {address[0]}:{address[1]}\r\n'
+                           f'Content-Type: application/json\r\nContent-Length: {len(body) + 5}\r\n\r\n')
+                connection.sendall(headers.encode() + body)
+                connection.shutdown(socket.SHUT_WR)
+                response = http.client.HTTPResponse(connection)
+                response.begin()
+                self.assertEqual(response.status, 400)
+                response.read()
+            helper.assert_not_called()
+
+    def test_creative_process_ownership_matches_complete_arguments(self):
+        pid = 987654
+        main = str((qwen.COMFY_DIR / 'main.py').resolve())
+        for args, expected in [
+            (['python', main, '--port', '8188'], pid),
+            (['python', main, '--port', '81880'], None),
+            (['python', main + '.other', '--port', '8188'], None),
+            (['python', '/unrelated.py', '--note', main, '--port', '8188'], None),
+            (['python', main, '--note', '--port 8188'], None),
+        ]:
+            raw = ('\0'.join(args) + '\0').encode()
+            with self.subTest(args=args), \
+                 patch.object(Path, 'read_text', return_value=str(pid)), \
+                 patch.object(Path, 'read_bytes', return_value=raw), \
+                 patch.object(os, 'getpgid', return_value=pid):
+                self.assertEqual(qwen.ENGINE.owned_pid(), expected)
+            with self.subTest(music_args=args), \
+                 patch.object(music, 'COMFY_MAIN', main), \
+                 patch('builtins.open', mock_open(read_data=raw)), \
+                 patch.object(os, 'getpgid', return_value=pid):
+                self.assertEqual(music._owned_pid(pid), expected is not None)
+
+    def test_owned_process_check_uses_real_proc_arguments(self):
+        # Some sandboxes expose a /proc mounted from a different PID namespace.
+        if Path('/proc/self/stat').read_text().split()[0] != str(os.getpid()):
+            self.skipTest('/proc PID namespace differs from the executing process')
+        # Harmless stand-in processes; never start ComfyUI or touch a GPU.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            main = root / 'main.py'
+            main.write_text('import time; time.sleep(30)\n')
+            pidfile = root / 'comfy.pid'
+            for port, expected in [('81880', False), ('8188', True)]:
+                child = subprocess.Popen([sys.executable, str(main), '--port', port],
+                                         start_new_session=True)
+                try:
+                    pidfile.write_text(str(child.pid))
+                    with patch.object(qwen, 'COMFY_DIR', root), \
+                         patch.object(qwen.ENGINE, 'pid_file', pidfile), \
+                         patch.object(music, 'COMFY_MAIN', str(main)):
+                        self.assertEqual(qwen.ENGINE.owned_pid(), child.pid if expected else None)
+                        self.assertEqual(music._owned_pid(child.pid), expected)
+                        self.assertEqual(qwen.ENGINE.stop_owned(), expected)
+                        if expected:
+                            child.wait(timeout=2)
+                        else:
+                            self.assertIsNone(child.poll())
+                finally:
+                    if child.poll() is None:
+                        child.terminate()
+                    child.wait(timeout=2)
+
     def test_qwen_oversized_reference_rejected_before_pixel_decode(self):
         opened = unittest.mock.MagicMock(format='PNG', width=10000, height=10000)
         opened.__enter__.return_value = opened

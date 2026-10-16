@@ -53,6 +53,20 @@ class WebSearchPolicyTests(unittest.TestCase):
         self.assertNotIn("political_framing", policy)
         self.assertNotIn("balance", policy)
 
+    def test_reuters_is_retained_as_reputable_reporting(self):
+        self.assertIn("reuters.com", web_search.REPUTABLE_REPORTING_DOMAINS)
+        labelled = web_search._claim_label_for_result(
+            {
+                "title": "Example current report",
+                "description": "Reuters reports the verified event details.",
+                "url": "https://www.reuters.com/world/example-report-2026-10-16/",
+            },
+            self.clock,
+        )
+        self.assertEqual(labelled["domain"], "reuters.com")
+        self.assertEqual(labelled["source_relation"], "reputable_reporting")
+        self.assertEqual(labelled["label"], "credibly_reported")
+
 
 if __name__ == "__main__":
     unittest.main()

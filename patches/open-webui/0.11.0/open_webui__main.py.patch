@@ -8,7 +8,7 @@
  from uuid import uuid4
  
  import aiohttp
-@@ -269,6 +270,169 @@
+@@ -269,6 +270,170 @@
  logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
  log = logging.getLogger(__name__)
  
@@ -30,11 +30,12 @@
 +    'remote media generators, SVG/code substitutes, or merely writing lyrics/prompts. '
 +    'Do not generate for discussion or text-only requests. Call once and wait for the result. '
 +    'Return the actual file link; never invent one. The tools attach the finished media to '
-+    'the chat. For music, tell the user the attached MP3 card opens Open WebUI\'s built-in '
-+    'player; do not output raw HTML. For image edits, use the uploaded Open WebUI file ID, '
-+    'not a guessed local path. WAN MP4 attachments render in Open WebUI\'s native HTML5 '
-+    'player. Make download_url a clickable Markdown link, never inline code. Include the '
-+    'returned WAN Video Desk link for editing, reuse or reruns. If a tool fails, report the error.'
++    'the chat. For music, tell the user the attached MP3 card opens Open WebUI’s built-in '
++    'player; do not output raw HTML. For image edits, use the '
++    'uploaded Open WebUI file ID, not a guessed local path. WAN MP4 attachments render in '
++    'Open WebUI’s native HTML5 player. Make download_url a clickable Markdown link, never '
++    'inline code. WAN videos remain in the WAN Video Desk gallery; also include its returned '
++    'desk link so the user can edit, reuse or rerun the take. If a tool fails, report the error.'
 +)
 +
 +RHIZOME_OPENCLAW_RELAY_TOOL_ID = 'openclaw_agent'
@@ -178,7 +179,7 @@
  
  async def emit_chat_list_event(metadata: dict, chat_id: str):
      if not is_saved_chat_id(chat_id):
-@@ -1083,18 +1247,71 @@
+@@ -1083,18 +1248,71 @@
              model = model_item
              await _set_direct_model(request, model, user)
  
@@ -256,10 +257,10 @@
  
          # Check base model existence for custom models
          if model_info and model_info.base_model_id:
-@@ -1177,6 +1394,73 @@
+@@ -1176,6 +1394,73 @@
+             )
          ):
              tool_servers = None
--
 +
 +        # Dynamic provider models (notably the OpenClaw adapter) do not have a
 +        # row in Open WebUI's `model` table.  Preserve metadata assembled by
@@ -327,7 +328,6 @@
 +                **model_default_features,
 +                **request_features,
 +            }
-+
+ 
          metadata = {
              'user_id': user.id,
-             'user_agent': request.headers.get('user-agent', '') or '',

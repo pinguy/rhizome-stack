@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -882,6 +883,93 @@ def cmd_add(args: argparse.Namespace) -> None:
         )
 
 
+def record_ucs_report(
+    path: str | Path, report: dict[str, Any], model: str,
+    expected_revision: int | None = None,
+) -> dict[str, Any]:
+    """Atomically append UCS inference and receipts, never an independent PASS.
+
+    Run IDs make reconciliation safe after an ambiguous write. A repeated ID
+    must contain exactly the same report. The existing status/constraint rules
+    remain authoritative; this operation cannot finish, route or approve work.
+    """
+    if not model.strip() or model.startswith("user/"):
+        raise ValueError("UCS reports require a non-user writer")
+    if not isinstance(report, dict):
+        raise ValueError("UCS report must be an object")
+    run_id = str(report.get("run_id", ""))
+    if not UUID_RE.fullmatch(run_id):
+        raise ValueError("UCS report needs a run_id UUID")
+    for key in ("problem", "answer", "verification_scope"):
+        if not isinstance(report.get(key), str) or not report[key].strip():
+            raise ValueError(f"UCS report needs non-empty {key}")
+    digest = hashlib.sha256(json.dumps(
+        report, sort_keys=True, ensure_ascii=False, allow_nan=False,
+    ).encode()).hexdigest()
+    with board_lock(path, True):
+        board = load(path)
+        errors = validate(board)
+        if errors:
+            raise ValueError("invalid blackboard: " + "; ".join(errors))
+        existing = [entry for entry in board["evidence"]
+                    if _entry_metadata(entry).get("ucs_run_id") == run_id]
+        if existing:
+            if _entry_metadata(existing[0]).get("report_sha256") != digest:
+                raise ValueError("UCS run_id already exists with a different report")
+            return {"ok": True, "duplicate": True, "revision": board["revision"]}
+        if expected_revision is not None and board["revision"] != expected_revision:
+            raise ValueError(f"revision conflict: expected {expected_revision}, found {board['revision']}")
+        if board["status"] not in {"active", "needs_verification"}:
+            raise ValueError(f"board does not allow UCS results: {board['status']}")
+        if target_blocked(board, str(Path(path).resolve())):
+            raise ValueError("DO_NOT_TOUCH blocks this blackboard target")
+        sources = report.get("context_sources", {})
+        snapshot = sources.get("blackboard") if isinstance(sources, dict) else None
+        if snapshot and snapshot.get("task_id") != board["task_id"]:
+            raise ValueError("UCS report belongs to a different blackboard task")
+        metadata = {"ucs_run_id": run_id, "report_sha256": digest}
+
+        def entry(content, kind):
+            return {
+                "entry_id": str(uuid.uuid4()), "content": content,
+                "written_by": {"model": model}, "created_at": now(),
+                "verified_by": [], "metadata": dict(metadata),
+                "provenance": [{"kind": kind, "source": "UnifiedCognitionSystem",
+                                "locator": f"ucs_runs/{run_id}", "sha256": digest}],
+            }
+
+        board["inferences"].append(entry(
+            f"UCS proposal for {report['problem']}:\n{report['answer']}", "model_output",
+        ))
+        evidence = entry(
+            f"UCS receipt {run_id}: scope={report['verification_scope']}; "
+            f"outcome checks={report.get('outcome_verifiers_run', 0)}; "
+            f"outcome passed={report.get('outcome_verifiers_passed', False)}. "
+            "This is the runtime's own verification record, not independent approval.",
+            "tool",
+        )
+        evidence["metadata"].update({
+            "context_sources": sources,
+            "verifications": report.get("final_verifications", []),
+            "hard_verifiers_passed": report.get("hard_verifiers_passed", False),
+        })
+        board["evidence"].append(evidence)
+        if not report.get("hard_verifiers_passed", False):
+            board["failed_attempts"].append(entry(
+                f"UCS run {run_id} failed a hard verifier; inspect its receipt before reuse.",
+                "tool",
+            ))
+        commit(path, board, model)
+        return {"ok": True, "duplicate": False, "revision": board["revision"]}
+
+
+def cmd_record_ucs(args: argparse.Namespace) -> None:
+    result = record_ucs_report(
+        args.board, load(args.report), args.model, args.expect_revision,
+    )
+    _print_result(result, args.json, str(result["revision"]))
+
+
 def cmd_verify(args: argparse.Namespace) -> None:
     with board_lock(args.board, True):
         board = load(args.board)
@@ -1271,6 +1359,14 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--max-hops", type=int, default=6)
     add_json_flag(command)
     command.set_defaults(fn=cmd_init)
+
+    command = commands.add_parser("record-ucs")
+    command.add_argument("board")
+    command.add_argument("--report", required=True)
+    command.add_argument("--model", required=True)
+    command.add_argument("--expect-revision", type=int)
+    add_json_flag(command)
+    command.set_defaults(fn=cmd_record_ucs)
 
     command = commands.add_parser("show")
     command.add_argument("board")

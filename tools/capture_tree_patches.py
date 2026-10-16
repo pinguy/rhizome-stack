@@ -34,7 +34,16 @@ def main() -> int:
         modified_text = modified.decode("utf-8").splitlines(keepends=True)
         name = relative.replace("/", "__") + ".patch"
         diff = difflib.unified_diff(clean_text, modified_text, fromfile="a/" + relative, tofile="b/" + relative)
-        (args.output / name).write_text("".join(diff))
+        rendered = []
+        for line in diff:
+            # difflib preserves a missing final newline but does not emit the
+            # unified-diff marker. Without it, the following hunk line is
+            # concatenated and `patch` rejects generated/minified bundles.
+            if line.startswith((" ", "+", "-")) and not line.endswith("\n"):
+                rendered.extend((line, "\n\\ No newline at end of file\n"))
+            else:
+                rendered.append(line)
+        (args.output / name).write_text("".join(rendered))
         manifest["files"].append({
             "path": relative,
             "action": "modify",

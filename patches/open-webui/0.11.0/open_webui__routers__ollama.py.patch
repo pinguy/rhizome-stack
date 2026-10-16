@@ -1,9 +1,33 @@
 --- a/open_webui/routers/ollama.py
 +++ b/open_webui/routers/ollama.py
-@@ -1147,6 +1147,44 @@
+@@ -1125,6 +1125,10 @@
+     model_info = await Models.get_model_by_id(model_id)
+ 
+     if model_info is not None:
++        # Explicit request options are narrower than persisted model defaults
++        # (for example, hidden title/tag task output caps), so preserve them
++        # across the model-profile merge and let them win on key collisions.
++        request_options = dict(payload.get('options') or {})
+         if model_info.base_model_id:
+             base_model_id = request.base_model_id if hasattr(request, 'base_model_id') else model_info.base_model_id
+             payload['model'] = base_model_id
+@@ -1133,6 +1137,11 @@
+         if params:
+             system = params.pop('system', None)
+             payload = apply_model_params_to_body_ollama(params, payload)
++            if request_options:
++                payload['options'] = {
++                    **(payload.get('options') or {}),
++                    **request_options,
++                }
+             if not bypass_system_prompt:
+                 payload = await apply_system_prompt_to_body(system, payload, metadata, user)
+ 
+@@ -1146,6 +1155,101 @@
+ 
      prefix_id = api_config.get('prefix_id')
      payload['model'] = strip_provider_model_prefix(payload['model'], prefix_id)
- 
++
 +    # Keep every local chat model on one stable runner across the initial
 +    # browser request, tool continuations, and hidden metadata/title generation.
 +    # Earlier request-shaping layers can carry stale browser values (observed
@@ -18,12 +42,26 @@
 +        # with an automatic 65K fallback for long inputs and a separately
 +        # selectable full-context alias. See state/fable-runtime-profile/.
 +        'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed': 32768,
++        'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed:fast16k': 16384,
 +        'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed:full65k': 65536,
++        # 16K is the fastest profile that fits Open WebUI's real system/tool
++        # prompt. The raw 8K benchmark is faster but fails before generation.
++        # Keep a full-context alias and automatically route larger chats to it.
++        'qwen3-8-27b-turbofcfusion-735-882-here--dec14241': 16384,
++        'qwen3-8-27b-turbofcfusion-735-882-here--dec14241:fast16k': 16384,
++        'qwen3-8-27b-turbofcfusion-735-882-here--dec14241:full65k': 65536,
++        # Gemma 4's 16K runner is the fastest useful Open WebUI profile on
++        # this host. Batch 1024 improves representative long-prompt prefill;
++        # MTP depth 3 is materially faster than shallower/disabled drafting.
++        'gemma4:26b': 16384,
++        'gemma4:fast16k': 16384,
++        'gemma4:full32k': 32768,
++        'gemma4:full65k': 65536,
 +    }.get(model_key, 65536)
 +
-+    # A conservative character-count guard prevents the fast Fable profile
-+    # from silently discarding a large early section. The explicit full65k
-+    # alias remains visible in the model picker for document-heavy sessions.
++    # Conservative character-count guards prevent the accelerated profiles
++    # from silently discarding a large early section. Explicit full65k aliases
++    # remain visible in the model picker for document-heavy sessions.
 +    if model_key == 'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed':
 +        message_chars = sum(
 +            len(message.get('content') or '')
@@ -39,9 +77,51 @@
 +            )
 +            payload['model'] = 'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed:full65k'
 +            stable_num_ctx = 65536
++    fast_fallbacks = {
++        'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed:fast16k':
++            'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed:full65k',
++        'qwen3-8-27b-turbofcfusion-735-882-here--dec14241':
++            'qwen3-8-27b-turbofcfusion-735-882-here--dec14241:full65k',
++        'qwen3-8-27b-turbofcfusion-735-882-here--dec14241:fast16k':
++            'qwen3-8-27b-turbofcfusion-735-882-here--dec14241:full65k',
++        'gemma4:26b': 'gemma4:full32k',
++        'gemma4:fast16k': 'gemma4:full32k',
++    }
++    if model_key in fast_fallbacks:
++        message_chars = sum(
++            len(message.get('content') or '')
++            if isinstance(message.get('content'), str)
++            else len(json.dumps(message.get('content') or [], ensure_ascii=False))
++            for message in payload.get('messages', [])
++            if isinstance(message, dict)
++        )
++        if message_chars >= 18000:
++            target_model = fast_fallbacks[model_key]
++            log.warning(
++                '%s fast16k input is %d characters; routing to %s to avoid silent truncation',
++                model_key,
++                message_chars,
++                target_model,
++            )
++            payload['model'] = target_model
++            stable_num_ctx = 32768 if target_model == 'gemma4:full32k' else 65536
 +    payload.setdefault('options', {})['num_ctx'] = stable_num_ctx
++    effective_model_key = str(payload['model']).removesuffix(':latest')
++    if effective_model_key in {'gemma4:26b', 'gemma4:fast16k'}:
++        payload['options']['num_batch'] = 1024
++    elif effective_model_key in {'gemma4:full32k', 'gemma4:full65k'}:
++        payload['options']['num_batch'] = 512
++    if effective_model_key in {
++        'gemma4:26b', 'gemma4:fast16k', 'gemma4:full32k', 'gemma4:full65k'
++    }:
++        payload['options']['draft_num_predict'] = 3
 +    payload['keep_alive'] = '10m'
 +
++    # Hidden metadata jobs need only their compact final value.  Keep this at
++    # the final Ollama boundary because task payload fields can be lost or
++    # overwritten while model defaults and pipeline filters are applied.
++    if metadata and metadata.get('task'):
++        payload['think'] = False
+ 
      return await send_request(
          f'{url}/api/chat',
-         payload=json.dumps(payload),

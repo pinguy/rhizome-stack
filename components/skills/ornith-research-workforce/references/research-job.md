@@ -82,3 +82,8 @@ checkpoint: <last complete batch or null>
 Check unique IDs and their exact membership as well as the count equation. Preserve pending entries for unfinished batches. Do not use unresolved findings as an additional coverage count: an inspected item may still raise an unresolved question.
 
 Rhizome appends an independent verification record: claims relied upon, primary sources reopened, negative-result sample, errors found, resulting coverage limits and final decision. Keep it distinct from the worker's result.
+
+
+## Compact helper result and verification
+
+For small text-only jobs, the installed helper's JSON receipt is the compact equivalent of this ledger. Preserve `job_id`, `attempt_id`, configured and observed model identity, HTTP/tool observations, finish reason, worker claim and verification state. Rhizome must append its own acceptance result before treating the task as complete. On `UNKNOWN`, reconcile the existing attempt before retrying. Do not infer cancellation from a wrapper timeout or success from the word “done”.

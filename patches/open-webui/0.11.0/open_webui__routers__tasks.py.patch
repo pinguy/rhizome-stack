@@ -5,7 +5,7 @@
  import logging
  import re
  from typing import Optional
-@@ -37,6 +38,42 @@
+@@ -37,6 +38,48 @@
  
  router = APIRouter()
  
@@ -14,7 +14,7 @@
 +# chat, tools, RAG, context size, or visible model output.
 +TASK_GENERATION_TIMEOUT_SECONDS = 180
 +TASK_OUTPUT_TOKEN_LIMITS = {
-+    TASKS.TITLE_GENERATION: 128,
++    TASKS.TITLE_GENERATION: 512,
 +    TASKS.TAGS_GENERATION: 128,
 +    TASKS.FOLLOW_UP_GENERATION: 384,
 +    TASKS.EMOJI_GENERATION: 16,
@@ -23,11 +23,17 @@
 +
 +def bounded_task_output_params(model: dict, task: TASKS) -> dict:
 +    max_tokens = TASK_OUTPUT_TOKEN_LIMITS[task]
-+    return (
-+        {'max_tokens': max_tokens}
-+        if model.get('owned_by') == 'ollama'
-+        else {'max_completion_tokens': max_tokens}
-+    )
++    if model.get('owned_by') == 'ollama':
++        # Ollama accepts generation limits only inside options. A top-level
++        # max_tokens field is silently ignored by /api/chat. Metadata jobs need
++        # only the compact final value, not a hidden reasoning trace; the title
++        # task additionally has a native JSON grammar.
++        return {
++            'think': False,
++            'options': {'num_predict': max_tokens},
++            **({'format': 'json'} if task == TASKS.TITLE_GENERATION else {}),
++        }
++    return {'max_completion_tokens': max_tokens}
 +
 +
 +async def generate_bounded_task(request: Request, payload: dict, user, task: TASKS):
@@ -48,7 +54,7 @@
  TASK_CONFIG_KEYS = {
      'TASK_MODEL': 'task.model.default',
      'TASK_MODEL_EXTERNAL': 'task.model.external',
-@@ -143,7 +180,6 @@
+@@ -143,7 +186,6 @@
          await Config.get('task.model.external'),
          models,
      )
@@ -56,7 +62,7 @@
      log.debug(f'generating chat title using model {task_model_id} for user {user.email} ')
  
      title_template = await Config.get('task.title.prompt_template')
-@@ -153,20 +189,12 @@
+@@ -153,20 +195,12 @@
          template = DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE
  
      content = await title_generation_template(template, form_data['messages'], user)
@@ -78,7 +84,7 @@
          'metadata': {
              **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
              'task': str(TASKS.TITLE_GENERATION),
-@@ -182,7 +210,7 @@
+@@ -182,7 +216,7 @@
          raise e
  
      try:
@@ -87,7 +93,7 @@
      except Exception as e:
          log.error('Exception occurred', exc_info=True)
          return JSONResponse(
-@@ -237,6 +265,7 @@
+@@ -237,6 +271,7 @@
          'model': task_model_id,
          'messages': [{'role': 'user', 'content': content}],
          'stream': False,
@@ -95,7 +101,7 @@
          'metadata': {
              **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
              'task': str(TASKS.FOLLOW_UP_GENERATION),
-@@ -252,7 +281,7 @@
+@@ -252,7 +287,7 @@
          raise e
  
      try:
@@ -104,7 +110,7 @@
      except Exception as e:
          log.error('Exception occurred', exc_info=True)
          return JSONResponse(
-@@ -307,6 +336,7 @@
+@@ -307,6 +342,7 @@
          'model': task_model_id,
          'messages': [{'role': 'user', 'content': content}],
          'stream': False,
@@ -112,7 +118,7 @@
          'metadata': {
              **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
              'task': str(TASKS.TAGS_GENERATION),
-@@ -322,7 +352,7 @@
+@@ -322,7 +358,7 @@
          raise e
  
      try:
@@ -121,7 +127,7 @@
      except Exception as e:
          log.error(f'Error generating chat completion: {e}')
          return JSONResponse(
-@@ -594,13 +624,7 @@
+@@ -594,13 +630,7 @@
          'model': task_model_id,
          'messages': [{'role': 'user', 'content': content}],
          'stream': False,
@@ -136,7 +142,7 @@
          'metadata': {
              **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
              'task': str(TASKS.EMOJI_GENERATION),
-@@ -616,7 +640,7 @@
+@@ -616,7 +646,7 @@
          raise e
  
      try:

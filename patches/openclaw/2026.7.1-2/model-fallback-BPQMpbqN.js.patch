@@ -1,0 +1,50 @@
+--- a/model-fallback-BPQMpbqN.js
++++ b/model-fallback-BPQMpbqN.js
+@@ -1236,6 +1236,7 @@
+ }
+ const lastProbeAttempt = /* @__PURE__ */ new Map();
+ const MIN_PROBE_INTERVAL_MS = 3e4;
++const ACTIVE_RATE_LIMIT_PROBE_INTERVAL_MS = 5 * 60 * 1e3;
+ const PROBE_MARGIN_MS = 120 * 1e3;
+ const PROBE_SCOPE_DELIMITER = "::";
+ const PROBE_STATE_TTL_MS = 1440 * 60 * 1e3;
+@@ -1259,9 +1260,9 @@
+ 		lastProbeAttempt.delete(oldestKey);
+ 	}
+ }
+-function isProbeThrottleOpen(now, throttleKey) {
++function isProbeThrottleOpen(now, throttleKey, intervalMs = MIN_PROBE_INTERVAL_MS) {
+ 	pruneProbeState(now);
+-	return now - (lastProbeAttempt.get(throttleKey) ?? 0) >= MIN_PROBE_INTERVAL_MS;
++	return now - (lastProbeAttempt.get(throttleKey) ?? 0) >= intervalMs;
+ }
+ function markProbeAttempt(now, throttleKey) {
+ 	pruneProbeState(now);
+@@ -1279,18 +1280,20 @@
+ }
+ function shouldProbePrimaryDuringCooldown(params) {
+ 	if (!params.isPrimary) return false;
+-	if (!isProbeThrottleOpen(params.now, params.throttleKey)) return false;
++	const hasActiveRateLimitReset = params.reason === "rate_limit" && hasActiveProviderRateLimitResetWindow({
++		authStore: params.authStore,
++		profileIds: params.profileIds,
++		now: params.now,
++		model: params.model
++	});
++	const probeIntervalMs = hasActiveRateLimitReset ? ACTIVE_RATE_LIMIT_PROBE_INTERVAL_MS : MIN_PROBE_INTERVAL_MS;
++	if (!isProbeThrottleOpen(params.now, params.throttleKey, probeIntervalMs)) return false;
+ 	if (!params.hasFallbackCandidates) return true;
+ 	const soonest = params.authRuntime.getSoonestCooldownExpiry(params.authStore, params.profileIds, {
+ 		now: params.now,
+ 		forModel: params.model
+ 	});
+-	if (params.reason === "rate_limit" && !hasActiveProviderRateLimitResetWindow({
+-		authStore: params.authStore,
+-		profileIds: params.profileIds,
+-		now: params.now,
+-		model: params.model
+-	})) return true;
++	if (params.reason === "rate_limit") return true;
+ 	if (soonest === null || !Number.isFinite(soonest)) return true;
+ 	return params.now >= soonest - PROBE_MARGIN_MS;
+ }

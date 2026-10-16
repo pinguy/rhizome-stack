@@ -1,4 +1,4 @@
-# Known limitations — 0.1.0-alpha.11 candidate
+# Known limitations — 0.1.0-alpha.14 candidate
 
 - Full installation and browser acceptance still need testing in disposable
   native Linux and actual WSL2 environments. Static and mocked-provider tests
@@ -32,10 +32,13 @@
 - Voice Lab is loopback-only but intentionally writes Chatterbox systemd
   drop-ins when the user selects a default. It verifies and rolls back the
   switch; combining it with another Chatterbox backend owner remains unsupported.
-- Four minified Open WebUI frontend changes use exact hash-guarded replacements.
+- Three minified Open WebUI frontend changes use exact hash-guarded replacements.
   The MP4 renderer is tied to Open WebUI 0.11.0's generated frontend chunk and
   must be re-derived and browser-tested before any Open WebUI update.
 - The Jupyter image omits the reference machine's accumulated compilers/caches.
+  The packaged service fails fast when that image is absent, while the direct
+  Open WebUI wake/retry patch and 30-second idle guard cover cold starts. This
+  does not prove arbitrary user notebooks are safe to resume after a crash.
 - Base packages have version pins, but the full transitive dependency graph is
   not locked. A clean dependency install remains a required release check.
 - The creative profile requires a supported NVIDIA/CUDA setup and substantial

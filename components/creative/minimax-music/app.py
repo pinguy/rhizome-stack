@@ -272,12 +272,14 @@ def _read_pid():
 
 def _owned_pid(pid):
     """Accept only the exact detached ComfyUI process recorded by this app."""
-    if not pid or pid == os.getpid():
+    if not pid or pid <= 1 or pid == os.getpid():
         return False
     try:
-        cmdline = open("/proc/%d/cmdline" % pid, "rb").read().replace(b"\0", b" ").decode(errors="replace")
-        return (os.path.realpath(COMFY_MAIN) in cmdline
-                and "--port %d" % COMFY_PORT in cmdline
+        with open("/proc/%d/cmdline" % pid, "rb") as stream:
+            args = stream.read().split(b"\0")
+        return (len(args) > 2 and args[1] == os.fsencode(os.path.realpath(COMFY_MAIN))
+                and any(args[i:i + 2] == [b"--port", str(COMFY_PORT).encode()]
+                        for i in range(2, len(args) - 1))
                 and os.getpgid(pid) == pid)
     except (OSError, ProcessLookupError):
         return False
@@ -908,7 +910,7 @@ input[type=range]{accent-color:var(--accent);width:100%;padding:0;height:24px;cu
 .library-tools{display:flex;gap:8px;align-items:center;margin-bottom:12px}.refresh{background:var(--library-card);border:1px solid var(--library-line);border-radius:9px;color:#f4f8fc;min-width:43px;height:43px;font-size:18px}.refresh:hover{background:#28465b}
 .now-playing{border:1px solid #496b82;border-radius:12px;background:linear-gradient(145deg,#1f4056,#183246);padding:14px;margin-bottom:12px}.now-label{font:700 9px 'Adwaita Mono',monospace;letter-spacing:1.2px;text-transform:uppercase;color:#9fbae0}.now-title{font-size:16px;line-height:1.3;margin-top:4px;overflow-wrap:anywhere}.now-meta{font-size:10px;color:var(--library-muted);margin-top:3px}.now-playing audio{width:100%;height:38px;display:block;margin-top:11px}.now-actions{display:flex;gap:15px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .hist{display:flex;flex-direction:column;gap:5px;max-height:calc(100vh - 430px);min-height:180px;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--library-line) transparent;padding-right:3px}
-.track-row{display:grid;grid-template-columns:36px minmax(0,1fr);align-items:center;gap:9px;border:1px solid transparent;border-radius:9px;padding:7px;background:transparent;min-width:0;flex-shrink:0}.track-row:hover{background:var(--library-card);border-color:#29475c}.track-row.selected{background:var(--library-card);border-color:#557890}.play-track{display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--library-line);border-radius:8px;background:#203e53;color:#fff;font-size:12px;padding:0}.play-track:hover{background:#2d5169}.track-select{min-width:0;border:0;background:none;color:inherit;text-align:left;padding:0;cursor:pointer}.track-select>.hn,.track-select>.track-date{display:block}.hn{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35}.track-date{font-size:9px;color:var(--library-muted);margin-top:2px}.track-state{font-size:9px;color:#bcd0ef;margin-left:5px}
+.track-row{display:grid;grid-template-columns:36px minmax(0,1fr) 34px;align-items:center;gap:9px;border:1px solid transparent;border-radius:9px;padding:7px;background:transparent;min-width:0;flex-shrink:0}.track-row:hover{background:var(--library-card);border-color:#29475c}.track-row.selected{background:var(--library-card);border-color:#557890}.play-track{display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--library-line);border-radius:8px;background:#203e53;color:#fff;font-size:12px;padding:0}.play-track:hover{background:#2d5169}.track-select{min-width:0;border:0;background:none;color:inherit;text-align:left;padding:0;cursor:pointer}.track-select>.hn,.track-select>.track-date{display:block}.hn{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35}.track-date{font-size:9px;color:var(--library-muted);margin-top:2px}.track-state{font-size:9px;color:#bcd0ef;margin-left:5px}.track-delete{display:grid;place-items:center;width:32px;height:32px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--library-muted);font:20px/1 'Adwaita Sans','Segoe UI',sans-serif;cursor:pointer}.track-delete:hover,.track-delete:focus-visible{border-color:#765b5b;background:#352329;color:#ffd7d7}.track-delete:disabled{opacity:.45;cursor:wait}
 a.dl,.text-button{font-size:12px;font-weight:600;text-decoration:none;background:transparent;border:0;padding:0;color:var(--accent);cursor:pointer}.library a.dl,.library .text-button{color:#c5d9ff}.library a.dl:hover,.text-button:hover{text-decoration:underline}
 .xdel{margin-left:auto;color:var(--library-muted);font-size:11px;background:none;border:0;padding:4px;min-height:28px}.xdel:hover{color:#fff;text-decoration:underline}
 .file-details{margin-top:8px;border-top:1px solid var(--library-line);padding-top:3px}.file-details summary{font-size:10px;font-weight:400;color:var(--library-muted);min-height:26px}.file-details summary::after{font-size:14px;color:var(--library-muted)}
@@ -1040,21 +1042,41 @@ const DEF_CAP=`__CAP__`, DEF_LYR=`__LYR__`;
 $('#caption').value=DEF_CAP; $('#lyrics').value=DEF_LYR;
 
 // ---- AI brief -> autofill ----
-// The backend exposes every live route/tag. The studio deliberately presents a
-// short writing roster; long-context aliases are useful elsewhere but only make
-// this one-job picker noisy.
+// The backend exposes every live route/tag. Keep the recommended default first,
+// then show every other live writer so the picker never silently hides models.
 const DEFAULT_WRITER='openclaw/openai/gpt-5.6-sol';
-const WRITERS=[
-  {id:DEFAULT_WRITER,label:'Rhizome · GPT-5.6 Sol',group:'Recommended'},
-  {id:'openclaw/openai/gpt-5.6-luna',label:'GPT-5.6 Luna · quicker',group:'Cloud'},
-  {id:'openclaw/openai/gpt-5.6-terra',label:'GPT-5.6 Terra · deeper',group:'Cloud'},
-  {id:'openclaw/openai/gpt-6-astra',label:'GPT-6 Astra · long context',group:'Cloud'},
-  {id:'openclaw/anthropic/claude-sonnet-4-6',label:'Claude Sonnet 4.6',group:'Cloud'},
-  {id:'openclaw/anthropic/claude-opus-4-6',label:'Claude Opus 4.6',group:'Cloud'},
-  {id:'qwen3-8-27b-turbofcfusion-735-882-here--dec14241:fast16k',label:'TurboFusion 27B · fast 16K',group:'Local · uses VRAM'},
-  {id:'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed:fast16k',label:'Fable 27B · fast 16K',group:'Local · uses VRAM'},
-  {id:'ornith-1.5:35b',label:'Ornith 35B',group:'Local · uses VRAM'}
-];
+const WRITER_LABELS={
+  [DEFAULT_WRITER]:'Rhizome · GPT-5.6 Sol',
+  'openclaw/openai/gpt-5.6-luna':'GPT-5.6 Luna · quicker',
+  'openclaw/openai/gpt-5.6-terra':'GPT-5.6 Terra · deeper',
+  'openclaw/openai/gpt-6-astra':'GPT-6 Astra · long context',
+  'openclaw/anthropic/claude-sonnet-4-6':'Claude Sonnet 4.6',
+  'openclaw/anthropic/claude-opus-4-6':'Claude Opus 4.6',
+  'openclaw/anthropic/claude-opus-4-7':'Claude Opus 4.7',
+  'openclaw/anthropic/claude-opus-4-8':'Claude Opus 4.8',
+  'openclaw/anthropic/claude-opus-5':'Claude Opus 5',
+  'openclaw/nvidia/deepseek-ai/deepseek-v4-pro-0813':'DeepSeek V4 Pro 0813',
+  'openclaw/nvidia/moonshotai/kimi-k3':'Kimi K3',
+  'openclaw/nvidia/openai/gpt-oss-120b':'GPT-OSS 120B',
+  'gemma4:26b':'Gemma 4 26B · fast 16K',
+  'gemma4:fast16k':'Gemma 4 26B · fast 16K alias',
+  'gemma4:full32k':'Gemma 4 26B · full 32K',
+  'gemma4:full65k':'Gemma 4 26B · full 65K',
+  'ornith-1.5:35b':'Ornith 35B',
+  'qwen3-8-27b-turbofcfusion-735-882-here--dec14241:fast16k':'TurboFusion 27B · fast 16K',
+  'qwen3-8-27b-turbofcfusion-735-882-here--dec14241:latest':'TurboFusion 27B · default',
+  'qwen3-8-27b-turbofcfusion-735-882-here--dec14241:full65k':'TurboFusion 27B · full 65K',
+  'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed:fast16k':'Fable 27B · fast 16K',
+  'qwen3-6-27b-fable-fus-711-unheretic-nm--0f9c77ed:full65k':'Fable 27B · full 65K',
+  'gpt-oss-20b-ud-q4-k-xl:latest':'GPT-OSS 20B',
+  'glm-4-7-flash-uncen-hrt-neo-code-max-im-d7692d62:latest':'GLM 4.7 Flash',
+  'minicpm-v4.6:latest':'MiniCPM V4.6'
+};
+function writerEntry(id){
+  const cloud=id.startsWith('openclaw/');
+  return {id,label:WRITER_LABELS[id]||id.replace(/^openclaw\//,''),
+    group:id===DEFAULT_WRITER?'Recommended':(cloud?'Cloud':'Local · uses VRAM')};
+}
 let _modelSig='';
 async function loadModels(){
   try{
@@ -1065,7 +1087,7 @@ async function loadModels(){
     _modelSig=sig;
     const sel=$('#aimodel'); const prev=sel.value; sel.innerHTML='';
     if(!ms.length){sel.innerHTML='<option value="">no models (OpenClaw/Ollama offline)</option>';return;}
-    const available=WRITERS.filter(writer=>ms.includes(writer.id));
+    const available=[...new Set(ms)].map(writerEntry);
     const grp=(label,items)=>{
       if(!items.length)return;
       const g=document.createElement('optgroup'); g.label=label;
@@ -1073,8 +1095,8 @@ async function loadModels(){
         o.textContent=writer.label; g.appendChild(o);});
       sel.appendChild(g);
     };
-    [...new Set(available.map(writer=>writer.group))].forEach(group=>grp(group,available.filter(writer=>writer.group===group)));
-    if(!available.length){sel.innerHTML='<option value="">no supported writing models online</option>';return;}
+    ['Recommended','Cloud','Local · uses VRAM'].forEach(group=>grp(group,available.filter(writer=>writer.group===group)));
+    if(!available.length){sel.innerHTML='<option value="">no writing models online</option>';return;}
     sel.value=(prev && available.some(writer=>writer.id===prev))?prev:(available.some(writer=>writer.id===DEFAULT_WRITER)?DEFAULT_WRITER:available[0].id);
   }catch(e){ if(!_modelSig) $('#aimodel').innerHTML='<option value="">models unavailable</option>'; }
 }
@@ -1320,9 +1342,11 @@ async function loadHist(){
       const view=trackView(it),el=document.createElement('article');el.className='track-row';el.dataset.filename=it.filename;el.dataset.title=view.name;
       el.innerHTML=
         '<button class="play-track" type="button" aria-label="Play '+esc(view.name)+'">▶</button>'+
-        '<button class="track-select" type="button"><span class="hn">'+esc(view.name)+'<span class="track-state"></span></span><span class="track-date">'+esc(view.date)+' · '+esc(view.size)+'</span></button>';
+        '<button class="track-select" type="button"><span class="hn">'+esc(view.name)+'<span class="track-state"></span></span><span class="track-date">'+esc(view.date)+' · '+esc(view.size)+'</span></button>'+
+        '<button class="track-delete" type="button" title="Delete '+esc(view.name)+'" aria-label="Delete '+esc(view.name)+'">×</button>';
       el.querySelector('.play-track').onclick=()=>selectTrack(it,true);
       el.querySelector('.track-select').onclick=()=>selectTrack(it,false);
+      el.querySelector('.track-delete').onclick=event=>{event.stopPropagation();deleteGen(it.filename,event.currentTarget);};
       box.appendChild(el);
     });
     const keep=currentTrack&&d.items.find(it=>it.filename===currentTrack.filename);

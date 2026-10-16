@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Open WebUI Jupyter demand and idle state
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=openwebui-code-jupyter-idle-guard.service
+
+[Install]
+WantedBy=timers.target

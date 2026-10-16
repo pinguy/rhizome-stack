@@ -73,6 +73,19 @@ concrete new lead, or the risk justifies deeper retrieval. Otherwise use first p
 
 These are optional fast paths, not required dependencies.
 
+### Unified Cognition runtime
+
+When this skill is used with this repository's UCS runtime, `solve_with_abm()`
+retrieves up to three relevant SQLite memories before generating contributions.
+Inspect `context_sources.memories` in the saved report for IDs, timestamps,
+verification scope and originating run IDs. Recall is lexical over the newest
+500 records; a miss is not proof that no prior exists.
+
+Use `ucs.memory.retrieve_memory(topic=...)` to read a full prior when the prompt
+excerpt is truncated. Read its originating `ucs.run_journal.get(run_id)` receipt
+for verifier details. Legacy entries with unknown evidence and failed outcomes
+remain hypotheses. Current user constraints always take precedence.
+
 ## 3. Read the prior, not just the hit
 
 A search result or semantic snippet is only a pointer. Before reuse, read enough of the original

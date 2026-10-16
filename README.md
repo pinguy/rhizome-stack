@@ -9,7 +9,7 @@ Open WebUI and other open-source projects; upstream authorship is preserved in
 skills and optional speech.** Start with one working model, then add what you
 need. Linux and WSL2 use the same setup wizard.
 
-**Status: 0.1.0-alpha.11 candidate.** Installer and regression checks are automated; complete
+**Status: 0.1.0-alpha.14 candidate.** Installer and regression checks are automated; complete
 native Linux and WSL2 installations still need acceptance testing.
 Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working machine.
 
@@ -19,7 +19,7 @@ Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working ma
 | --- | --- | --- |
 | OpenClaw gateway + Open WebUI | Agent runtime and browser interface, joined by a model adapter | Yes |
 | Pinned upstream patches | Preserve the integration against specific upstream builds | Yes |
-| Skills | Six core reliability skills; fourteen bundled skills available on demand | Optional |
+| Skills | Seven core reliability skills; fifteen bundled skills available on demand | Optional |
 | GLiNER + Ornith workforce | Optional routing advice and a bounded, text-only local worker under Rhizome | Optional; configured separately |
 | Semantic memory | Import your own documents, chat exports and RhizomeML data; hybrid retrieval | Optional |
 | Voice | Chatterbox-Nano TTS, faster-whisper STT and local Voice Lab | Optional |
@@ -55,7 +55,9 @@ and stops the owned ComfyUI engine so the chat model can reload.
 
 See
 [Open WebUI local media](docs/OPENWEBUI_MEDIA.md) for the exact data flow,
-setup, safety boundaries and chat examples.
+setup, safety boundaries and chat examples. The [browser showcase](docs/SHOWCASE.md)
+contains current screenshots of all three standalone desks and the PNG, MP3 and
+MP4 render paths inside saved Open WebUI chats.
 
 ## Start here
 
@@ -148,6 +150,7 @@ browser profiles and model weights are never seeded from the reference machine.
 - [Skills and companion projects](docs/INTEGRATIONS.md)
 - [GLiNER routing advice and the Ornith workforce](docs/WORKFORCE.md)
 - [ComfyUI, Qwen Image Desk, MiniMax Music 3 and WAN Video Desk](docs/CREATIVE.md)
+- [Browser showcase: all three desks and Open WebUI media embeds](docs/SHOWCASE.md)
 - [Updating and troubleshooting](docs/MAINTENANCE.md)
 - [Native Linux](docs/LINUX.md) · [WSL2](docs/WSL.md)
 - [Changes](CHANGELOG.md) · [Known limitations](KNOWN_LIMITATIONS.md)
@@ -166,8 +169,10 @@ python3 tools/build_release.py --output-root /tmp/rhizome-stack-build
 The test runner discovers every `tests/test_*.py` suite and returns a failure
 if any suite fails. Node is needed for the creative JavaScript regression;
 FAISS storage checks skip explicitly when its dependencies are absent.
-See the [14 October hygiene review](docs/HYGIENE_REVIEW_2026-10-14.md)
-for this update, the [13 October integration review](docs/HYGIENE_REVIEW_2026-10-13.md),
+See the [16 October hygiene follow-up](docs/HYGIENE_REVIEW_2026-10-16.md)
+for the alpha.14 fixes and checks, the [16 October release review](docs/RELEASE_REVIEW_2026-10-16.md)
+for the preceding stack capture, the [14 October hygiene review](docs/HYGIENE_REVIEW_2026-10-14.md),
+the [13 October integration review](docs/HYGIENE_REVIEW_2026-10-13.md),
 and the [earlier review](docs/HYGIENE_REVIEW.md).
 
 The exporter copies only the paths in `manifests/release-files.json`, then runs

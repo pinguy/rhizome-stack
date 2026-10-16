@@ -145,9 +145,14 @@ class ComfyEngine:
     def owned_pid(self) -> int | None:
         try:
             pid = int(self.pid_file.read_text().strip())
-            command = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            command = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
             main = str((COMFY_DIR / "main.py").resolve())
-            if main in command and "--port 8188" in command and os.getpgid(pid) == pid:
+            # Match argv boundaries, not substrings of another program or port.
+            if (pid > 1 and pid != os.getpid() and len(command) > 2
+                    and command[1] == os.fsencode(main)
+                    and any(command[i:i + 2] == [b"--port", b"8188"]
+                            for i in range(2, len(command) - 1))
+                    and os.getpgid(pid) == pid):
                 return pid
         except (OSError, ValueError, ProcessLookupError):
             pass

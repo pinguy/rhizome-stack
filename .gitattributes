@@ -1,0 +1,2 @@
+# Preserve unified-diff context markers and exact upstream payload whitespace.
+*.patch whitespace=-blank-at-eol,-space-before-tab

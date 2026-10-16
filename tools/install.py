@@ -625,7 +625,7 @@ def main() -> int:
     parser.add_argument("--with-retrieval", action="store_true", help="install and enable optional CPU MiniLM workforce retrieval")
     parser.add_argument("--with-creative", action="store_true", help="install pinned ComfyUI plus Qwen, MiniMax and WAN Desks")
     parser.add_argument("--download-creative-models", action="store_true", help="download hash-verified Qwen, MiniMax and WAN weights; requires --with-creative")
-    parser.add_argument("--with-skills", action="store_true", help="install the six core reliability skills")
+    parser.add_argument("--with-skills", action="store_true", help="install the seven core reliability skills")
     args = parser.parse_args()
     runner = Runner(args.dry_run)
     try:

@@ -1,6 +1,6 @@
 ---
-name: openclaw-downstream-maintainer
-description: "Review upstream OpenClaw releases, commits and security notices for Rhizome's private downstream; investigate divergence and design, test or apply explicitly authorised selective backports. Use for OpenClaw upgrade, update, merge or migration requests. Never interpret a routine check as permission to upgrade."
+name: "openclaw-downstream-maintainer"
+description: "Maintain the pinned OpenClaw downstream with selective backports and bounded measured local triage."
 ---
 
 # OpenClaw Downstream Maintainer
@@ -19,7 +19,7 @@ Treat upstream as a patch source for Rhizome's maintained private downstream. Tr
 ## 1. Establish current state
 
 1. Identify the requested outcome and operating mode: scan, design, isolated implementation, or live application. Define what would count as success.
-2. Read the configured OpenClaw workspace’s `TOOLS.md`, relevant `TOOLS_HISTORY_2026-08-24.md` entries, current dated memory/task handover and durable policy in `MEMORY.md`. Treat historical notes as leads; an absent file is a reported gap, not a reason to invent its contents.
+2. Resolve the configured OpenClaw workspace, then read its `TOOLS.md`, relevant `TOOLS_HISTORY_2026-08-24.md` entries, current dated memory/task handover and durable policy in `MEMORY.md`. Treat historical notes as leads; an absent file is a reported gap, not a reason to invent its contents.
 3. Observe live state without changing it. Confirm the CLI executable/package path and version separately from the gateway process, service command, package path and version. Resolve wrappers, symlinks and multiple installations. A CLI version does not identify the running gateway.
 4. Record gateway health and the existing failure baseline. Do not attribute an existing failure to a proposed patch.
 5. Inventory affected local divergence: source and installed-bundle edits, systemd integration, config schema, plugins, auth, model routing, databases, scheduled jobs and recovery hooks. Include uncommitted edits; do not reset, stash or overwrite them without authorisation.
@@ -96,3 +96,10 @@ For a scan, report comparison points and retrieval time (Europe/London with UTC 
 For a periodic scan, stay quiet only after a successful sufficiently covered check found no material delta. Write its bounded checkpoint if a designated output location exists. Report acquisition failures, partial coverage, new uncertainty and security-relevant changes; “could not check” must never become “nothing changed”. Deduplicate previously reported candidates using their source IDs and local applicability, and revisit them if evidence or local state changes. For an explicitly requested scan, always return its outcome.
 
 Stop live application when provenance, affected local divergence, prerequisite closure, safe migration testing, acceptance checks or practical rollback are unresolved. Continue useful read-only investigation when possible. A correct no-change recommendation is a successful outcome.
+
+
+## Optional workforce routing on this machine
+
+The installed `rhizome-stack` helper may provide shadow GLiNER advice and bounded Ornith text work. Resolve it from `PATH` or the stack installation rather than assuming an owner's home directory. Deterministic Git/status operations, difficult security judgement, coding, consequential work and missing material bypass classification. GLiNER remains advisory and cannot select a backport, grant authority or change completion state. The 2026-10-01 narrow-category trial matched 23/24 expected paths on a small hand-labelled held-out set versus 17/24 for the legacy scheme, but one-shot inference took 21–32 seconds. Treat its signals as evaluation leads, never inline dispatch authority, and keep the effective route with Rhizome.
+
+Use Ornith only for bounded read-only inventories, summaries, repetitive comparisons and first-pass candidate extraction over evidence Rhizome supplies. Ornith has no tools through the helper and must not fetch, mutate, patch, test, restart or write durable records. A result marked `AWAITING_VERIFICATION` still requires Rhizome to reopen every primary source relied upon. Timeout is `UNKNOWN`; reconcile the attempt ID before retrying. Security applicability, prerequisite closure, patch design, authorisation, live changes and final decisions remain with Rhizome.

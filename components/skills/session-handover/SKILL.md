@@ -38,6 +38,19 @@ The purpose is operational continuity, not narrative completeness.
 
 ## Inputs
 
+For UCS sessions, `ucs.get_handover()` or
+`python scripts/run_ucs.py --memory /path/to/memory.db --handover` returns recent
+durable run records without calling a model. A `finished` run means its report
+was saved; inspect `hard_verifiers_passed`, `outcome_verifiers_run`, actual
+verifier details and any model-fallback warning before calling the task complete.
+A `running` record after interruption is unresolved ownership, not permission
+to duplicate the operation. Reconcile the worker and external effects first.
+
+If a saved run could not be published because the board changed, inspect the
+current revision and use `ucs.publish_run(run_id, expected_revision=...)`.
+This republishes the same receipt without repeating model calls or executable
+tests. Board publication does not complete the task or claim independent review.
+
 - Session directory: `~/.openclaw/agents/<agentId>/sessions/`
 - Optional index: `sessions.json`
 - Memory files in the workspace (`memory/*.md`; `MEMORY.md` only where allowed)

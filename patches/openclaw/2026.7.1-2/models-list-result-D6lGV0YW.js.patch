@@ -1,0 +1,32 @@
+--- a/models-list-result-D6lGV0YW.js
++++ b/models-list-result-D6lGV0YW.js
+@@ -4,7 +4,7 @@
+ import { a as resolveAgentDir, c as resolveDefaultAgentId, o as resolveAgentWorkspaceDir } from "./agent-scope-config-BxAUeF6t.js";
+ import { n as resolveDefaultAgentWorkspaceDir } from "./workspace-default-ClCi3unQ.js";
+ import { r as DEFAULT_PROVIDER } from "./defaults-mDjiWzE5.js";
+-import { u as loadAuthProfileStoreWithoutExternalProfiles } from "./store-DH33UrUj.js";
++import { g as resolveExternalCliAuthProfiles, u as loadAuthProfileStoreWithoutExternalProfiles } from "./store-DH33UrUj.js";
+ import "./auth-profiles-BFnI-y_7.js";
+ import { i as resolveAuthProfileOrder } from "./order-CeBlX0NH.js";
+ import { l as hasRuntimeAvailableProviderAuth } from "./model-auth-CJEm9SNp.js";
+@@ -12,6 +12,7 @@
+ import { a as resolveCliRuntimeExecutionProvider } from "./model-runtime-aliases-w4oRlOM0.js";
+ import { t as loadModelCatalogForBrowse } from "./model-catalog-browse-BU0fAHez.js";
+ import { n as resolveVisibleModelCatalog, t as isCodexRoutableOpenAIPlatformCatalogEntry } from "./model-catalog-visibility-x4XqgvUA.js";
++import { x as overlayRuntimeExternalOAuthProfiles } from "./source-check-ZSz5NzGW.js";
+ //#region src/gateway/server-methods/models-list-result.ts
+ let loggedSlowModelsListCatalog = false;
+ const OAUTH_REFRESH_MARGIN_MS = 300 * 1e3;
+@@ -80,7 +81,11 @@
+ 	return sawUnknown ? void 0 : false;
+ }
+ function createModelsListProviderAuthChecker(params) {
+-	const store = loadAuthProfileStoreWithoutExternalProfiles(resolveAgentDir(params.cfg, params.agentId), { allowKeychainPrompt: false });
++	const persistedStore = loadAuthProfileStoreWithoutExternalProfiles(resolveAgentDir(params.cfg, params.agentId), { allowKeychainPrompt: false });
++	const store = overlayRuntimeExternalOAuthProfiles(persistedStore, resolveExternalCliAuthProfiles(persistedStore, {
++		providerIds: ["openai"],
++		allowKeychainPrompt: false
++	}));
+ 	return createInFlightProviderAuthChecker((provider, modelApi) => hasRuntimeAvailableProviderAuth({
+ 		provider,
+ 		modelApi,

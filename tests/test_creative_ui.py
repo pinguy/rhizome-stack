@@ -16,6 +16,14 @@ NODE = shutil.which('node')
 
 @unittest.skipUnless(NODE, 'Node is required for creative JavaScript checks')
 class CreativeUITest(unittest.TestCase):
+    def test_minimax_lists_every_writer_and_exposes_per_track_delete(self):
+        source = (ROOT / 'components/creative/minimax-music/app.py').read_text()
+        self.assertIn("const available=[...new Set(ms)].map(writerEntry);", source)
+        self.assertIn("['Recommended','Cloud','Local · uses VRAM']", source)
+        self.assertIn("class=\"track-delete\"", source)
+        self.assertIn("fetch('/api/delete'", source)
+        self.assertIn('return self._delete(body.get("filename", ""))', source)
+
     def test_wan_frontend_syntax_and_independent_controls(self):
         module_dir = ROOT / 'components/creative/wan-video-desk'
         for name in ('app.js', 'sw.js'):

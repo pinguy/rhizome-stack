@@ -135,6 +135,22 @@ class SecurityConfigurationTest(unittest.TestCase):
             (root / 'fixture.txt').write_text('TELEGRAM_OWNER_ID=\nBRAVE_API_KEY=\nHF_TOKEN=\n')
             self.assertEqual(privacy_audit.audit(root), [])
 
+    def test_privacy_scan_allows_only_pngs_in_documented_screenshot_tree(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            screenshots = root / "docs/screenshots"
+            screenshots.mkdir(parents=True)
+            (screenshots / "accepted.png").write_bytes(
+                privacy_audit.PNG_SIGNATURE + b"\x00\x00fixture"
+            )
+            self.assertEqual(privacy_audit.audit(root), [])
+            (root / "unreviewed.png").write_bytes(
+                privacy_audit.PNG_SIGNATURE + b"\x00\x00fixture"
+            )
+            self.assertTrue(any(
+                "unexpected binary file" in item for item in privacy_audit.audit(root)
+            ))
+
 
 if __name__ == '__main__':
     unittest.main()

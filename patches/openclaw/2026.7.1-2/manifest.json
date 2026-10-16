@@ -2,6 +2,13 @@
   "schema": 1,
   "files": [
     {
+      "path": "control-ui/assets/chat-page-DrPkxqJK.js",
+      "action": "modify",
+      "clean_sha256": "0a3e8d050478b7c24c88bb8091eda1a791f7cfe622fb3ae3827f1b146c230615",
+      "patched_sha256": "843b14b3870a63ac4364a6ccde688edabbd550c84267feab809838bb1254f1b4",
+      "payload": "control-ui__assets__chat-page-DrPkxqJK.js.patch"
+    },
+    {
       "path": "dreaming-DqzMSXGC.js",
       "action": "modify",
       "clean_sha256": "74392dc060c14fc57c05326ab70b05fa6f051f2b340f674f757c0ea231d85319",
@@ -23,6 +30,20 @@
       "payload": "embedded-agent-DGUuxGR2.js.patch"
     },
     {
+      "path": "model-fallback-BPQMpbqN.js",
+      "action": "modify",
+      "clean_sha256": "b3033200624e1e88597f141ce64bbc33e77db6fc5178fa278bd185717f2d9624",
+      "patched_sha256": "572be21365893f0bbcd892dbd2b9d052f2c5dc96a4348ee078223a747db29a5d",
+      "payload": "model-fallback-BPQMpbqN.js.patch"
+    },
+    {
+      "path": "models-list-result-D6lGV0YW.js",
+      "action": "modify",
+      "clean_sha256": "2fca77464cfbb29ca70f3577eb0f5be1199dd9db919fc5a424ccaccb71d1cf33",
+      "patched_sha256": "74419c4171d01584741493da1a4cca8cfbc02a37743da8877582ed7fcf4eda00",
+      "payload": "models-list-result-D6lGV0YW.js.patch"
+    },
+    {
       "path": "register.runtime-CcW2y9o2.js",
       "action": "modify",
       "clean_sha256": "a9ffce0faf9b801dff4ba622bd7e72f5923f82b4a450e13d843f00db920984a6",
@@ -35,6 +56,13 @@
       "clean_sha256": "ed940f0ba0877eea0f00b2da30e727714993db60156fefc6fe80ac8564984c50",
       "patched_sha256": "16f4c53e8476e3847feb2cbe7ab5252ce862a61cef23992e42684464ca46e552",
       "payload": "sqlite-B1ze-fre.js.patch"
+    },
+    {
+      "path": "store-DH33UrUj.js",
+      "action": "modify",
+      "clean_sha256": "25a5c7075e13b8fb32f498a90e5ee91d93b7e15972b3b74796f1325b5ba98ebf",
+      "patched_sha256": "cb9d5daa484cc2e7fede9ee72b2cffdea68fec768fe7bb00b8a05ca2770cdd52",
+      "payload": "store-DH33UrUj.js.patch"
     }
   ]
 }

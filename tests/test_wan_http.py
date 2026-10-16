@@ -107,6 +107,23 @@ class WanBatchTest(unittest.TestCase):
         self.queue._save = Mock()
         self.queue.wake = Mock()
 
+    def test_engine_ownership_rejects_similar_paths_ports_and_embedded_arguments(self):
+        owned = engine.ComfyEngine(Path('/synthetic/state'))
+        pid = 987654
+        main = str((engine.COMFY_DIR / 'main.py').resolve())
+        for args, expected in [
+            (['python', main, '--port', '8188'], pid),
+            (['python', main, '--port', '81880'], None),
+            (['python', main + '.other', '--port', '8188'], None),
+            (['python', '/unrelated.py', '--note', main, '--port', '8188'], None),
+            (['python', main, '--note', '--port 8188'], None),
+        ]:
+            with self.subTest(args=args), \
+                 patch.object(Path, 'read_text', return_value=str(pid)), \
+                 patch.object(Path, 'read_bytes', return_value=('\0'.join(args) + '\0').encode()), \
+                 patch.object(os, 'getpgid', return_value=pid):
+                self.assertEqual(owned.owned_pid(), expected)
+
     def test_zero_seed_batch_stays_sequential_and_keeps_caller_payload(self):
         payload = {'seed': 0, 'take_count': 3, 'prompt': 'fixture'}
         jobs = self.queue.add(payload)

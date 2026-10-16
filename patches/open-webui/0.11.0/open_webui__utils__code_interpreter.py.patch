@@ -1,0 +1,90 @@
+--- a/open_webui/utils/code_interpreter.py
++++ b/open_webui/utils/code_interpreter.py
+@@ -66,14 +66,80 @@
+                 logger.exception('close kernel failed, %s', err)
+         await self.session.close()
+ 
++    async def _discard_kernel(self) -> None:
++        """Best-effort cleanup of a partially created kernel before a retry."""
++        if not self.kernel_id:
++            return
++        kernel_id, self.kernel_id = self.kernel_id, ''
++        try:
++            async with self.session.delete(
++                f'api/kernels/{kernel_id}', params=self.params
++            ) as response:
++                response.raise_for_status()
++        except Exception as err:
++            logger.warning('discard kernel failed: %s', err)
++
++    async def _try_start_sandbox(self) -> None:
++        """RHIZOME PATCH (2026-10-15): best-effort wake of the on-demand local
++        Jupyter sandbox so execute_code self-heals instead of hard-failing."""
++
++        def _start() -> None:
++            try:
++                import subprocess
++
++                subprocess.run(
++                    [
++                        '/usr/bin/systemctl',
++                        '--user',
++                        'start',
++                        'openwebui-code-jupyter.service',
++                    ],
++                    timeout=30,
++                    capture_output=True,
++                    check=False,
++                )
++            except Exception as start_err:
++                logger.warning('Could not nudge Jupyter sandbox service: %s', start_err)
++
++        try:
++            await asyncio.get_running_loop().run_in_executor(None, _start)
++        except Exception as err:
++            logger.warning('sandbox wake dispatch failed: %s', err)
++
+     async def run(self) -> ResultModel:
+-        try:
+-            await self.sign_in()
+-            await self.init_kernel()
+-            await self.execute_code()
+-        except Exception as err:
+-            logger.exception('execute code failed, %s', err)
+-            self.result.stderr = f'Error: {err}'
++        # RHIZOME PATCH (2026-10-15): wake-on-demand retry. The sandbox is
++        # stopped when idle and only restarted by a 30s guard timer once an
++        # Ollama model is loaded; previously the first execute_code call after
++        # a quiet period failed instantly with "Cannot connect to host
++        # 127.0.0.1:8889". On connection failures, start the service and
++        # retry for up to ~50s before giving up.
++        max_attempts = 10
++        for attempt in range(1, max_attempts + 1):
++            try:
++                await self.sign_in()
++                await self.init_kernel()
++                await self.execute_code()
++                return self.result
++            except Exception as err:
++                err_text = str(err)
++                retryable = isinstance(
++                    err, (aiohttp.ClientConnectorError, ConnectionError, OSError)
++                ) or ('cannot connect' in err_text.lower())
++                if retryable and attempt < max_attempts:
++                    logger.warning(
++                        'Jupyter connection failed (attempt %s/%s): %s; waking sandbox and retrying in 5s',
++                        attempt,
++                        max_attempts,
++                        err,
++                    )
++                    if attempt == 1:
++                        await self._try_start_sandbox()
++                    await self._discard_kernel()
++                    await asyncio.sleep(5)
++                else:
++                    logger.exception('execute code failed, %s', err)
++                    self.result.stderr = f'Error: {err}'
++                    return self.result
+         return self.result
+ 
+     async def sign_in(self) -> None:

@@ -51,6 +51,22 @@ The board owns `policy.max_hops`; later commands cannot override it. Mutations l
 
 Read `references/schema.md` before router integration.
 
+### UCS integration
+
+Pass an existing board as `blackboard_path` to `UnifiedCognitionSystem`, or use
+`scripts/run_ucs.py --board ... --memory ... --task ...` from the repository root.
+UCS reads its typed constraints and bounded recent context before reasoning,
+then appends a synthesis to `inferences` and verifier receipts to `evidence` in
+one locked transaction. It does not create user decisions, acquire route
+ownership, grant permissions, or mark the board completed.
+
+The helper also accepts an exported UCS report through
+`record-ucs BOARD.json --report report.json --model ucs/runtime --expect-revision N`.
+An identical run ID/report is deduplicated; changed content under the same ID
+is rejected. A changed revision requires reconciliation, not a repeated solve.
+Runtime receipts are self-reported evidence until independently checked under
+the normal completion policy.
+
 ## One-hop workflow
 
 1. Run `validate`. Stop on schema, policy, state, route-loop, ownership, or provenance failure.

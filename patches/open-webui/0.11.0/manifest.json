@@ -6,7 +6,7 @@
       "path": "open_webui/main.py",
       "action": "modify",
       "clean_sha256": "2e53f5afef53bdc87da2a8f96f4a5437ee6adb18c1f8a66785083f4ba658df33",
-      "patched_sha256": "5a37dbfb4eb34c26b863bd8bc4a18a00bce5a26bba070c8ef127cb510f786780",
+      "patched_sha256": "dbf9b9cc249e51afdc870714358a5a4517ff67394c1a1757107e7ecd9018e90f",
       "payload": "open_webui__main.py.patch"
     },
     {
@@ -20,14 +20,14 @@
       "path": "open_webui/routers/ollama.py",
       "action": "modify",
       "clean_sha256": "dfc91edc36f063499e85dd27b72ff5f97e8f8273513f87520c09e95ddd40b74a",
-      "patched_sha256": "c0db1a88a94645b6a9ad36214d9a412713fd2922ade14bfc2fbfff2cfb23ef6b",
+      "patched_sha256": "c35c7725c38169ee4b140ef7b50c2795d7385d89fb43c79e71884eceec8f2e62",
       "payload": "open_webui__routers__ollama.py.patch"
     },
     {
       "path": "open_webui/routers/tasks.py",
       "action": "modify",
       "clean_sha256": "91553977c72078cf6a824c1406dfdc750d720f279b3e848bb7c25c97767918f3",
-      "patched_sha256": "dd4eb4211da877442940d5914e4202f52a49f7a907affc20a4d6b20d4ac228eb",
+      "patched_sha256": "cfd1fa80785527ddb1c9c17119a649f79a267332939381df5d3e40fa25aa6a6a",
       "payload": "open_webui__routers__tasks.py.patch"
     },
     {
@@ -36,6 +36,13 @@
       "clean_sha256": "8a1c2558faa0fccdb20a76f1ad6dbc164558c84403888003255b3ac656606a5d",
       "patched_sha256": "9f9ae84ccbb3244a3dae4fe7bc95a72324892f16e01a9c100817e4e7b82f40a5",
       "payload": "open_webui__tools__builtin.py.patch"
+    },
+    {
+      "path": "open_webui/utils/code_interpreter.py",
+      "action": "modify",
+      "clean_sha256": "aa264671c7ff9cc4c277f9d4fd3299b5e6d11bc113251c20930c4ae96c613d38",
+      "patched_sha256": "87a0b9c4eb324216cca800cab96363ef103c16f4302945ef9882aca32b4a276f",
+      "payload": "open_webui__utils__code_interpreter.py.patch"
     },
     {
       "path": "open_webui/utils/memory.py",

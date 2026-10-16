@@ -1,0 +1,7 @@
+[Unit]
+Description=Wake or unload the Open WebUI Jupyter sandbox as needed
+
+[Service]
+Type=oneshot
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+ExecStart=/usr/bin/env bash @@STACK_ROOT@@/components/openwebui_jupyter_idle_guard.sh

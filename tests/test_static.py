@@ -149,6 +149,69 @@ def main() -> int:
             if item.get("payload"):
                 check((manifest_path.parent / item["payload"]).is_file(), f"missing patch payload in {manifest_path}")
     print("PASS patch manifest invariants")
+    openwebui_manifest = json.loads(
+        (ROOT / "patches/open-webui/0.11.0/manifest.json").read_text())
+    openwebui_targets = {item["path"] for item in openwebui_manifest["files"]}
+    check("open_webui/utils/code_interpreter.py" in openwebui_targets,
+          "Open WebUI Jupyter cold-wake patch is missing")
+    code_patch = (ROOT / "patches/open-webui/0.11.0/open_webui__utils__code_interpreter.py.patch").read_text()
+    for required in ("openwebui-code-jupyter.service", "10", "5"):
+        check(required in code_patch, f"Jupyter wake/retry patch lacks {required}")
+    openclaw_manifest = json.loads(
+        (ROOT / "patches/openclaw/2026.7.1-2/manifest.json").read_text())
+    openclaw_targets = {item["path"] for item in openclaw_manifest["files"]}
+    for required in (
+        "control-ui/assets/chat-page-DrPkxqJK.js",
+        "model-fallback-BPQMpbqN.js",
+        "models-list-result-D6lGV0YW.js",
+        "store-DH33UrUj.js",
+    ):
+        check(required in openclaw_targets, f"current OpenClaw downstream patch missing: {required}")
+    quota_patch = (ROOT / "patches/openclaw/2026.7.1-2/control-ui__assets__chat-page-DrPkxqJK.js.patch").read_text()
+    quota_start = quota_patch.index("+const rhizomeChatEventWithQuotaRefresh=Ng;")
+    quota_end = quota_patch.index("+//# sourceMappingURL", quota_start)
+    quota_code = "\n".join(
+        line[1:] for line in quota_patch[quota_start:quota_end].splitlines()
+        if line.startswith("+")
+    )
+    for required in (
+        "rhizomeHasProviderAllowance", "e.modelAuthStatusResult=n",
+        "globalThis.setTimeout", "2e3", "15e3",
+    ):
+        check(required in quota_code, f"quota refresh safety contract is missing: {required}")
+    check("j_(e,{refresh:!0}).finally" not in quota_code,
+          "quota refresh still runs immediately in the terminal-event call stack")
+    quota_canary = r'''
+const good={ts:1,providers:[{provider:"openai",usage:{windows:[{label:"5h",usedPercent:25}]}}]};
+const fresh={ts:2,providers:[{provider:"openai",usage:{windows:[{label:"5h",usedPercent:26}]}}]};
+const empty={ts:3,providers:[{provider:"openai",usage:{windows:[]}}]};
+let outcomes=[empty,fresh],calls=0,renders=0,timers=[];
+async function j_(state){state.modelAuthStatusResult=outcomes[calls++];}
+function G_(){renders++;}
+function wg(state){return state==="final"||state==="aborted"||state==="error";}
+function Ng(_host,event){return event.state;}
+globalThis.setTimeout=(fn,ms)=>{timers.push({fn,ms});return timers.length;};
+globalThis.clearTimeout=()=>{};
+eval(process.argv[1]);
+(async()=>{
+  const state={modelAuthStatusResult:good};
+  if(Ng(state,{state:"final"})!=="final"||timers.length!==1||timers[0].ms!==2000)throw Error("terminal refresh was not deferred");
+  timers.shift().fn();await new Promise(setImmediate);
+  if(state.modelAuthStatusResult!==good||calls!==1||timers.length!==1||timers[0].ms!==15000)throw Error("empty refresh was not preserved and retried");
+  timers.shift().fn();await new Promise(setImmediate);
+  if(state.modelAuthStatusResult!==fresh||calls!==2||renders!==2)throw Error("retry did not publish fresh allowance data");
+})().catch(error=>{console.error(error);process.exit(1);});
+'''
+    quota_result = subprocess.run(
+        ["node", "-e", quota_canary, quota_code], capture_output=True, text=True)
+    check(quota_result.returncode == 0,
+          "quota refresh empty-window canary failed: " + quota_result.stderr)
+    jupyter_unit = (ROOT / "systemd/openwebui-code-jupyter.service").read_text()
+    check("podman image exists" in jupyter_unit, "Jupyter image preflight is missing")
+    check("--pull=never" in jupyter_unit, "Jupyter service may pull a registry image")
+    check((ROOT / "systemd/openwebui-code-jupyter-idle-guard.timer").is_file(),
+          "Jupyter idle guard timer is missing")
+    print("PASS current OpenClaw/Open WebUI downstream invariants")
     openclaw = shutil.which("openclaw")
     if openclaw:
         with tempfile.TemporaryDirectory(prefix="rhizome-config-") as temporary:

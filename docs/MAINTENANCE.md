@@ -34,6 +34,27 @@ Do not downgrade a migrated database without its matching backup.
 Core lifecycle commands manage the gateway, adapter and Open WebUI. Stop any
 optional services you have separately enabled before modifying their files.
 
+## Patch application and recovery
+
+The patch installer first copies the affected upstream files into a temporary
+staging directory, applies the complete patch set there and verifies every
+result against its expected SHA-256. A malformed patch or corrupt replacement
+therefore fails before installed files change. File modes, including executable
+bits, are preserved when the verified files are installed.
+
+Before installation, the clean hashes are checked again and original files are
+saved under `.rhizome-stack-patch-backup` in the upstream package root. Ordinary
+write failures trigger restoration of files already changed, provided those
+files still match this run's replacements. The backup remains for inspection;
+reconcile it before retrying. Never remove a backup or bypass a hash mismatch
+just to make an update proceed.
+
+Individual replacements are atomic; the complete multi-file installation is
+not a power-loss transaction. Stop the affected services first. A process kill,
+power loss, concurrent modification or failed restoration still needs inspection
+and recovery from the retained originals. An older downstream patch set is not
+a clean upstream base and remains an explicit compatibility failure.
+
 ## Check failures
 
 | Symptom | Check |
@@ -46,6 +67,7 @@ optional services you have separately enabled before modifying their files.
 | PDF/DOCX import lacks dependencies | Install `--with-memory`; the importer uses that environment when available |
 | New import is not visible | Run `import --reindex` if it was only staged, then restart the gateway |
 | Skills are not discovered | Check the configured workspace and start a new session |
+| First code execution after idle cannot reach Jupyter | Check `openwebui-code-jupyter.service`, its image preflight and the idle-guard timer; the pinned Open WebUI patch starts the service and retries bounded connection failures |
 | Audio port already in use | Inspect whether the stack or Chatterbox add-on owns the overlapping services |
 | WSL has no user services | Enable systemd, shut down WSL from Windows and reopen the distribution |
 
@@ -66,6 +88,14 @@ provider information.
 - The welcome wizard checks the selected model in the provider catalogue.
 - A real chat in Open WebUI checks the request path and inference.
 - Memory, voice and Jupyter each need their own real acceptance check.
+
+The packaged Jupyter unit refuses to pull a missing local image and therefore
+fails once, clearly, instead of entering a registry-pull restart loop. Its idle
+guard starts the sandbox when a local Ollama runner is present and stops it only
+after both Ollama and the authenticated Jupyter kernel list are empty. The
+pinned `code_interpreter.py` patch also starts the user service on the first
+connection failure and retries ten times at five-second intervals, covering a
+cold first call and hosted-provider chats that do not load Ollama.
 
 Static success must not be reported as a complete native/WSL installation.
 The [Open WebUI regression skill](../components/skills/openwebui-regression-test/SKILL.md)

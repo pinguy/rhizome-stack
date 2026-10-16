@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.1.0-alpha.14 candidate — 16 October 2026 hygiene follow-up
+
+- Stage every upstream patch and verify its resulting hash before changing
+  installed code. Preserve file permissions, use atomic file replacements and
+  restore changed files on ordinary installation errors, keeping rollback copies.
+- Reject escaping, symlinked and duplicate patch targets without weakening the
+  clean/patched hash guards or changing upstream payloads.
+- Match complete process arguments in all three creative desks so a similar
+  script name, embedded argument or port cannot pass the ComfyUI ownership check.
+- Reject incomplete Qwen JSON bodies before prompt expansion or generation.
+- Add regression cases and document patch failure recovery and test limits.
+- Preserve the repository's portable workforce reference when integrating the
+  refreshed snapshot; include it in release and skill checksum manifests.
+
+## 0.1.0-alpha.13 candidate — 16 October 2026 Control UI quota fix
+
+- Delay the terminal-chat allowance refresh until the chat event has settled,
+  preserve the last usable five-hour/weekly snapshot when the provider briefly
+  returns an empty window list, and retry once after 15 seconds.
+- Add a deterministic regression for the empty-first-refresh path. The quota
+  control must retain both windows, refresh on retry and never require a whole
+  Chrome-app reload to recover.
+- Preserve alpha.12 unchanged as evidence of the bad immediate-refresh build.
+
+## 0.1.0-alpha.12 candidate — 16 October 2026 current-stack capture
+
+- Re-capture every live Open WebUI 0.11.0 and OpenClaw 2026.7.1-2 downstream
+  patch against pristine upstream packages, including the current Control UI
+  quota refresh, provider fallback probe, model catalogue/store changes and
+  Jupyter cold-wake retry.
+- Add the fail-fast, no-pull Jupyter service and token-aware 30-second idle
+  guard so a missing image cannot cause registry-pull crash loops and a cold
+  code-interpreter call can wake the sandbox.
+- Refresh Qwen Image Desk, WAN Video Desk and MiniMax Music 3. MiniMax now
+  displays every returned writer model and supports per-track deletion.
+- Refresh thirteen pinned upstream Skills at revision
+  `99e53d4501703a78fb87ad4221512029558802b7`, add
+  `minimum-sufficient-change`, and refresh the two owner-supplied stack skills.
+- Lock Reuters into the Brave search source policy with an explicit regression
+  for reputable-reporting classification.
+- Add privacy-scrubbed browser screenshots of all three standalone apps and
+  real saved Open WebUI PNG, MP3 Preview and inline MP4 render paths.
+
 ## 0.1.0-alpha.11 candidate — 14 October 2026 security review
 
 - Require a private adapter bearer token, loopback Host and JSON requests;

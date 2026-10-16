@@ -1,16 +1,16 @@
 {
   "schema": 1,
   "repository": "https://github.com/pinguy/Skills",
-  "commit": "41335012d5000dd29d9477c963a6ee1ff0333aba",
+  "commit": "99e53d4501703a78fb87ad4221512029558802b7",
   "licence": "Apache-2.0",
   "skills": {
     "blackboard": {
       "profile": "extra",
       "files": {
-        "SKILL.md": "372cc0e48c4acc77670673611b68de1dde7c8c9f9d89387836a26caeaced9b79",
+        "SKILL.md": "766e2892c4968fb1f8f01b86636ebe01440c7fb811e3724ca50aa7545037e7ad",
         "references/canary.md": "f3a8ee27e88ed6f1a7838e94f12d12094c47b30f1d7e384da308cbaa93eea84f",
         "references/schema.md": "6fa006c4793f3a5e8e7876657bf31925d122d42c0d788732d2f9ccf3d4ad11e0",
-        "scripts/blackboard.py": "644f6fd1a99047da0d1522f48c40920423efc001b8fa19724025a6a28c52a597"
+        "scripts/blackboard.py": "9a7b06797022e32cc0d98da5dbe801096b7d557905150c78246b3f305d3d6e88"
       }
     },
     "chatterbox-tts-recovery": {
@@ -22,13 +22,13 @@
     "check-notes-first": {
       "profile": "core",
       "files": {
-        "SKILL.md": "cb0a5b4399ab0276fd6e71a3bac2ff2b96b05cb3f96085605c4c60707bce0d7e"
+        "SKILL.md": "62ba79f4d6bb8b57b9c5a37a2a06aa3f9f6725bfa6ef1ad452b72cc437658e4f"
       }
     },
     "council-blackboard": {
       "profile": "extra",
       "files": {
-        "SKILL.md": "1615d7248cda8586e33df959c24528ee88486562c4e8af7499d314c52b7b817e",
+        "SKILL.md": "f072805a71df6c2506115da600feb8e9cdca15e2ec6e87e8a207b1297c674ddb",
         "scripts/council.py": "d0ddbb28944b528d9b197ed5197d3400f8bb7d09736d8bf1006e54e12aa7b67b",
         "scripts/openwebui_tool.py": "f271d148b926693317684281d8775dd5ad89542129faa75fff9b532249755687"
       }
@@ -43,6 +43,12 @@
       "profile": "extra",
       "files": {
         "SKILL.md": "a502126d0638de1f94686782096709024326fa19e02b69e69eb80cb9ed14df7f"
+      }
+    },
+    "minimum-sufficient-change": {
+      "profile": "core",
+      "files": {
+        "SKILL.md": "4123fd247600041ca006e59415c78e022128b5c97335eae812664596ac5f7e25"
       }
     },
     "openwebui-regression-test": {
@@ -66,7 +72,7 @@
     "session-handover": {
       "profile": "core",
       "files": {
-        "SKILL.md": "4822ec05f8e0a9e7051162ad824baf8667bf0562e414214c0156678983fd17aa"
+        "SKILL.md": "250a5055784463efa93aca33fe19f8090f24a2515f285487774b6f767a5e417f"
       }
     },
     "symlink-space-saver": {
@@ -85,18 +91,18 @@
       "profile": "extra",
       "source": {
         "kind": "owner-supplied",
-        "archive_sha256": "e3734b12eb2f369b5436de6f08b39b9e5b2d468615f80772b93e76a1e5e638e9",
+        "snapshot_date": "2026-10-16",
         "original_files": {
-          "SKILL.md": "57f27c501aef00824b627fde7de997182c7346abf4b6cc49f78c287030740b79",
+          "SKILL.md": "0782ddabc259d73182333ad81ff9cd388f08363cce9124f86844ae28976b81bd",
           "references/backport-record.md": "0e2cf88bac3c5daa272efa7997e7d36cb50a5f32a10c6f63af07aace08471a74"
         },
         "adaptations": [
-          "Replace reference-machine workspace path with configured workspace discovery."
+          "Replace reference-machine workspace and helper paths with configured discovery."
         ]
       },
       "licence": "MIT",
       "files": {
-        "SKILL.md": "824371957c898fe2bcbdc43af7e7d4e2595c32322625e9bff57450463a5f0099",
+        "SKILL.md": "8969e071aaa1a6080876d31c5d61b83240bb02371c36f2f689e2e990b2154422",
         "references/backport-record.md": "0e2cf88bac3c5daa272efa7997e7d36cb50a5f32a10c6f63af07aace08471a74"
       }
     },
@@ -104,19 +110,20 @@
       "profile": "extra",
       "source": {
         "kind": "owner-supplied",
-        "archive_sha256": "e3734b12eb2f369b5436de6f08b39b9e5b2d468615f80772b93e76a1e5e638e9",
+        "snapshot_date": "2026-10-16",
         "original_files": {
-          "SKILL.md": "8db6d3d8bfdb140572a265564032945f6f4ccc41864de2adf5b29ae81e240669",
-          "references/research-job.md": "6fde4934b6c47306b45746aa87e9bafe73b699cf38a45df53e749de9db2b0cc9"
+          "SKILL.md": "64fa24452283fdd668104ff1e2493849a4e3d67c033f591e3d53f34f479879fc",
+          "references/research-job.md": "1da12ab0dbf012d1adbb4e7dfd9cf9d9a77788ec20736aecb3bd19b8a4594eaa"
         },
         "adaptations": [
-          "Add optional stack CLI integration reference; broaden trigger to basic text tasks."
+          "Replace reference-machine helper and configuration paths with portable discovery.",
+          "Retain the portable stack-workforce reference unchanged from rhizome-stack commit becb0b4c2bfd6942283541daaf54386774084506."
         ]
       },
       "licence": "MIT",
       "files": {
-        "SKILL.md": "6f6c7a5b1e97ead02d819024213c932b6b57ad01879e71c75cc4c9dd55fe1c58",
-        "references/research-job.md": "6fde4934b6c47306b45746aa87e9bafe73b699cf38a45df53e749de9db2b0cc9",
+        "SKILL.md": "6d286debcc93b38b71ffc3da7faa7e06993f9c29e9a8bd75f0bd5b8a2cecfbed",
+        "references/research-job.md": "1da12ab0dbf012d1adbb4e7dfd9cf9d9a77788ec20736aecb3bd19b8a4594eaa",
         "references/stack-workforce.md": "a51f5fdc93441e0961afa32628971ca75e1f763d049f2151355aad5d81009e70"
       }
     }

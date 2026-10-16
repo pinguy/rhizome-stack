@@ -48,4 +48,12 @@ The WebUI model calls `consult_openclaw` with a bounded question and its current
 
 ## Handover
 
+When UCS participates, pass the council's existing board path as
+`blackboard_path`. Its imported constraints and appended inference/evidence use
+the same typed board that the room reads. The host still owns route claims and
+the visible room transcript; UCS does not post to WebUI or authenticate users.
+Check the saved UCS run ID and board revision before routing its result onward.
+Its four expert roles share the configured model callback and do not count as
+four independent reviewers. Normal independent-verification rules still apply.
+
 Use `handover` when switching lead model or pausing. Keep it operational and short: outcome, constraints, decisions, evidence, failures, open questions, exact next action.

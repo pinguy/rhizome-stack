@@ -111,3 +111,8 @@ five seconds unless the caller deliberately overrides a supported setting.
 
 The standalone desks remain useful for manual control, but they and the
 Open WebUI tools use the same local services and model files.
+
+See [the browser showcase](SHOWCASE.md) for captured reference-machine evidence
+of all three desks plus Open WebUI's inline PNG, native MP3 Preview and patched
+inline MP4 player. The screenshots contain no user database, generated media
+files or credentials; those remain excluded runtime state.
