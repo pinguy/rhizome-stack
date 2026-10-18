@@ -71,6 +71,12 @@ a clean upstream base and remains an explicit compatibility failure.
 | Audio port already in use | Inspect whether the stack or Chatterbox add-on owns the overlapping services |
 | WSL has no user services | Enable systemd, shut down WSL from Windows and reopen the distribution |
 
+The curated-memory helper has bounded child-process requests and output. If its
+vector worker is missing, exits, hangs or emits invalid/oversized JSON, status
+reports it unavailable and retrieval can continue through the workspace
+Markdown fallback. That fallback uses the configured OpenClaw workspace, not
+the parent directory of the vector archive.
+
 Useful logs:
 
 ```bash
@@ -112,6 +118,12 @@ produces deterministic ZIP and tar.zst output. Verification also checks byte
 counts, the release allow-list and the absence of symlinks. Compare two independent builds before
 publishing an archive. GitHub source commits and downloadable release archives
 are different deliverables; pushing this repository does not create a release.
+
+`uninstall.sh --dry-run` resolves `RHIZOME_STACK_ROOT`, verifies installed unit
+ownership against the rendered shipped templates and lists everything it would
+move. Uninstall is recoverable: owned files are archived under the user's state
+directory and pre-existing unit backups are restored. Modified or unknown unit
+files stop the operation before any service or file is changed.
 
 The adapter reads `OPENCLAW_PORT`; model sync reads `OPENCLAW_BIN` and
 `OLLAMA_BASE_URL`. Both prefer `OPENCLAW_CONFIG_PATH`, with `OPENCLAW_CONFIG`

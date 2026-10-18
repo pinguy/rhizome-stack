@@ -1,14 +1,23 @@
-# Known limitations — 0.1.0-alpha.14 candidate
+# Known limitations — 0.1.0-alpha.15 candidate
 
 - Full installation and browser acceptance still need testing in disposable
   native Linux and actual WSL2 environments. Static and mocked-provider tests
   do not establish that the complete stack works on those targets.
 - OpenClaw 2026.7.1-2 and Open WebUI 0.11.0 remain compatibility pins. Newer
   releases need patch checks and end-to-end testing before adoption.
+- This is an owner-operated, loopback-only stack, not an isolation boundary for
+  mutually untrusted Open WebUI users. The agent runtime, creative services and
+  one Jupyter container are shared. Jupyter mounts the Open WebUI upload store
+  read-only so attached files work, which also means a notebook can enumerate
+  that store. Do not expose this deployment as a hostile multi-user service.
 - WSL GPU acceleration is not configured; the voice profile defaults to CPU.
 - Ollama installation is opt-in (`--with-ollama` or the welcome wizard).
   Model weights are not bundled; Ornith downloads need separate confirmation,
   and other models must be pulled or imported explicitly.
+- Debian/Ubuntu Ollama installation downloads the current upstream HTTPS
+  installer with a size bound, but does not pin a script digest or verify a
+  code signature. Inspect or install Ollama separately where immutable supply
+  chain inputs are required.
 - Provider verification checks the selected model catalogue entry. It does not
   perform inference, check billing/quota or prove tool-calling support.
 - Skills are available as an opt-in profile. Existing differing local copies
@@ -35,6 +44,9 @@
 - Three minified Open WebUI frontend changes use exact hash-guarded replacements.
   The MP4 renderer is tied to Open WebUI 0.11.0's generated frontend chunk and
   must be re-derived and browser-tested before any Open WebUI update.
+- The source privacy audit checks paths, file contents, common secret patterns
+  and PNG metadata. It cannot prove that screenshot pixels contain no personal
+  information; release screenshots still require human visual review.
 - The Jupyter image omits the reference machine's accumulated compilers/caches.
   The packaged service fails fast when that image is absent, while the direct
   Open WebUI wake/retry patch and 30-second idle guard cover cold starts. This

@@ -73,6 +73,9 @@ frontend chunk needed to render `video/mp4` attachments inline. Open WebUI
 updates require that replacement and all normal image/file branches to be
 re-derived and browser-tested against the new build.
 
+Existing tool IDs are preserved by default. Use `--mode diff` to compare hashes
+or `--mode update` to replace drift only after writing a private source backup.
+
 ## Use from chat
 
 Examples:
@@ -100,6 +103,9 @@ five seconds unless the caller deliberately overrides a supported setting.
   checking that the GPU is free. A missing or malformed list blocks hand-off.
 - Generation submission is not automatically retried.
 - A failed or timed-out job is reported as a failure, never as a created file.
+- A generation call must carry Open WebUI's stable message ID or an explicit
+  caller-supplied idempotency key. Calls without either are rejected before GPU
+  hand-off or submission, so an unsaved-chat retry cannot create duplicate jobs.
 - Result paths must remain under the selected packaged application's output
   directory.
 - Only the ComfyUI process owned by the selected packaged application is

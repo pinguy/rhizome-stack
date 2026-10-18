@@ -8,7 +8,15 @@
  import json
  import logging
  import os
-@@ -191,6 +192,16 @@
+@@ -25,6 +26,7 @@
+     DEFAULT_CODE_INTERPRETER_PROMPT,
+     DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
+     DEFAULT_VOICE_MODE_PROMPT_TEMPLATE,
++    UPLOAD_DIR,
+ )
+ from open_webui.constants import TASKS
+ from open_webui.env import (
+@@ -191,6 +193,16 @@
  
  DEFAULT_SOLUTION_TAGS = [('<|begin_of_solution|>', '<|end_of_solution|>')]
  DEFAULT_CODE_INTERPRETER_TAGS = [('<code_interpreter>', '</code_interpreter>')]
@@ -25,23 +33,26 @@
  
  
  def _start_tag_pattern(start_tag: str) -> str:
-@@ -1591,6 +1602,15 @@
+@@ -1591,6 +1603,18 @@
              attrs += f' content_type="{file["content_type"]}"'
          if file.get('name'):
              attrs += f' name="{file["name"]}"'
 +        host_path = file.get('path') or file.get('file', {}).get('path')
-+        uploads_roots = (
-+            os.path.expanduser('~/.local/share/rhizome-stack/shared/openwebui-uploads/'),
-+            os.path.expanduser('~/.local/share/rhizome-stack/state/openwebui-data/uploads/'),
-+        )
-+        if isinstance(host_path, str) and host_path.startswith(uploads_roots):
-+            upload_name = os.path.basename(host_path)
-+            attrs += f' sandbox_path="/mnt/openwebui/uploads/{upload_name}"'
-+            attrs += f' host_path="{os.path.expanduser("~/.local/share/rhizome-stack/shared/openwebui-uploads/")}{upload_name}"'
++        if isinstance(host_path, str):
++            uploads_root = os.path.realpath(str(UPLOAD_DIR))
++            resolved_host = os.path.realpath(host_path)
++            try:
++                inside_uploads = os.path.commonpath((uploads_root, resolved_host)) == uploads_root
++            except ValueError:
++                inside_uploads = False
++            if inside_uploads:
++                upload_name = os.path.basename(resolved_host)
++                attrs += f' sandbox_path="/mnt/openwebui/uploads/{upload_name}"'
++                attrs += f' host_path="{resolved_host}"'
          return f'<file {attrs}/>'
  
      # Pair only user-role messages from both lists to avoid misalignment.
-@@ -1607,6 +1627,7 @@
+@@ -1607,6 +1631,7 @@
              file
              for file in stored_message.get('files', [])
              if file.get('url') and not file.get('url').startswith('data:')
@@ -49,7 +60,7 @@
          ]
          if not files_with_urls:
              continue
-@@ -1831,6 +1852,10 @@
+@@ -1831,6 +1856,10 @@
      sources = []
  
      if files := body.get('metadata', {}).get('files', None):
@@ -60,7 +71,7 @@
          # Check if all files are in full context mode
          all_full_context = all(item.get('context') == 'full' for item in files)
  
-@@ -2020,6 +2045,7 @@
+@@ -2020,6 +2049,7 @@
              try:
                  base64_data = await get_image_base64_from_url(image_url, user=user)
                  if base64_data:
@@ -68,7 +79,7 @@
                      new_content.append(
                          {
                              'type': 'image_url',
-@@ -2037,6 +2063,213 @@
+@@ -2037,6 +2067,213 @@
      return form_data
  
  
@@ -282,7 +293,7 @@
  async def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[dict]]:
      """
      Load the message chain from DB up to message_id,
-@@ -2073,6 +2306,226 @@
+@@ -2073,6 +2310,226 @@
      return None
  
  
@@ -509,7 +520,7 @@
  def process_messages_with_output(
      messages: list[dict],
      reasoning_format: str | None = None,
-@@ -2084,6 +2537,40 @@
+@@ -2084,6 +2541,40 @@
      OpenAI-style messages (tool_calls + tool results). Strips 'output' before LLM.
      """
      processed = []
@@ -550,7 +561,7 @@
  
      for message in messages:
          if message.get('role') == 'assistant' and message.get('output'):
-@@ -2095,7 +2582,7 @@
+@@ -2095,7 +2586,7 @@
                  flatten_tool_images=True,
              )
              if output_messages:
@@ -559,7 +570,7 @@
                  continue
  
          # Strip 'output' field before adding (LLM shouldn't see it)
-@@ -2317,28 +2804,10 @@
+@@ -2317,28 +2808,10 @@
              system_message = get_system_message(form_data.get('messages', []))
              form_data['messages'] = [system_message, *db_messages] if system_message else db_messages
  
@@ -591,7 +602,7 @@
                  message.pop('files', None)
  
      if regeneration_prompt:
-@@ -2504,6 +2973,19 @@
+@@ -2504,6 +2977,19 @@
      variables = form_data.pop('variables', None)
      payload_tools = form_data.get('tools', None)  # snapshot before filters
  
@@ -611,7 +622,7 @@
      # Process the form_data through the pipeline
      try:
          form_data = await process_pipeline_inlet_filter(request, form_data, user, models)
-@@ -2576,6 +3058,8 @@
+@@ -2576,6 +3062,8 @@
                  # Append filesystem awareness only for pyodide engine
                  if engine != 'jupyter':
                      prompt += CODE_INTERPRETER_PYODIDE_PROMPT
@@ -620,7 +631,7 @@
  
                  form_data['messages'] = add_or_update_user_message(
                      prompt,
-@@ -2591,6 +3075,12 @@
+@@ -2591,6 +3079,12 @@
                  if engine != 'jupyter':
                      form_data['messages'] = add_or_update_system_message(
                          CODE_INTERPRETER_PYODIDE_PROMPT,
@@ -633,7 +644,7 @@
                          form_data['messages'],
                          append=True,
                      )
-@@ -2716,6 +3206,9 @@
+@@ -2716,6 +3210,9 @@
          }
      )
      form_data['metadata'] = metadata
@@ -643,7 +654,7 @@
  
      # When the caller provides an explicit `tools` key in the request body,
      # skip all server-side tool resolution and pass the caller's tools through
-@@ -2895,9 +3388,17 @@
+@@ -2895,9 +3392,17 @@
                  features,
                  model,
              )
@@ -661,7 +672,7 @@
  
          if tools_dict:
              # Always store resolved tools in metadata so downstream consumers
-@@ -3153,6 +3654,28 @@
+@@ -3153,6 +3658,28 @@
                      append_output_text(output[-1], content)
  
                  assistant_message['content'] = assistant_message.get('content', '') + content
@@ -690,7 +701,7 @@
  
  
  async def get_system_oauth_token(request, user):
-@@ -4168,6 +4691,7 @@
+@@ -4168,6 +4695,7 @@
                          )
  
                  async def stream_body_handler(response, form_data):
@@ -698,7 +709,7 @@
                      nonlocal content_parts
                      nonlocal usage
                      nonlocal output
-@@ -4850,6 +5374,27 @@
+@@ -4850,6 +5378,27 @@
                                  )
                                  reasoning_item['status'] = 'completed'
  
@@ -726,7 +737,7 @@
                      if response_tool_calls:
                          tool_calls.append(_split_tool_calls(response_tool_calls))
  
-@@ -4968,6 +5513,8 @@
+@@ -4968,6 +5517,8 @@
  
                      async def execute_tool_call(tool_call):
                          name = tool_call.get('function', {}).get('name', '')
@@ -735,7 +746,7 @@
                          params = parse_tool_params(tool_call)
                          if params is None:
                              return {}, None, None, None, False
-@@ -5503,8 +6050,10 @@
+@@ -5503,8 +6054,10 @@
                          item['status'] = 'completed'
  
                  title = await Chats.get_chat_title_by_id(metadata['chat_id']) if save_to_chat else ''
@@ -746,7 +757,7 @@
                      'output': output,
                      'title': title,
                      **({'usage': usage} if usage else {}),
-@@ -5518,6 +6067,7 @@
+@@ -5518,6 +6071,7 @@
                              metadata['message_id'],
                              {
                                  'done': True,
@@ -754,7 +765,7 @@
                                  'output': output,
                                  **({'usage': usage} if usage else {}),
                              },
-@@ -5526,13 +6076,13 @@
+@@ -5526,13 +6080,13 @@
                          await Chats.upsert_message_to_chat_by_id_and_message_id(
                              metadata['chat_id'],
                              metadata['message_id'],
@@ -770,7 +781,7 @@
                          )
  
                  await publish_chat_finished_event(request, user, metadata, title, ''.join(content_parts), output)
-@@ -5545,7 +6095,7 @@
+@@ -5545,7 +6099,7 @@
                  )
  
                  ctx['assistant_message'] = {

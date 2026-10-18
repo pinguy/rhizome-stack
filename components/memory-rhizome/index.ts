@@ -2,10 +2,10 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { listMemoryHostPublicArtifacts } from "openclaw/plugin-sdk/memory-host-core";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { RhizomeServer } from "./runtime_client.js";
 
 const OPENCLAW_DIST = process.env.OPENCLAW_DIST ?? path.join(os.homedir(), ".npm-global/lib/node_modules/openclaw/dist");
 let recallTrackerPromise: Promise<any> | null = null;
@@ -157,6 +157,7 @@ const MemoryGetSchema = {
 
 type RhizomeConfig = {
   enabled?: boolean;
+  workspaceDir?: string;
   pythonPath?: string;
   baseDir?: string;
   indexPath?: string;
@@ -166,13 +167,28 @@ type RhizomeConfig = {
   device?: "auto" | "cuda" | "cpu";
   topK?: number;
   snippetMaxChars?: number;
+  requestTimeoutMs?: number;
+  maxResponseBytes?: number;
 };
 
-function resolveCfg(raw: unknown): Required<RhizomeConfig> {
+function resolveWorkspaceDir(cfg: RhizomeConfig, rootConfig: any): string {
+  const configured = rootConfig?.agents?.defaults?.workspace;
+  const candidate = typeof configured === "string" && configured.trim()
+    ? configured
+    : cfg.workspaceDir || path.join(os.homedir(), ".local/share/rhizome-stack/workspace");
+  if (typeof candidate !== "string" || !candidate.trim() || candidate.includes("\0")) {
+    throw new Error("memory-rhizome requires a valid workspace directory");
+  }
+  const expanded = candidate.startsWith("~/") ? path.join(os.homedir(), candidate.slice(2)) : candidate;
+  return path.resolve(expanded);
+}
+
+function resolveCfg(raw: unknown, rootConfig?: any): Required<RhizomeConfig> {
   const cfg = (raw || {}) as RhizomeConfig;
   const baseDir = cfg.baseDir || path.join(os.homedir(), ".local/share/rhizome-stack/memory/archive");
   return {
     enabled: cfg.enabled ?? true,
+    workspaceDir: resolveWorkspaceDir(cfg, rootConfig),
     pythonPath: cfg.pythonPath || path.join(os.homedir(), ".local/share/rhizome-stack/venvs/memory/bin/python"),
     baseDir,
     indexPath: cfg.indexPath || path.join(baseDir, "memory.index"),
@@ -182,98 +198,9 @@ function resolveCfg(raw: unknown): Required<RhizomeConfig> {
     device: cfg.device || "auto",
     topK: cfg.topK ?? 10,
     snippetMaxChars: cfg.snippetMaxChars ?? 700,
+    requestTimeoutMs: Math.max(1000, Math.min(120_000, cfg.requestTimeoutMs ?? 30_000)),
+    maxResponseBytes: Math.max(64 * 1024, Math.min(16 * 1024 * 1024, cfg.maxResponseBytes ?? 1024 * 1024)),
   };
-}
-
-class RhizomeServer {
-  private proc: ChildProcessWithoutNullStreams | null = null;
-  private buf = "";
-  private queue: Array<(msg: any) => void> = [];
-
-  constructor(private readonly cfg: Required<RhizomeConfig>) {}
-
-  start() {
-    if (this.proc) return;
-
-    const script = path.resolve(path.dirname(new URL(import.meta.url).pathname), "./rhizome_memory_server.py");
-    if (!fs.existsSync(script)) {
-      throw new Error(`rhizome_memory_server.py not found at ${script}`);
-    }
-
-    this.proc = spawn(this.cfg.pythonPath, [script], {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        RHIZOME_BASE_DIR: this.cfg.baseDir,
-        RHIZOME_INDEX: this.cfg.indexPath,
-        RHIZOME_TEXTS: this.cfg.textsPath,
-        RHIZOME_META: this.cfg.metadataPath,
-        RHIZOME_EMBED_MODEL: this.cfg.embedModel,
-        RHIZOME_DEVICE: this.cfg.device,
-        MALLOC_ARENA_MAX: "2",
-        MALLOC_TRIM_THRESHOLD_: "131072",
-        MALLOC_MMAP_THRESHOLD_: "131072",
-        OMP_NUM_THREADS: "4",
-        MKL_NUM_THREADS: "4",
-        OPENBLAS_NUM_THREADS: "4",
-        NUMEXPR_NUM_THREADS: "4",
-      },
-    });
-
-    this.proc.stdout.setEncoding("utf8");
-    this.proc.stdout.on("data", (chunk: string) => {
-      this.buf += chunk;
-      while (true) {
-        const idx = this.buf.indexOf("\n");
-        if (idx === -1) break;
-        const line = this.buf.slice(0, idx);
-        this.buf = this.buf.slice(idx + 1);
-        if (!line.trim()) continue;
-        let parsed: any;
-        try {
-          parsed = JSON.parse(line);
-        } catch {
-          parsed = { ok: false, error: "bad json from rhizome server", raw: line };
-        }
-        const fn = this.queue.shift();
-        if (fn) fn(parsed);
-      }
-    });
-
-    this.proc.stderr.setEncoding("utf8");
-    this.proc.stderr.on("data", (_chunk: string) => {
-      // intentionally quiet
-    });
-
-    this.proc.on("exit", () => {
-      this.proc = null;
-      while (this.queue.length) {
-        const fn = this.queue.shift();
-        fn?.({ ok: false, error: "rhizome server exited" });
-      }
-    });
-  }
-
-  request(payload: any): Promise<any> {
-    this.start();
-    return new Promise((resolve) => {
-      this.queue.push(resolve);
-      this.proc!.stdin.write(JSON.stringify(payload) + "\n");
-    });
-  }
-
-  stop() {
-    const proc = this.proc;
-    if (!proc) return;
-    this.proc = null;
-    this.buf = "";
-    while (this.queue.length) {
-      const fn = this.queue.shift();
-      fn?.({ ok: false, error: "rhizome server stopped" });
-    }
-    proc.stdin.end();
-    if (!proc.killed) proc.kill("SIGTERM");
-  }
 }
 
 function toMemoryResults(resp: any, cfg: Required<RhizomeConfig>, maxResults?: number, minScore?: number) {
@@ -329,32 +256,35 @@ class RhizomeMemoryManager {
   }
 
   status() {
+    const health = this.server.health();
     return {
       backend: "builtin" as const,
       provider: "rhizome-faiss",
       model: this.cfg.embedModel,
-      workspaceDir: this.cfg.baseDir,
+      workspaceDir: this.cfg.workspaceDir,
       sources: ["memory" as const],
-      vector: { enabled: true, available: true },
+      vector: { enabled: true, available: health.available, error: health.error || undefined },
     };
   }
 
   async sync() {}
 
   getCachedEmbeddingAvailability() {
-    return { ok: true, checked: true, cached: true, checkedAtMs: Date.now() };
+    const health = this.server.health();
+    return { ok: health.available, checked: true, cached: true, checkedAtMs: Date.now(), error: health.error || undefined };
   }
 
   async probeEmbeddingAvailability() {
-    return { ok: true, checked: true, checkedAtMs: Date.now() };
+    const resp = await this.server.request({ type: "status" });
+    return { ok: Boolean(resp?.ok), checked: true, checkedAtMs: Date.now(), error: resp?.error };
   }
 
   async probeVectorStoreAvailability() {
-    return true;
+    return Boolean((await this.server.request({ type: "status" }))?.ok);
   }
 
   async probeVectorAvailability() {
-    return true;
+    return Boolean((await this.server.request({ type: "status" }))?.ok);
   }
 }
 
@@ -378,6 +308,7 @@ const plugin = definePluginEntry({
     const servers = new Map<string, RhizomeServer>();
     const configKey = (cfg: Required<RhizomeConfig>) => JSON.stringify({
         pythonPath: cfg.pythonPath,
+        workspaceDir: cfg.workspaceDir,
         baseDir: cfg.baseDir,
         indexPath: cfg.indexPath,
         textsPath: cfg.textsPath,
@@ -386,6 +317,8 @@ const plugin = definePluginEntry({
         device: cfg.device,
         topK: cfg.topK,
         snippetMaxChars: cfg.snippetMaxChars,
+        requestTimeoutMs: cfg.requestTimeoutMs,
+        maxResponseBytes: cfg.maxResponseBytes,
       });
     const getServer = (cfg: Required<RhizomeConfig>) => {
       const key = configKey(cfg);
@@ -398,7 +331,7 @@ const plugin = definePluginEntry({
     };
     const getManager = (rootConfig: any) => {
       const rawPluginCfg = rootConfig?.plugins?.entries?.["memory-rhizome"]?.config;
-      const cfg = resolveCfg(rawPluginCfg);
+      const cfg = resolveCfg(rawPluginCfg, rootConfig);
       const key = configKey(cfg);
       let manager = managers.get(key);
       if (!manager) {
@@ -443,7 +376,7 @@ const plugin = definePluginEntry({
         });
 
         const rawPluginCfg = (ctx.config as any)?.plugins?.entries?.["memory-rhizome"]?.config;
-        const cfg = resolveCfg(rawPluginCfg);
+        const cfg = resolveCfg(rawPluginCfg, ctx.config);
         if (!cfg.enabled) {
           return baseSearch && baseGet ? [baseSearch, baseGet] : null;
         }
@@ -476,10 +409,9 @@ const plugin = definePluginEntry({
             // FAISS-only: use a conservative lexical fallback over MEMORY.md
             // and dated daily notes.
             if (!(basePayload.results || []).length) {
-              const workspaceDir = path.dirname(cfg.baseDir);
               basePayload = {
                 results: searchCuratedMarkdown(
-                  workspaceDir,
+                  cfg.workspaceDir,
                   query,
                   Math.max(10, maxResults ?? cfg.topK),
                 ),
@@ -566,7 +498,7 @@ const plugin = definePluginEntry({
             // builtin wrapper never sees these surfaced Markdown recalls.
             // Feed only dated Markdown hits into its existing tracker; FAISS
             // archive rows and MEMORY.md itself are deliberately excluded.
-            await trackSurfacedMarkdownRecalls(path.dirname(cfg.baseDir), query, merged);
+            await trackSurfacedMarkdownRecalls(cfg.workspaceDir, query, merged);
 
             return {
               content: [

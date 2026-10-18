@@ -19,7 +19,7 @@ class Tools:
     async def create_video(self, prompt: str, negative_prompt: str = "", aspect: str = "4:3",
                            quality: str = "480p", duration_seconds: int = 5, fps: int = 16,
                            steps: int = 4, input_mode: str = "t2v", video_model: str = T2V_MODEL,
-                           reference_file_id: str = "", seed: int = -1,
+                           reference_file_id: str = "", seed: int = -1, idempotency_key: str = "",
                            __user__=None, __metadata__=None, __event_emitter__=None) -> str:
         """Create an MP4 with local WAN Video Desk and attach it to this saved chat.
 
@@ -42,6 +42,7 @@ class Tools:
         :param video_model: Exact installed WAN T2V or I2V GGUF filename.
         :param reference_file_id: Uploaded Open WebUI image UUID for i2v; never a path or URL.
         :param seed: Optional seed from 0 to 9223372036854775807; -1 chooses a random seed.
+        :param idempotency_key: Stable caller retry key, required only when Open WebUI supplies no message ID.
         """
         prompt = prompt.strip()
         negative_prompt = negative_prompt.strip()
@@ -82,4 +83,4 @@ class Tools:
         if seed >= 0:
             payload["seed"] = int(seed)
         return await generate("video", payload, __user__, __metadata__, __event_emitter__,
-                              reference_file_id if input_mode == "i2v" else "")
+                              reference_file_id if input_mode == "i2v" else "", idempotency_key)

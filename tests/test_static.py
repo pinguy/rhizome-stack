@@ -108,6 +108,15 @@ def main() -> int:
         check("/home/" not in text, f"hard-coded home in {path}")
         check("[Unit]" in text, f"missing Unit section in {path}")
     print("PASS systemd template invariants")
+    unit_manifest = json.loads((ROOT / "manifests/systemd-units.json").read_text())
+    shipped_units = sorted(path.name for path in (ROOT / "systemd").iterdir()
+                           if path.suffix in (".service", ".timer"))
+    check(sorted(unit_manifest["units"]) == shipped_units,
+          "systemd uninstall manifest does not match shipped units")
+    uninstall = (ROOT / "uninstall.sh").read_text()
+    check("rg -" not in uninstall and "systemd-units.json" in uninstall,
+          "uninstall still relies on ripgrep or lacks the installed unit manifest")
+    print("PASS complete manifest-driven uninstall contract")
     voice_app = (ROOT / "components/chatterbox_voice_app.py").read_text()
     check('app.run(host="127.0.0.1"' in voice_app, "Voice Lab is not loopback-only")
     register_spec = importlib.util.spec_from_file_location(
@@ -209,6 +218,16 @@ eval(process.argv[1]);
     jupyter_unit = (ROOT / "systemd/openwebui-code-jupyter.service").read_text()
     check("podman image exists" in jupyter_unit, "Jupyter image preflight is missing")
     check("--pull=never" in jupyter_unit, "Jupyter service may pull a registry image")
+    check("state/openwebui-data/uploads:/mnt/openwebui/uploads:ro" in jupyter_unit,
+          "Jupyter does not mount Open WebUI's actual upload directory")
+    check("shared/openwebui-uploads" not in jupyter_unit,
+          "Jupyter still mounts the disconnected upload staging directory")
+    middleware_patch = (ROOT / "patches/open-webui/0.11.0/open_webui__utils__middleware.py.patch").read_text()
+    for required in ("UPLOAD_DIR", "os.path.realpath", "os.path.commonpath",
+                     'sandbox_path="/mnt/openwebui/uploads/'):
+        check(required in middleware_patch, f"Jupyter upload bridge lacks {required}")
+    check("shared/openwebui-uploads" not in middleware_patch,
+          "middleware still fabricates paths in the disconnected upload directory")
     check((ROOT / "systemd/openwebui-code-jupyter-idle-guard.timer").is_file(),
           "Jupyter idle guard timer is missing")
     print("PASS current OpenClaw/Open WebUI downstream invariants")

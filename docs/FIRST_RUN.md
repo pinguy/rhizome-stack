@@ -98,7 +98,19 @@ python3 ~/.local/share/rhizome-stack/tools/register_openwebui_tools.py \
 ```
 
 Use the matching configuration directory if you set `XDG_CONFIG_HOME`.
-Registration preserves matching tool IDs. Select the tools in Open WebUI as
+Registration preserves matching tool IDs. Compare deployed and shipped hashes
+without changing anything, or explicitly update drift after private backups:
+
+```bash
+python3 ~/.local/share/rhizome-stack/tools/register_openwebui_tools.py \
+  --token-file ~/.config/rhizome-stack/openwebui-admin.token --mode diff
+python3 ~/.local/share/rhizome-stack/tools/register_openwebui_tools.py \
+  --token-file ~/.config/rhizome-stack/openwebui-admin.token --mode update
+```
+
+`rhizome-stack doctor` performs the hash comparison when that default token
+file exists (or `OPENWEBUI_ADMIN_TOKEN_FILE` points to another mode-0600 file).
+Select the tools in Open WebUI as
 needed; the token is read from disk rather than supplied in process arguments.
 The registered IDs are `rhizome_memory`, `rhizome_web_search`, `openclaw_agent`,
 `minimax_music_3`, `qwen_image` and `wan_video`.

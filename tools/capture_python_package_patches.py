@@ -67,6 +67,29 @@ def portable_installed(relative: str, data: bytes) -> bytes:
             f"attrs += (\n                ' host_path=\"{home}/.openclaw/workspace/shared/'\n                f'openwebui-uploads/{{upload_name}}\"'\n            )",
             "attrs += f' host_path=\"{os.path.expanduser(\"~/.local/share/rhizome-stack/shared/openwebui-uploads/\")}{upload_name}\"'",
         )
+        old_upload_bridge = """        uploads_roots = (
+            os.path.expanduser('~/.local/share/rhizome-stack/shared/openwebui-uploads/'),
+            os.path.expanduser('~/.local/share/rhizome-stack/state/openwebui-data/uploads/'),
+        )
+        if isinstance(host_path, str) and host_path.startswith(uploads_roots):
+            upload_name = os.path.basename(host_path)
+            attrs += f' sandbox_path=\"/mnt/openwebui/uploads/{upload_name}\"'
+            attrs += f' host_path=\"{os.path.expanduser(\"~/.local/share/rhizome-stack/shared/openwebui-uploads/\")}{upload_name}\"'"""
+        new_upload_bridge = """        if isinstance(host_path, str):
+            uploads_root = os.path.realpath(str(UPLOAD_DIR))
+            resolved_host = os.path.realpath(host_path)
+            try:
+                inside_uploads = os.path.commonpath((uploads_root, resolved_host)) == uploads_root
+            except ValueError:
+                inside_uploads = False
+            if inside_uploads:
+                upload_name = os.path.basename(resolved_host)
+                attrs += f' sandbox_path=\"/mnt/openwebui/uploads/{upload_name}\"'
+                attrs += f' host_path=\"{resolved_host}\"'"""
+        value = value.replace(old_upload_bridge, new_upload_bridge)
+        if new_upload_bridge in value and "    UPLOAD_DIR,\n" not in value:
+            value = value.replace("    DEFAULT_VOICE_MODE_PROMPT_TEMPLATE,\n",
+                                  "    DEFAULT_VOICE_MODE_PROMPT_TEMPLATE,\n    UPLOAD_DIR,\n")
     return value.encode("utf-8")
 
 

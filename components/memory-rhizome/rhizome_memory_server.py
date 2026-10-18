@@ -274,7 +274,10 @@ def main():
             req = json.loads(line)
             typ = req.get("type")
 
-            if typ == "search":
+            if typ == "status":
+                print(json.dumps({"ok": True, "status": "ready"}), flush=True)
+
+            elif typ == "search":
                 q = str(req.get("query", ""))
                 k = int(req.get("k", 10))
                 snippet_max = int(req.get("snippetMaxChars", 700))

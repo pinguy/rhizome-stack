@@ -27,9 +27,39 @@ import fetch_voice_models
 spec = importlib.util.spec_from_file_location('setup_adapter', ROOT / 'components/openclaw_openwebui_adapter.py')
 adapter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(adapter)
+agent_spec = importlib.util.spec_from_file_location(
+    'openclaw_agent_tool', ROOT / 'components/openwebui-tools/openclaw_agent.py')
+openclaw_agent = importlib.util.module_from_spec(agent_spec)
+agent_spec.loader.exec_module(openclaw_agent)
 
 
 class SetupRegressions(unittest.TestCase):
+    def test_openclaw_chat_sessions_are_user_scoped_and_collision_resistant(self):
+        first = openclaw_agent._session_key({'chat_id': 'abc def'}, {'id': 'user-1'})
+        self.assertEqual(first, openclaw_agent._session_key({'chat_id': 'abc def'}, {'id': 'user-1'}))
+        self.assertNotEqual(first, openclaw_agent._session_key({'chat_id': 'abc/def'}, {'id': 'user-1'}))
+        self.assertNotEqual(first, openclaw_agent._session_key({'chat_id': 'abc def'}, {'id': 'user-2'}))
+        self.assertNotEqual(openclaw_agent._session_key({}, {'id': 'user-1'}),
+                            openclaw_agent._session_key({}, {'id': 'user-1'}))
+        with self.assertRaisesRegex(ValueError, 'authenticated'):
+            openclaw_agent._session_key({'chat_id': 'saved'}, None)
+
+    def test_openclaw_agent_honours_validated_gateway_port(self):
+        with patch.dict(openclaw_agent.os.environ, {'OPENCLAW_PORT': '19999'}):
+            self.assertEqual(openclaw_agent._gateway(),
+                             'http://127.0.0.1:19999/v1/chat/completions')
+        for value in ('invalid', '0', '65536'):
+            with self.subTest(value=value), patch.dict(openclaw_agent.os.environ,
+                                                       {'OPENCLAW_PORT': value}):
+                with self.assertRaises(RuntimeError):
+                    openclaw_agent._gateway()
+
+    def test_minimum_packages_include_patch_utility(self):
+        self.assertIn('patch', install.package_command('arch', voice=False, jupyter=False,
+                                                       creative=False))
+        self.assertIn('patch', install.package_command('debian', voice=False, jupyter=False,
+                                                       creative=False))
+
     def test_quoted_settings_survive_openclaw_rendering(self):
         token = 'synthetic token with "quotes" and \\slashes'
         content = "OPENCLAW_GATEWAY_TOKEN=" + welcome.shlex.quote(token) + "\nDEFAULT_OLLAMA_MODEL='fixture:latest'\n"
@@ -211,6 +241,70 @@ class SetupRegressions(unittest.TestCase):
             self.assertEqual(config.stat().st_mode & 0o777, 0o600)
             self.assertEqual(json.loads(config.read_text())['gateway']['port'], 18789)
             self.assertEqual(json.loads(config.read_text())['plugins']['slots']['memory'], 'memory-rhizome')
+            memory_config = json.loads(config.read_text())['plugins']['entries']['memory-rhizome']['config']
+            self.assertEqual(memory_config['workspaceDir'], str(root / 'stack/workspace'))
+
+    def test_memory_profile_validation_failure_never_promotes_candidate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / 'claw'
+            home.mkdir()
+            config = home / 'openclaw.json'
+            original = '{"gateway":{"port":19999},"custom":"preserve"}\n'
+            config.write_text(original)
+            runner = MagicMock(dry_run=False)
+
+            def run(command, **_kwargs):
+                if command[-2:] == ['config', 'validate']:
+                    raise subprocess.CalledProcessError(1, command)
+
+            runner.run.side_effect = run
+            with patch.multiple(install, STACK_ROOT=root / 'custom-stack', OPENCLAW_HOME=home), \
+                 self.assertRaises(subprocess.CalledProcessError):
+                install.install_memory(runner, root / 'node/bin')
+            self.assertEqual(config.read_text(), original)
+            self.assertFalse(config.with_suffix('.json.before-memory-rhizome').exists())
+            self.assertEqual(list(home.glob('.openclaw-memory-candidate.*.json')), [])
+
+    def test_tool_update_mode_backs_up_drift_before_replacement(self):
+        source_root = ROOT / 'components/openwebui-tools'
+        existing = {}
+        for tool_id, (name, filename, description) in registration.TOOLS.items():
+            existing[tool_id] = {
+                'id': tool_id, 'name': name,
+                'content': (source_root / filename).read_text(),
+                'meta': {'description': description, 'manifest': {}, 'has_user_valves': False},
+                'access_grants': [{'principal_type': 'user', 'principal_id': 'fixture',
+                                   'permission': 'read'}],
+            }
+        existing['openclaw_agent']['content'] = '# owner customisation\n'
+        calls = []
+
+        def fake_api(_base, _token, method, path, body=None):
+            calls.append((method, path, body))
+            if method == 'GET':
+                return existing[path.rsplit('/', 1)[-1]]
+            self.assertEqual(path, '/id/openclaw_agent/update')
+            existing['openclaw_agent'] = body
+            return {'id': 'openclaw_agent'}
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            token = root / 'token'
+            token.write_text('synthetic')
+            token.chmod(0o600)
+            backup = root / 'backup'
+            with patch.object(registration, 'api', side_effect=fake_api), \
+                 patch.object(sys, 'argv', ['register', '--token-file', str(token),
+                                            '--mode', 'update', '--backup-dir', str(backup)]), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(registration.main(), 0)
+            saved = json.loads((backup / 'openclaw_agent.json').read_text())
+            self.assertEqual(saved['content'], '# owner customisation\n')
+            self.assertEqual((backup / 'openclaw_agent.json').stat().st_mode & 0o777, 0o600)
+            update = next(call for call in calls if call[0] == 'POST')
+            self.assertEqual(update[2]['content'], (source_root / 'openclaw_agent.py').read_text())
+            self.assertEqual(update[2]['access_grants'], saved['access_grants'])
 
     def test_import_write_preserves_duplicate_provenance_without_symlink_writes(self):
         with tempfile.TemporaryDirectory() as temporary:

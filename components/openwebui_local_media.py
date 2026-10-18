@@ -262,7 +262,21 @@ async def attach_result(kind, source, user, metadata, emitter):
     return {"file_id": file_id, "url": url, "name": path.name, "path": str(path)}
 
 
-async def generate(kind, payload, user, metadata=None, emitter=None, reference_file_id=""):
+def retry_key(kind, payload, user_id, metadata, reference_file_id="", idempotency_key=""):
+    metadata = metadata or {}
+    logical_id = str(metadata.get("message_id") or idempotency_key or "").strip()
+    if not logical_id:
+        raise ValueError(
+            "A stable message ID or idempotency key is required before starting local generation"
+        )
+    if len(logical_id) > 256:
+        raise ValueError("The idempotency key must be 256 characters or fewer")
+    identity = [user_id, metadata.get("chat_id"), logical_id, kind, payload, reference_file_id]
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+
+
+async def generate(kind, payload, user, metadata=None, emitter=None, reference_file_id="",
+                   idempotency_key=""):
     metadata = metadata or {}
     # Seed/reference augmentation must not change the caller's retry identity.
     payload = dict(payload)
@@ -277,9 +291,10 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
     if kind not in labels:
         return json.dumps({"status": "error", "error": f"Unknown local media kind: {kind}"})
     label = labels[kind]
-    identity = [user["id"], metadata.get("chat_id"), metadata.get("message_id") or str(uuid.uuid4()),
-                kind, payload, reference_file_id]
-    key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+    try:
+        key = retry_key(kind, payload, user["id"], metadata, reference_file_id, idempotency_key)
+    except ValueError as exc:
+        return json.dumps({"status": "error", "error": str(exc)})
     try:
         async with media_lock(status):
             receipt = STATE / (key + ".json")

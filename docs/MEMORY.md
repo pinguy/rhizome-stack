@@ -98,3 +98,9 @@ at untrusted downloaded binaries.
 Private state defaults to `~/.local/share/rhizome-stack/memory/`. A
 `RHIZOME_STACK_ROOT` override moves the importer there; configure consumer paths
 consistently when customising an existing installation.
+
+The memory plugin separately resolves the curated Markdown fallback from
+`agents.defaults.workspace` (or its explicit `workspaceDir` setting). This may
+deliberately differ from `memory/archive`. The vector helper has a bounded
+request deadline and response size; spawn failures, hangs and malformed output
+are returned as unavailable so Markdown recall can still operate.

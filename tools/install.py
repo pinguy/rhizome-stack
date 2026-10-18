@@ -151,11 +151,11 @@ def require_preflight(target: str) -> str:
 def package_command(family: str, *, voice: bool, jupyter: bool, creative: bool) -> list[str]:
     common_arch = [
         "base-devel", "curl", "git", "jq", "nodejs", "npm", "python", "python-pip",
-        "python-virtualenv", "rsync", "sqlite", "xz", "zstd",
+        "python-virtualenv", "rsync", "sqlite", "patch", "xz", "zstd",
     ]
     common_debian = [
         "build-essential", "ca-certificates", "curl", "git", "jq", "nodejs", "npm",
-        "python3", "python3-pip", "python3-venv", "rsync", "sqlite3", "xz-utils", "zstd",
+        "python3", "python3-pip", "python3-venv", "rsync", "sqlite3", "patch", "xz-utils", "zstd",
     ]
     if voice or creative:
         common_arch.append("ffmpeg")
@@ -304,7 +304,7 @@ def configure_files(runner: Runner, *, with_jupyter: bool = False) -> None:
     else:
         print(f"+ preserve existing {openclaw_config}")
     runner.copy_tree(PROJECT / "workspace-template", STACK_ROOT / "workspace")
-    for directory in ["components", "state/openwebui-data", "state/openwebui-code-work", "shared/openwebui-uploads", "creative/state"]:
+    for directory in ["components", "state/openwebui-data/uploads", "state/openwebui-code-work", "creative/state"]:
         path = STACK_ROOT / directory
         print(f"+ ensure {path}")
         if not runner.dry_run:
@@ -482,6 +482,32 @@ def install_voice(runner: Runner, download_models: bool) -> None:
                     "--model-root", str(STACK_ROOT / "models")])
 
 
+def validate_openclaw_candidate(runner: Runner, node_path: str, candidate: str) -> None:
+    """Validate an exact candidate without exposing it as the active config."""
+    OPENCLAW_HOME.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=OPENCLAW_HOME,
+        prefix=".openclaw-memory-candidate.", suffix=".json", delete=False,
+    ) as stream:
+        candidate_path = Path(stream.name)
+        try:
+            stream.write(candidate)
+            stream.flush()
+            os.fsync(stream.fileno())
+            candidate_path.chmod(0o600)
+        except Exception:
+            candidate_path.unlink(missing_ok=True)
+            raise
+    try:
+        runner.run([
+            "env", node_path, f"OPENCLAW_CONFIG_PATH={candidate_path}",
+            f"OPENCLAW_STATE_DIR={OPENCLAW_HOME}",
+            str(HOME / ".npm-global/bin/openclaw"), "config", "validate",
+        ])
+    finally:
+        candidate_path.unlink(missing_ok=True)
+
+
 def install_memory(runner: Runner, node_bin: Path) -> None:
     venv = STACK_ROOT / "venvs/memory"
     if not runner.dry_run and not venv.exists():
@@ -504,6 +530,7 @@ def install_memory(runner: Runner, node_bin: Path) -> None:
             "enabled": True,
             "config": {
                 "pythonPath": str(venv / "bin/python"),
+                "workspaceDir": str(STACK_ROOT / "workspace"),
                 "baseDir": str(STACK_ROOT / "memory/archive"),
                 "indexPath": str(STACK_ROOT / "memory/archive/memory.index"),
                 "textsPath": str(STACK_ROOT / "memory/archive/memory_texts.npy"),
@@ -512,13 +539,16 @@ def install_memory(runner: Runner, node_bin: Path) -> None:
                 "device": "cpu",
                 "topK": 12,
                 "snippetMaxChars": 700,
+                "requestTimeoutMs": 30000,
+                "maxResponseBytes": 1048576,
             },
         }
+        candidate = json.dumps(config, indent=2) + "\n"
+        validate_openclaw_candidate(runner, node_path, candidate)
         backup = config_path.with_suffix(".json.before-memory-rhizome")
         if not backup.exists():
             shutil.copy2(config_path, backup)
-        atomic_write_text(config_path, json.dumps(config, indent=2) + "\n")
-        runner.run(["env", node_path, str(HOME / ".npm-global/bin/openclaw"), "config", "validate"])
+        atomic_write_text(config_path, candidate)
 
 
 def install_routing(runner: Runner) -> None:

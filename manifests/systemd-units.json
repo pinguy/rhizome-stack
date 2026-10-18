@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "units": [
+    "chatterbox-nano.service",
+    "chatterbox-voice-app.service",
+    "minimax-music-api.service",
+    "open-webui.service",
+    "openclaw-gateway.service",
+    "openclaw-ollama-model-sync.service",
+    "openclaw-ollama-model-sync.timer",
+    "openclaw-openwebui-adapter.service",
+    "openwebui-audio-bridge.service",
+    "openwebui-code-jupyter-idle-guard.service",
+    "openwebui-code-jupyter-idle-guard.timer",
+    "openwebui-code-jupyter.service",
+    "openwebui-memory-sync.service",
+    "openwebui-memory-sync.timer",
+    "qwen-image-desk.service",
+    "rhizome-gliner-resident.service",
+    "rhizome-workforce-retrieval.service",
+    "wan-video-desk.service"
+  ]
+}

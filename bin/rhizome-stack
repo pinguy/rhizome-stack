@@ -94,6 +94,16 @@ case "$action" in
     for relative in venvs/open-webui/bin/open-webui venvs/components/bin/python tools/welcome.py manifests/versions.json; do
       [[ -f "$RHIZOME_STACK_ROOT/$relative" ]] || { printf 'FAIL missing runtime file %s\n' "$relative"; failures=$((failures + 1)); }
     done
+    tool_token="${OPENWEBUI_ADMIN_TOKEN_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/rhizome-stack/openwebui-admin.token}"
+    if [[ -f "$tool_token" ]]; then
+      if ! python3 "$RHIZOME_STACK_ROOT/tools/register_openwebui_tools.py" \
+          --token-file "$tool_token" --mode diff --hash-only; then
+        printf 'FAIL deployed Open WebUI tools differ from shipped sources\n'
+        failures=$((failures + 1))
+      fi
+    else
+      printf 'WARN Open WebUI tool hashes not checked; token file missing: %s\n' "$tool_token"
+    fi
     printf 'Use smoke for HTTP health, then send a real chat to verify inference.\n'
     exit "$failures"
     ;;

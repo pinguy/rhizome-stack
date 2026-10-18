@@ -18,6 +18,7 @@ class Tools:
         caption: str,
         lyrics: str = "[Instrumental]",
         duration_seconds: int = 60,
+        idempotency_key: str = "",
         __user__=None,
         __metadata__=None,
         __event_emitter__=None,
@@ -34,6 +35,7 @@ class Tools:
         :param caption: Detailed production description using Global Metadata, Vocal Details, and Arrangement sections.
         :param lyrics: Complete singable lyrics with section tags, or instrumental structure tags.
         :param duration_seconds: Requested duration from 8 to 300 seconds.
+        :param idempotency_key: Stable caller retry key, required only when Open WebUI supplies no message ID.
         """
 
         if not caption.strip():
@@ -41,4 +43,4 @@ class Tools:
         return await generate("music", {
             "title": title.strip(), "caption": caption.strip(), "lyrics": lyrics.strip(),
             "seconds": max(8, min(300, int(duration_seconds))), "quality": "V0",
-        }, __user__, __metadata__, __event_emitter__)
+        }, __user__, __metadata__, __event_emitter__, idempotency_key=idempotency_key)

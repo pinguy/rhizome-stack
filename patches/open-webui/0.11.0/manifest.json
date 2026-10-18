@@ -55,7 +55,7 @@
       "path": "open_webui/utils/middleware.py",
       "action": "modify",
       "clean_sha256": "42380f32babc369cda496fe44017c25d3b6a417db1da57e97f3119a4f382448a",
-      "patched_sha256": "943dc9368ce5f2108ec5332e28c2e6b57472f7d1518251f87d51cc54c353d453",
+      "patched_sha256": "e97ebb04e7fdadd06084b07262ec0abe1f8637046be1c79d2ef79c09fad437c2",
       "payload": "open_webui__utils__middleware.py.patch"
     },
     {

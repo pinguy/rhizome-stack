@@ -13,6 +13,7 @@ class Tools:
     citation = False
 
     async def create_image(self, prompt: str, shape: str = "square", reference_file_id: str = "",
+                           idempotency_key: str = "",
                            __user__=None, __metadata__=None, __event_emitter__=None) -> str:
         """Create or edit an actual image using local Qwen Image Desk.
 
@@ -22,6 +23,7 @@ class Tools:
         :param prompt: Detailed image description, or precise requested changes when editing.
         :param shape: square, landscape or portrait. Default square.
         :param reference_file_id: Optional uploaded Open WebUI image UUID to edit; never a path or URL.
+        :param idempotency_key: Stable caller retry key, required only when Open WebUI supplies no message ID.
         """
         shape = shape.lower().strip()
         if shape not in ("square", "landscape", "portrait"):
@@ -31,4 +33,4 @@ class Tools:
         return await generate("image", {
             "final_prompt": prompt.strip(), "original_prompt": prompt.strip(),
             "prompt_mode": "direct", "preset": shape + "-standard", "batch_count": 1,
-        }, __user__, __metadata__, __event_emitter__, reference_file_id)
+        }, __user__, __metadata__, __event_emitter__, reference_file_id, idempotency_key)

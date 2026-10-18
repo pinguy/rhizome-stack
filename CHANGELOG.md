@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.0-alpha.15 candidate — 18 October 2026 independent-audit corrections
+
+- Resolve curated Markdown fallback and recall tracking from the configured
+  OpenClaw workspace rather than the parent of the separate FAISS archive.
+- Scope saved Open WebUI delegation sessions to a user plus a SHA-256 chat
+  identity; isolate unsaved invocations and honour the configured gateway port.
+- Make uninstall manifest-driven, custom-root aware, dry-runnable, ownership
+  checked and complete for all eighteen shipped service/timer units.
+- Validate a staged OpenClaw memory configuration before atomically promoting
+  it, leaving an existing configuration unchanged on validator failure.
+- Bound memory-worker requests and responses, handle spawn failures and report
+  observed vector health while preserving Markdown-only degradation.
+- Mount Open WebUI's actual upload directory read-only in Jupyter and derive
+  file tags from `UPLOAD_DIR` with realpath containment checks.
+- Add explicit Open WebUI tool hash/diff/update modes with private backups and
+  surface deployed-versus-shipped hashes through `rhizome-stack doctor`.
+- Require a stable message ID or caller idempotency key before local media
+  submission; add the missing `patch` prerequisite and document the
+  owner-operated deployment boundary.
+- Add focused lifecycle, session-isolation, worker-failure, upload-wiring,
+  configuration-rollback, tool-drift and retry-identity regressions.
+- Follow-up audit: treat explicit memory-worker failures and invalid JSON as
+  unhealthy, and make repeated uninstall a true no-op without extra archives.
+
 ## 0.1.0-alpha.14 candidate — 16 October 2026 hygiene follow-up
 
 - Stage every upstream patch and verify its resulting hash before changing

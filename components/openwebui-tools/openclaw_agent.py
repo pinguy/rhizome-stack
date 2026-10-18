@@ -8,14 +8,14 @@ OpenClaw session keyed to the originating Open WebUI chat.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
-import re
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 
 
-GATEWAY = "http://127.0.0.1:18789/v1/chat/completions"
 CONFIG = Path(os.environ.get("OPENCLAW_CONFIG", str(Path.home() / ".openclaw/openclaw.json")))
 MAX_TASK_CHARS = 8000
 MAX_CONTEXT_CHARS = 12000
@@ -25,13 +25,32 @@ def _gateway_token() -> str:
     return json.loads(CONFIG.read_text(encoding="utf-8"))["gateway"]["auth"]["token"]
 
 
-def _session_key(metadata: dict | None) -> str:
-    chat_id = str((metadata or {}).get("chat_id") or "unsaved")
-    safe = re.sub(r"[^a-zA-Z0-9_-]+", "-", chat_id).strip("-")[:96] or "unsaved"
-    return f"openwebui-pair-{safe}"
+def _gateway() -> str:
+    try:
+        port = int(os.environ.get("OPENCLAW_PORT", "18789"))
+    except ValueError as exc:
+        raise RuntimeError("OPENCLAW_PORT must be an integer") from exc
+    if not 1 <= port <= 65535:
+        raise RuntimeError("OPENCLAW_PORT must be between 1 and 65535")
+    return f"http://127.0.0.1:{port}/v1/chat/completions"
 
 
-def _consult(task: str, context: str, metadata: dict | None) -> str:
+def _session_key(metadata: dict | None, user: dict | None) -> str:
+    user_id = str((user or {}).get("id") or "").strip()
+    if not user_id:
+        raise ValueError("an authenticated Open WebUI user is required")
+    chat_id = str((metadata or {}).get("chat_id") or "").strip()
+    if not chat_id:
+        # Open WebUI does not supply a stable chat identity before the chat is
+        # saved. Isolation is safer than silently sharing one global session.
+        return f"openwebui-pair-unsaved-{uuid.uuid4().hex}"
+    digest = hashlib.sha256(
+        json.dumps([user_id, chat_id], ensure_ascii=False, separators=(",", ":")).encode()
+    ).hexdigest()
+    return f"openwebui-pair-{digest}"
+
+
+def _consult(task: str, context: str, metadata: dict | None, user: dict | None) -> str:
     task = (task or "").strip()
     if not task:
         raise ValueError("task must not be empty")
@@ -55,14 +74,14 @@ def _consult(task: str, context: str, metadata: dict | None) -> str:
         "stream": False,
     }
     request = urllib.request.Request(
-        GATEWAY,
+        _gateway(),
         data=json.dumps(payload).encode(),
         method="POST",
         headers={
             "Authorization": "Bearer " + _gateway_token(),
             "Content-Type": "application/json",
             "x-openclaw-message-channel": "webchat",
-            "x-openclaw-session-key": _session_key(metadata),
+            "x-openclaw-session-key": _session_key(metadata, user),
         },
     )
     with urllib.request.urlopen(request, timeout=900) as response:
@@ -80,6 +99,7 @@ class Tools:
         self,
         task: str,
         context: str = "",
+        __user__=None,
         __metadata__=None,
         __event_emitter__=None,
     ) -> str:
@@ -104,7 +124,7 @@ class Tools:
         try:
             import asyncio
 
-            answer = await asyncio.to_thread(_consult, task, context, __metadata__)
+            answer = await asyncio.to_thread(_consult, task, context, __metadata__, __user__)
             if __event_emitter__:
                 await __event_emitter__({
                     "type": "status",

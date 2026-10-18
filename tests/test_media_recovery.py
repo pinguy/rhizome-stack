@@ -118,6 +118,18 @@ class QueueSafetyTest(unittest.TestCase):
 
 
 class ReceiptTest(unittest.TestCase):
+    def test_retry_identity_requires_stable_caller_input(self):
+        payload = {'prompt': 'fixture'}
+        with self.assertRaisesRegex(ValueError, 'stable'):
+            media.retry_key('image', payload, 'user-1', {})
+        first = media.retry_key('image', payload, 'user-1', {}, idempotency_key='request-1')
+        self.assertEqual(first, media.retry_key('image', payload, 'user-1', {},
+                                                idempotency_key='request-1'))
+        self.assertNotEqual(first, media.retry_key('image', payload, 'user-2', {},
+                                                   idempotency_key='request-1'))
+        self.assertNotEqual(first, media.retry_key('image', payload, 'user-1', {},
+                                                   idempotency_key='request-2'))
+
     def test_receipt_private_and_predictable_symlink_untouched(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -197,6 +209,14 @@ class RecoveryTest(unittest.IsolatedAsyncioTestCase):
             result = json.loads(await media.generate('image', {}, self.user, self.metadata))
             self.assertIn('uncertain', result['error'])
             request.assert_called_once()
+
+    async def test_missing_message_and_idempotency_key_never_starts_generation(self):
+        with patch.object(media, 'request') as request:
+            result = json.loads(await media.generate('image', {'prompt': 'fixture'}, self.user, {}))
+        self.assertIn('stable message ID or idempotency key', result['error'])
+        request.assert_not_called()
+        media.ensure_app.assert_not_called()
+        media.hand_over.assert_not_called()
 
     async def test_failed_generation_is_not_polled_or_submitted_again(self):
         with patch.object(media, 'request', side_effect=[{'prompt_id': 'job-1'},
