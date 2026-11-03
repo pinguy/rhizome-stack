@@ -1,7 +1,7 @@
 """
 title: Rhizome Brave Search
 description: Public web search with source discovery, news checks and bounded enrichment.
-version: 1.9.2
+version: 1.9.3
 requirements: requests>=2.31.0,pydantic>=2.0.0
 
 Import this single file under Open WebUI Workspace > Tools. Configure Valves
@@ -65,7 +65,7 @@ if not logger.handlers:
 
 OPENWEBUI_DB = Path(os.environ.get("OPENWEBUI_DB", str(Path.home() / ".local/share/rhizome-stack/state/openwebui-data/webui.db")))
 OPENCLAW_CONFIG = Path(os.environ.get("OPENCLAW_CONFIG", str(Path.home() / ".openclaw/openclaw.json")))
-TOOL_VERSION = "1.9.2"
+TOOL_VERSION = "1.9.3"
 
 
 def _env_number(name: str, default: float, low: float, high: float) -> float:
@@ -822,7 +822,12 @@ def _wants_fresh_sources(query: str) -> bool:
 
 def _query_is_explicitly_historical(query: str, clock: dict) -> bool:
     """Recognise historical intent without hijacking requests for latest news."""
+    # History can be the subject of today's news, rather than a request for archives.
+    historical_intent = bool(re.search(
+        r"\b(?:history|origins)\s+of\b|\b(?:history|origins)\s*[?.!]*$|"
+        r"\barchived\s+(?:news|reports|articles)\b", query, re.IGNORECASE))
     if (_contains_any(query, ("history", "historical", "origins", "archived"))
+            and (not _looks_like_news_query(query) or historical_intent)
             and not _contains_any(query, ("today", "latest", "current", "now", "breaking", "this week", "tonight"))):
         return True
     years = _mentioned_years(query)

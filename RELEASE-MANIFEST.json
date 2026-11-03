@@ -20,8 +20,8 @@
       "bytes": 10139
     },
     "CHANGELOG.md": {
-      "sha256": "3fc238a9e4ccab7da5d7d713045cfa733efbeaa4aef107e18404c3e5d75b3697",
-      "bytes": 15657
+      "sha256": "8ac1e804c6391baf7bb5e650267468eae2309883a34f429a04c9f66cd50af395",
+      "bytes": 15821
     },
     "CONTRIBUTING.md": {
       "sha256": "2bfbecec36a7d23d4a9bb8b0a585eda9f1c718fe26a83fa53a7df90a9d2d4213",
@@ -208,8 +208,8 @@
       "bytes": 5726
     },
     "components/openwebui-tools/web_search.py": {
-      "sha256": "278b8c7e66c52bd348db9f9b7878aa8f319915469ce90f1ad3c26c8bf877407e",
-      "bytes": 105011
+      "sha256": "39b8ee3f97549f6bf57dba042861425db1d2e146136bb6c78d9aa3d0280cf364",
+      "bytes": 105359
     },
     "components/openwebui_audio_bridge.py": {
       "sha256": "2cae591882f46fb6785a1182fbe487057e25457a8fa5c331398d89a8a5860e05",
@@ -432,8 +432,8 @@
       "bytes": 5458
     },
     "docs/INTEGRATIONS.md": {
-      "sha256": "af278e69c2ea56ada73b4fe2213a93bb29d3b9b2be799e8aee37a767f7fd19e7",
-      "bytes": 7405
+      "sha256": "025446afdfb141da1ef1bccff0bdefa356f8c80494c795d043533cc15cce327f",
+      "bytes": 7640
     },
     "docs/LINUX.md": {
       "sha256": "6ad573dacf7e787f8ec0c7dd89f0e970e2a1db84f95ad98eae346d970248141c",
@@ -780,8 +780,8 @@
       "bytes": 16111
     },
     "tests/test_web_search.py": {
-      "sha256": "23adb77e64991659d5e0bca7b134c10f95e0019f00bae72aa5535e8a23a36689",
-      "bytes": 16379
+      "sha256": "3dc1b5f869d3e8e5703db91f92b1caab045cc256134bf8016d5b9186259eee9c",
+      "bytes": 16756
     },
     "tests/test_workforce.py": {
       "sha256": "0cc4e282a24404343fb79dfa916c192705a52183cd2323be3ee0aab8fc479c32",

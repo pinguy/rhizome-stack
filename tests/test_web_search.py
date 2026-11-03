@@ -139,6 +139,10 @@ class WebSearchRoutingTests(unittest.TestCase):
             ('history of local news', 'web', None, False),
             ('latest BBC news on museum history', 'news', 'pw', True),
             ('VS Code release notes', 'web', None, False),
+            ('history curriculum news', 'news', 'pw', True),
+            ('historical building news', 'news', 'pw', True),
+            ('archaeology origins news', 'news', 'pw', True),
+            ('origins of BBC News', 'web', None, False),
         ]
         for query, mode, freshness, dated in cases:
             with self.subTest(query=query), \
@@ -278,6 +282,8 @@ class WebSearchHeuristicTests(unittest.TestCase):
             ('The bank may cut rates after reviewing May data', 'rumour/speculation'),
             ('The bank may not raise rates', 'rumour/speculation'),
             ('The bank may have revised its forecast', 'rumour/speculation'),
+            ('The suspect may face charges', 'rumour/speculation'),
+            ('The suspect may be released', 'rumour/speculation'),
             ('The bank could cut rates', 'rumour/speculation'),
             ('The bank reportedly revised its forecast', 'rumour/speculation'),
         ]

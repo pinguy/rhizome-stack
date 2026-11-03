@@ -114,7 +114,7 @@ are distributed under this repository's MIT licence.
 
 ## Search routing and freshness
 
-The packaged Brave tool (1.9.2) keeps release-note and other ordinary web queries
+The packaged Brave tool (1.9.3) keeps release-note and other ordinary web queries
 free of inferred ISO dates. Generic `new`, `release`, `update`, `now` and `live`
 words alone do not request recent articles; explicit current-version and live
 coverage phrases still do. Use the `mode` and `freshness` arguments when intent
@@ -141,3 +141,7 @@ moves the repeated `event_date_rule` and `custody_state_rule` strings from each
 result to `claim_discipline_rules` at the top level. Dynamic freshness/custody
 flags, source URLs, snippets, verification labels and `response_policy` stay
 available. Leave it disabled for clients expecting the original result shape.
+
+History as a news subject (for example “history curriculum news”) keeps news
+routing. Explicit historical intent (“history of local news” or “BBC News
+website redesign history”) still avoids inferred current-news filters.

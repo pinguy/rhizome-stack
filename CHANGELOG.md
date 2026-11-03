@@ -2,6 +2,9 @@
 
 ## 0.1.0-alpha.16 - 2026-11-03
 
+- Update Brave search to 1.9.3: keep news about historical subjects current while
+  preserving explicit history/archive queries; extend routing/modal regressions.
+
 - Update Brave search to 1.9.2: distinguish May dates/names from modal phrases,
   qualify sports-score routing and exempt VS Code from opponent matching.
 - Route undated historical-news queries to ordinary web discovery, keep web
