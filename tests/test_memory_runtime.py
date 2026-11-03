@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -21,6 +22,7 @@ class MemoryRuntimeTest(unittest.TestCase):
                 'hung.py': 'import time\nfor line in __import__("sys").stdin:\n time.sleep(30)\n',
                 'partial.py': 'import sys,time\nfor line in sys.stdin:\n print("{\\\"ok\\\":", end="", flush=True); time.sleep(30)\n',
                 'oversized.py': 'import sys,time\nfor line in sys.stdin:\n print("x"*4096, end="", flush=True); time.sleep(30)\n',
+                'slow_valid.py': 'import json,sys,time\nfor line in sys.stdin:\n time.sleep(0.25); print(json.dumps({"ok": True}), flush=True)\n',
                 'valid.py': 'import json,sys\nfor line in sys.stdin:\n print(json.dumps({"ok": True}), flush=True)\n',
                 'failure.py': 'import json,sys\nfor line in sys.stdin:\n print(json.dumps({"ok": False, "error": "index missing"}), flush=True)\n',
                 'malformed.py': 'import sys\nfor line in sys.stdin:\n print("this is not json", flush=True)\n',
@@ -31,23 +33,24 @@ class MemoryRuntimeTest(unittest.TestCase):
                 import {{ RhizomeServer }} from {json.dumps(CLIENT.as_uri())};
                 const root = process.argv[1];
                 const base = {{
-                  pythonPath: "/usr/bin/python3", baseDir: root, indexPath: root + "/index",
+                  pythonPath: {json.dumps(sys.executable)}, baseDir: root, indexPath: root + "/index",
                   textsPath: root + "/texts", metadataPath: root + "/meta",
                   embedModel: "fixture", device: "cpu", requestTimeoutMs: 120,
                   maxResponseBytes: 1024,
                 }};
                 const outcomes = {{}};
-                async function run(label, name, pythonPath = base.pythonPath) {{
-                  const server = new RhizomeServer({{...base, pythonPath}}, root + "/" + name);
+                async function run(label, name, pythonPath = base.pythonPath, requestTimeoutMs = 1000) {{
+                  const server = new RhizomeServer({{...base, pythonPath, requestTimeoutMs}}, root + "/" + name);
                   outcomes[label] = await server.request({{type:"status"}});
                   outcomes[label + ":health"] = server.health();
                   server.stop();
                 }}
                 await run("valid", "valid.py");
+                await run("slow_valid", "slow_valid.py");
                 await run("failure", "failure.py");
                 await run("malformed", "malformed.py");
-                await run("hung", "hung.py");
-                await run("partial", "partial.py");
+                await run("hung", "hung.py", base.pythonPath, 120);
+                await run("partial", "partial.py", base.pythonPath, 120);
                 await run("oversized", "oversized.py");
                 await run("missing", "valid.py", root + "/missing-python");
                 console.log(JSON.stringify(outcomes));
@@ -58,6 +61,8 @@ class MemoryRuntimeTest(unittest.TestCase):
             outcomes = json.loads(result.stdout)
             self.assertTrue(outcomes['valid']['ok'])
             self.assertTrue(outcomes['valid:health']['available'])
+            self.assertTrue(outcomes['slow_valid']['ok'])
+            self.assertTrue(outcomes['slow_valid:health']['available'])
             self.assertFalse(outcomes['failure']['ok'])
             self.assertFalse(outcomes['failure:health']['available'])
             self.assertEqual(outcomes['failure:health']['error'], 'index missing')

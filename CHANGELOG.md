@@ -2,6 +2,14 @@
 
 ## 0.1.0-alpha.16 - 2026-11-03
 
+- Give responsive memory-worker test fixtures 1000 ms, including a deliberately
+  delayed healthy reply, while retaining 120 ms hung/partial timeout checks.
+- Update Brave search to 1.9.1: narrow automatic recency triggers, avoid date
+  suffixes on ordinary web queries and try one bounded unfiltered fallback for
+  sparse automatic searches. Explicit windows remain strict.
+- Add 30 routing cases plus mocked HTTP refusal, fallback and budget regressions;
+  document author-machine acceptance scope and clean-target tester receipts.
+
 - Add revision-pinned MiniMax H3 FL2VA pruned NF4 generation to Video Desk and
   Open WebUI: Text or first-frame input, fixed 24 fps, native 32 kHz stereo
   audio, 1–15 second jobs, and hash-verified model/processor downloads.

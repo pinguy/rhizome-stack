@@ -1,7 +1,7 @@
 """
 title: Rhizome Brave Search
 description: Public web search with source discovery, news checks and bounded enrichment.
-version: 1.9.0
+version: 1.9.1
 requirements: requests>=2.31.0,pydantic>=2.0.0
 
 Import this single file under Open WebUI Workspace > Tools. Configure Valves
@@ -15,6 +15,9 @@ freshness accepts auto, none, pd, pw, pm, py or YYYY-MM-DDtoYYYY-MM-DD.
 mode accepts auto, web, news, local, live or headlines. use_cache=False bypasses
 local and requests bypass of provider caching. Explicit freshness overrides
 automatic age filtering; historical queries do not trigger current-state checks.
+Sparse automatic searches may retry once without provider freshness filtering;
+explicit windows stay strict and news publication-age checks remain in force.
+Only news/live queries receive an inferred date suffix.
 
 Results are snippets, not fetched articles or independently verified claims.
 Outlet perspective labels are inherited, unverified hints, not truth ratings.
@@ -61,7 +64,7 @@ if not logger.handlers:
 
 OPENWEBUI_DB = Path(os.environ.get("OPENWEBUI_DB", str(Path.home() / ".local/share/rhizome-stack/state/openwebui-data/webui.db")))
 OPENCLAW_CONFIG = Path(os.environ.get("OPENCLAW_CONFIG", str(Path.home() / ".openclaw/openclaw.json")))
-TOOL_VERSION = "1.9.0"
+TOOL_VERSION = "1.9.1"
 
 
 def _env_number(name: str, default: float, low: float, high: float) -> float:
@@ -110,22 +113,18 @@ F1_PUBLIC_API_KEY_FALLBACK = os.getenv(
 )
 
 RECENCY_TERMS = (
+    "headlines",
     "breaking",
-    "current",
     "latest",
-    "live",
-    "new",
     "news",
-    "now",
     "recent",
-    "release",
+    "right now",
     "today",
     "tonight",
     "this morning",
     "this afternoon",
     "this evening",
     "this week",
-    "update",
 )
 
 MONTH_NAME_PATTERN = (
@@ -145,7 +144,6 @@ ACTIVE_EVENT_TERMS = (
     "currently happening",
     "election results",
     "latest updates",
-    "live",
     "live blog",
     "live coverage",
     "live feed",
@@ -809,14 +807,11 @@ def _clean_query(query: str) -> str:
 
 
 def _wants_fresh_sources(query: str) -> bool:
-    # The place name "New York" must not be read as a request for new articles.
     cleaned = _clean_query(query)
-    cleaned = re.sub(
-        r"(?i)\bnew\s+(?:york|jersey|zealand|mexico|hampshire|orleans|delhi|south wales)\b",
-        "",
-        cleaned,
-    )
-    return _contains_any(cleaned, RECENCY_TERMS)
+    return (_contains_any(cleaned, RECENCY_TERMS)
+            or _looks_like_active_event_query(cleaned)
+            or bool(re.search(r"\bcurrent\s+(?:\w+\s+)?(?:version|price|status|weather|standings|results|news)\b",
+                              cleaned, re.IGNORECASE)))
 
 
 def _query_is_explicitly_historical(query: str, clock: dict) -> bool:
@@ -849,13 +844,13 @@ def _ground_today_date(query: str, clock: dict) -> tuple[str, bool]:
     return grounded, grounded != cleaned
 
 
-def _build_search_query(query: str, clock: dict) -> str:
+def _build_search_query(query: str, clock: dict, *, news: bool = False) -> str:
     cleaned, _ = _ground_today_date(query, clock)
     if not cleaned:
         return clock["date"]
     if _query_is_explicitly_historical(cleaned, clock):
         return cleaned
-    if not _wants_fresh_sources(cleaned):
+    if not news or not _wants_fresh_sources(cleaned):
         return cleaned
 
     additions: list[str] = []
@@ -867,7 +862,7 @@ def _build_search_query(query: str, clock: dict) -> str:
 
 
 def _freshness_filter(query: str) -> str | None:
-    if _contains_any(query, ("today", "tonight", "breaking", "right now", "live")):
+    if _contains_any(query, ("today", "tonight", "breaking", "right now", "live updates", "live coverage", "live score")):
         return "pd"
     if _contains_any(query, ("this week", "headlines", "news")):
         return "pw"
@@ -2296,7 +2291,8 @@ class Tools:
         local_query = _local_news_location_query(cleaned) if mode == "local" else cleaned
         query_date_corrected = False
         if freshness == "auto" and not historical:
-            search_query = _build_search_query(local_query, clock)
+            search_query = _build_search_query(
+                local_query, clock, news=mode in {"local", "news", "headlines", "live"})
             _, query_date_corrected = _ground_today_date(local_query, clock)
         else:
             search_query = local_query
@@ -2343,6 +2339,19 @@ class Tools:
             return bool(_canonical_url(item.get("url", "")))
 
         candidates = [item for item in candidates if keep(item)]
+        freshness_relaxed = False
+        context = _run_context.get()
+        # Only inferred windows are soft. An explicit caller window is a contract.
+        # Do not spend another request after a provider refusal or exhausted budget.
+        if (freshness == "auto" and effective_freshness and stage_successes
+                and len(_dedupe_results(candidates)) < safe_count
+                and _domain_for_url(BRAVE_SEARCH_URL) not in context["blocked_hosts"]):
+            broader = attempt("Unfiltered fallback", lambda: search(search_query, None), None)
+            if broader is not None:
+                freshness_relaxed = True
+                candidates = _dedupe_results([*candidates, *[item for item in broader if keep(item)]])
+                warnings.append("Automatic freshness returned too few results; tried one unfiltered search. "
+                                "Publication-age checks still apply to news results.")
         if mode == "headlines":
             # Restriction first, so long natural-language queries cannot truncate it away.
             left = attempt("Left perspective", lambda: search(f"{_site_query(LEFT_NEWS_DOMAINS)} {search_query}"), [])
@@ -2411,6 +2420,7 @@ class Tools:
                 "error": None if success else "No discovery stage completed successfully",
                 "searched_at": clock, "mode": mode, "original_query": cleaned, "query": search_query,
                 "query_date_corrected": query_date_corrected, "freshness": effective_freshness,
+                "freshness_relaxed": freshness_relaxed,
                 "schedule_validation": schedule, "news_balance": balance, "allsides_results": allsides_items,
                 "source_expansion": {"requested_primary_count": safe_count, "requested_additional_count": additional_target,
                                      "candidate_pool_size": len(candidates), "primary_results_are_ranked": False,

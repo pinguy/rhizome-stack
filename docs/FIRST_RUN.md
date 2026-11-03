@@ -138,3 +138,30 @@ Enable the Ollama catalogue timer only when its endpoint is available:
 ```bash
 systemctl --user enable --now openclaw-ollama-model-sync.timer
 ```
+
+## Clean-target acceptance receipt
+
+Use a disposable native Linux VM or fresh WSL2 distribution with systemd.
+Record the source commit, distro/version, native/WSL2, GPU/driver and selected
+profile/provider. Start with the base profile before adding optional modules:
+
+```bash
+./install-linux.sh --dry-run
+./install-linux.sh
+~/.local/bin/rhizome-stack doctor
+~/.local/bin/rhizome-stack welcome
+~/.local/bin/rhizome-stack start
+~/.local/bin/rhizome-stack smoke
+```
+
+Use `install-wsl.sh` for both installer commands on WSL2. Then open Open WebUI,
+select the configured model and send a real message; record whether it replied.
+Include `doctor` output and the exit/result of each step. For a failed service:
+
+```bash
+journalctl --user -u openclaw-gateway -u openclaw-openwebui-adapter -u open-webui -n 30 --no-pager
+```
+
+Review and redact logs before sharing them. A dry run or HTTP smoke test alone
+is not a completed installation or browser acceptance receipt. An independent
+tester should provide the same receipt; no outside acceptance is recorded yet.

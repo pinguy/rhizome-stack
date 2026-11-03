@@ -21,6 +21,7 @@ authorship over OpenClaw, Open WebUI or the other projects it connects.
 | Optional external Real-ESRGAN NCNN/Vulkan executable and models | Upstream terms; not downloaded or bundled by this stack | https://github.com/xinntao/Real-ESRGAN |
 | Qwen Image 2.1 model files | Qwen Research licence; weights are not bundled | https://huggingface.co/Comfy-Org/Qwen-Image-2.1 |
 | Qwen Image 2.1 Uncensored GGUF | Repository terms; weights are not bundled | https://huggingface.co/abenzerps/Qwen-Image-2.1-Uncensored-GGUF |
+| WAN Rapid GGUF and supporting WAN/UMT5 model files | Upstream repository/model terms; weights are not bundled | https://huggingface.co/befox/WAN2.2-14B-Rapid-AllInOne-GGUF and supporting repositories in `manifests/creative-models.json` |
 | MiniMax Music 3 ComfyUI model files | Apache-2.0 repository terms; weights are not bundled | https://huggingface.co/Comfy-Org/MiniMax-Music-3 |
 | sentence-transformers/all-MiniLM-L6-v2 | Apache-2.0; weights are downloaded separately | https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2 |
 
@@ -42,3 +43,8 @@ of the upstream material they modify.
 
 Open WebUI's current licence includes a branding condition. This project does
 not remove or replace Open WebUI branding.
+
+Creative model names containing “Uncensored” or “NSFW” are upstream labels,
+not licence classifications. The download manifest records exact repository
+revisions; check those revisions' model and derivative terms separately from
+this repository's MIT licence. This document is not a licence-clearance audit.

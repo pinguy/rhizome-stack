@@ -111,3 +111,21 @@ source hashes and portability adaptations recorded per entry in
 `manifests/skills.json`. They are not presented as part of the upstream
 snapshot. Reference-machine paths are replaced with configured discovery. They
 are distributed under this repository's MIT licence.
+
+## Search routing and freshness
+
+The packaged Brave tool (1.9.1) keeps release-note and other ordinary web queries
+free of inferred ISO dates. Generic `new`, `release`, `update`, `now` and `live`
+words alone do not request recent articles; explicit current-version and live
+coverage phrases still do. Use the `mode` and `freshness` arguments when intent
+is ambiguous.
+
+With `freshness=auto`, a sparse filtered baseline can retry once without the
+provider time filter, using the same request/time budget. `freshness_relaxed`
+reports a completed broader search; original results are retained and current
+news still passes the same publication-age checks. Explicit windows and
+`freshness=none` never trigger this fallback. Snippets remain discovery leads.
+
+Existing Open WebUI tool registrations are preserved on installation. Use the
+hash/diff and explicit update procedure in [First run](FIRST_RUN.md) to deploy
+changed tool source to an existing registration.

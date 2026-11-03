@@ -79,3 +79,11 @@
   new target still needs its own latency, memory and quality checks. The resident
   classifier is staged but disabled by default. There is no durable worker queue,
   server-side cancellation guarantee or automatic semantic acceptance.
+
+- Web-search outlet pairing uses a small, mostly US-oriented set of unverified
+  perspective labels. It is an outlet mix, not geographically balanced coverage
+  or matched reporting of each story. The optional F1 calendar depends on public
+  upstream endpoints which can change; failure does not invalidate web results.
+- Custody discovery uses title similarity to find candidate snippets, not person
+  identity verification. Its 0.32 candidate threshold can include unrelated
+  reports; never treat its suggested state as verified custody information.

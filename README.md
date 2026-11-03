@@ -12,6 +12,8 @@ need. Linux and WSL2 use the same setup wizard.
 **Status: 0.1.0-alpha.16 candidate.** Installer and regression checks are automated; complete
 native Linux and WSL2 installations still need acceptance testing.
 Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working machine.
+End-to-end runtime testing so far has been on the author's machine; automated
+regressions also run separately, but clean native Linux and WSL2 acceptance is pending.
 
 ## What you get
 
