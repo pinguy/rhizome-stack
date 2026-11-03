@@ -133,6 +133,12 @@ class WebSearchRoutingTests(unittest.TestCase):
             ('Python 2024 release notes', 'web', None, False),
             ('UK news 2024', 'web', None, False),
             ('Formula 1 2025 calendar', 'web', None, False),
+            ('scores of people displaced by floods', 'web', None, False),
+            ('football scores', 'live', 'pd', True),
+            ('BBC News website redesign history', 'web', None, False),
+            ('history of local news', 'web', None, False),
+            ('latest BBC news on museum history', 'news', 'pw', True),
+            ('VS Code release notes', 'web', None, False),
         ]
         for query, mode, freshness, dated in cases:
             with self.subTest(query=query), \
@@ -212,6 +218,97 @@ class WebSearchRoutingTests(unittest.TestCase):
         self.assertEqual(len(result['results']), 1)
         self.assertFalse(result['freshness_relaxed'])
         self.assertTrue(any('HTTP 403' in warning for warning in result['warnings']))
+
+    def test_web_latest_retains_older_results_and_uses_web_metadata(self):
+        with patch.object(web_search.requests, 'request', side_effect=[
+            self.response(items=[]), self.response(items=self.items(1, date='2026-10-04')),
+        ]):
+            result = self.run_search('bitcoin latest price', count=1, mode='web')
+        self.assertTrue(result['freshness_relaxed'])
+        self.assertEqual(len(result['results']), 1)
+        discipline = result['results'][0]['claim_discipline']
+        self.assertIsNone(discipline['current_news_window_days'])
+        self.assertFalse(discipline['background_only'])
+        self.assertEqual(discipline['source_age_days'], 3)
+
+    def test_missing_locality_only_degrades_automatic_mode(self):
+        with patch.object(web_search.requests, 'request', return_value=self.response(items=self.items(1))) as request:
+            result = self.run_search('news near me', count=1, LOCALITY='')
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['mode'], 'news')
+        self.assertNotIn('near me', result['query'])
+        self.assertNotIn('Poole', result['query'])
+        self.assertTrue(any('No locality configured' in warning for warning in result['warnings']))
+        self.assertEqual(request.call_count, 1)
+        with patch.object(web_search.requests, 'request') as request:
+            result = self.run_search('news near me', mode='local', LOCALITY='')
+        self.assertFalse(result['ok'])
+        request.assert_not_called()
+
+    def test_compact_output_hoists_rules_and_preserves_evidence(self):
+        tool = web_search.Tools()
+        output = []
+        for compact in (False, True):
+            with patch.object(web_search, '_current_time_context', return_value=self.clock), \
+                 patch.object(web_search, '_brave_results', return_value=self.items(12)):
+                output.append(tool._run_search('UK news', 10, 'auto', 'news', False,
+                                               self.settings(COMPACT_OUTPUT=compact)))
+        rich, compact = map(json.loads, output)
+        self.assertLess(len(output[1]), len(output[0]) * 0.8)
+        self.assertEqual(rich['response_policy'], compact['response_policy'])
+        self.assertIn('untrusted_content', compact['response_policy'])
+        for before, after in zip(rich['results'], compact['results']):
+            restored = dict(after['claim_discipline'], **compact['claim_discipline_rules'])
+            self.assertEqual(before['claim_discipline'], restored)
+            self.assertEqual(before['url'], after['url'])
+            self.assertEqual(before['claim_label'], after['claim_label'])
+            self.assertEqual(after['evidence_scope'], 'search_snippet')
+
+
+class WebSearchHeuristicTests(unittest.TestCase):
+    setUp = WebSearchPolicyTests.setUp
+
+    def test_month_names_and_modal_language_have_distinct_labels(self):
+        cases = [
+            ('Figures for 3 May 2025 show volume growth', 'primary_source_unverified'),
+            ('May 2025 figures show volume growth', 'primary_source_unverified'),
+            ('Figures for May show volume growth', 'primary_source_unverified'),
+            ('May data show volume growth', 'primary_source_unverified'),
+            ('Theresa May said the figures were published', 'primary_source_unverified'),
+            ('The bank may cut rates after reviewing May data', 'rumour/speculation'),
+            ('The bank may not raise rates', 'rumour/speculation'),
+            ('The bank may have revised its forecast', 'rumour/speculation'),
+            ('The bank could cut rates', 'rumour/speculation'),
+            ('The bank reportedly revised its forecast', 'rumour/speculation'),
+        ]
+        for text, label in cases:
+            with self.subTest(text=text):
+                result = web_search._claim_label_for_result({
+                    'title': 'Economic bulletin', 'description': text,
+                    'url': 'https://www.ons.gov.uk/economy/articles/fixture',
+                }, self.clock)
+                self.assertEqual(result['label'], label)
+                self.assertEqual(result['source_relation'], 'official_source')
+                self.assertFalse(result['verified'])
+
+    def test_vs_code_is_not_an_opponent_pairing(self):
+        for query, expected in [('VS Code release notes', False),
+                                 ('vs code extensions', False),
+                                 ('Arsenal vs Chelsea', True),
+                                 ('VS Code: Arsenal vs Chelsea fixture viewer', True)]:
+            with self.subTest(query=query):
+                result = web_search._freshness_for_result({}, query, self.clock)
+                self.assertEqual(result['same_record_validation'], expected)
+
+    def test_upstream_title_match_does_not_establish_domain_ownership(self):
+        source = {'title': 'Woodland Trust annual report', 'description': 'Annual report figures'}
+        hint = {'source_name': 'Woodland Trust'}
+        for domain, accepted in [('woodlandtrust.org.uk', True), ('random-reports.invalid', False)]:
+            with self.subTest(domain=domain):
+                candidate = {**source, 'url': f'https://{domain}/articles/annual-report',
+                             'page_age': self.clock['date']}
+                score = web_search._upstream_candidate_score(candidate, source, hint, self.clock)
+                self.assertEqual(score >= 0.62, accepted)
 
 
 if __name__ == "__main__":

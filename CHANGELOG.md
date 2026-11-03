@@ -2,6 +2,14 @@
 
 ## 0.1.0-alpha.16 - 2026-11-03
 
+- Update Brave search to 1.9.2: distinguish May dates/names from modal phrases,
+  qualify sports-score routing and exempt VS Code from opponent matching.
+- Route undated historical-news queries to ordinary web discovery, keep web
+  freshness metadata separate from news, and warn/fall back to general news
+  only when automatic local routing has no configured location.
+- Add opt-in compact JSON with shared result rules while retaining evidence
+  labels and the response policy; preserve the existing default output shape.
+
 - Give responsive memory-worker test fixtures 1000 ms, including a deliberately
   delayed healthy reply, while retaining 120 ms hung/partial timeout checks.
 - Update Brave search to 1.9.1: narrow automatic recency triggers, avoid date

@@ -114,7 +114,7 @@ are distributed under this repository's MIT licence.
 
 ## Search routing and freshness
 
-The packaged Brave tool (1.9.1) keeps release-note and other ordinary web queries
+The packaged Brave tool (1.9.2) keeps release-note and other ordinary web queries
 free of inferred ISO dates. Generic `new`, `release`, `update`, `now` and `live`
 words alone do not request recent articles; explicit current-version and live
 coverage phrases still do. Use the `mode` and `freshness` arguments when intent
@@ -129,3 +129,15 @@ news still passes the same publication-age checks. Explicit windows and
 Existing Open WebUI tool registrations are preserved on installation. Use the
 hash/diff and explicit update procedure in [First run](FIRST_RUN.md) to deploy
 changed tool source to an existing registration.
+
+Historical intent such as “BBC News website redesign history” keeps ordinary
+web routing even without a year. A bare “scores” does not imply live sport;
+qualified phrases such as “football scores” and “live scores” do. Automatic
+local routing without a configured locality falls back to general news with a
+warning; explicit `mode=local` still requires a place. No location is guessed.
+
+`COMPACT_OUTPUT` is an optional valve, disabled by default. It minifies JSON and
+moves the repeated `event_date_rule` and `custody_state_rule` strings from each
+result to `claim_discipline_rules` at the top level. Dynamic freshness/custody
+flags, source URLs, snippets, verification labels and `response_policy` stay
+available. Leave it disabled for clients expecting the original result shape.

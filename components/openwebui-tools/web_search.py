@@ -1,7 +1,7 @@
 """
 title: Rhizome Brave Search
 description: Public web search with source discovery, news checks and bounded enrichment.
-version: 1.9.1
+version: 1.9.2
 requirements: requests>=2.31.0,pydantic>=2.0.0
 
 Import this single file under Open WebUI Workspace > Tools. Configure Valves
@@ -17,7 +17,8 @@ local and requests bypass of provider caching. Explicit freshness overrides
 automatic age filtering; historical queries do not trigger current-state checks.
 Sparse automatic searches may retry once without provider freshness filtering;
 explicit windows stay strict and news publication-age checks remain in force.
-Only news/live queries receive an inferred date suffix.
+Only news/live queries receive an inferred date suffix. COMPACT_OUTPUT optionally
+minifies JSON and hoists repeated result rules; the default output is unchanged.
 
 Results are snippets, not fetched articles or independently verified claims.
 Outlet perspective labels are inherited, unverified hints, not truth ratings.
@@ -64,7 +65,7 @@ if not logger.handlers:
 
 OPENWEBUI_DB = Path(os.environ.get("OPENWEBUI_DB", str(Path.home() / ".local/share/rhizome-stack/state/openwebui-data/webui.db")))
 OPENCLAW_CONFIG = Path(os.environ.get("OPENCLAW_CONFIG", str(Path.home() / ".openclaw/openclaw.json")))
-TOOL_VERSION = "1.9.1"
+TOOL_VERSION = "1.9.2"
 
 
 def _env_number(name: str, default: float, low: float, high: float) -> float:
@@ -155,7 +156,13 @@ ACTIVE_EVENT_TERMS = (
     "right now",
     "score centre",
     "scorecenter",
-    "scores",
+    "live scores",
+    "football scores",
+    "cricket scores",
+    "rugby scores",
+    "tennis scores",
+    "basketball scores",
+    "match scores",
     "tracker",
 )
 
@@ -232,7 +239,6 @@ REPUTABLE_REPORTING_DOMAINS = (
 
 SPECULATION_TERMS = (
     "could",
-    "may",
     "might",
     "rumor",
     "rumour",
@@ -815,7 +821,10 @@ def _wants_fresh_sources(query: str) -> bool:
 
 
 def _query_is_explicitly_historical(query: str, clock: dict) -> bool:
-    """Recognise a clearly past-year search without hijacking requests for latest news."""
+    """Recognise historical intent without hijacking requests for latest news."""
+    if (_contains_any(query, ("history", "historical", "origins", "archived"))
+            and not _contains_any(query, ("today", "latest", "current", "now", "breaking", "this week", "tonight"))):
+        return True
     years = _mentioned_years(query)
     if not years or max(years) >= int(clock["year"]):
         return False
@@ -1284,6 +1293,8 @@ def _upstream_candidate_score(candidate: dict, source_result: dict, hint: dict, 
     elif domain_affinity:
         primary_bonus = 0.38
     else:
+        # Without an official/affiliated domain, the remaining bonuses cannot
+        # reach the 0.62 acceptance threshold. Title agreement is not ownership.
         primary_bonus = 0.0
     marker_bonus = 0.08 if official_marker else 0.0
     return round(primary_bonus + marker_bonus + (title_score * 0.18) + (overlap_score * 0.18) + freshness_score, 4)
@@ -1405,7 +1416,6 @@ def _resolve_upstream_sources(
                     if score >= 0.62:
                         ranked.append((score, candidate))
                 ranked.sort(key=lambda pair: pair[0], reverse=True)
-                chase_query = _upstream_chase_query(result, hint)
                 candidates = [
                     _compact_upstream_source(candidate, result, hint, chase_query, score, clock)
                     for score, candidate in ranked[:MAX_UPSTREAM_SOURCES_PER_HINT]
@@ -1553,7 +1563,7 @@ def _claim_discipline_for_result(result: dict, query: str, clock: dict) -> dict:
     window = {"pd": 1, "pw": 7, "pm": 31, "py": 365}.get(override, NEWS_CURRENT_MAX_AGE_DAYS)
     custom_range = bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}to\d{4}-\d{2}-\d{2}", override))
     current_news = override != "none" and not custom_range and not _query_is_explicitly_historical(query, clock) and (
-        _setting("news_mode", False) or _wants_fresh_sources(query) or _looks_like_news_query(query)
+        _setting("news_mode", _looks_like_news_query(query))
     )
     wants_background = _contains_any(query, BACKGROUND_TERMS)
     is_background = _contains_any(result_text, BACKGROUND_TERMS)
@@ -1686,7 +1696,9 @@ def _custody_validation(api_key: str, result: dict, query: str, clock: dict) -> 
 def _freshness_for_result(result: dict, query: str, clock: dict) -> dict:
     combined = "\n".join((str(query or ""), str(result.get("title", "") or ""), str(result.get("description", "") or "")))
     volatile = _contains_any(combined, VOLATILE_FACT_TERMS)
-    relational = _contains_any(combined, RELATIONAL_FACT_TERMS)
+    # VS Code is a product name, not an opponent pairing.
+    relational_text = re.sub(r"\bvs\s+code\b", "", combined, flags=re.IGNORECASE)
+    relational = _contains_any(relational_text, RELATIONAL_FACT_TERMS)
     return {
         "as_of": clock["iso"],
         "volatile": volatile,
@@ -1735,6 +1747,7 @@ def _request(method: str, url: str, **kwargs) -> requests.Response:
         else:
             kwargs.setdefault("timeout", HTTP_TIMEOUT)
         response = None
+        delay = None
         try:
             response = requests.request(method, url, headers=headers, **kwargs)
         except requests.RequestException as exc:
@@ -1753,7 +1766,8 @@ def _request(method: str, url: str, **kwargs) -> requests.Response:
             if status not in RETRYABLE_HTTP_STATUS or attempt + 1 == HTTP_RETRIES or delay > 8:
                 response.close()
                 raise error
-        delay = _retry_delay(response, attempt)
+        if delay is None:
+            delay = _retry_delay(response, attempt)
         if response is not None:
             response.close()
         if context is not None and time.monotonic() + delay >= context["deadline"]:
@@ -1971,7 +1985,11 @@ def _claim_label_for_result(result: dict, clock: dict) -> dict:
         label = "credibly_reported"
         reason = "Reputable reporting, but not direct official confirmation."
 
-    if _contains_any(claim_text, SPECULATION_TERMS):
+    # Bare "may" also names a month or a person. Require a modal-verb phrase.
+    modal_may = re.search(
+        r"\bmay\s+(?:not\s+)?(?:have|be|face|win|lose|join|announce|cut|raise|fall|rise|"
+        r"increase|decrease|lead|cause|change|need|remain|return)\b", claim_text, re.IGNORECASE)
+    if _contains_any(claim_text, SPECULATION_TERMS) or modal_may:
         label = "rumour/speculation"
         reason = "The title or snippet contains explicit uncertainty, denial, or report-claim language."
     elif source_relation == "general_web" and _contains_any(
@@ -2207,6 +2225,7 @@ class Tools:
         UPSTREAM_SOURCES: bool = Field(default=True, description="Follow institutional references towards primary sources.")
         CUSTODY_CHECKS: bool = Field(default=True, description="Look for recent custody-status snippets; not factual verification.")
         F1_SCHEDULE: bool = Field(default=True, description="Try the optional Formula 1 public calendar endpoint.")
+        COMPACT_OUTPUT: bool = Field(default=False, description="Minify JSON and hoist repeated result rules; retain evidence and response policy.")
 
     def __init__(self):
         self.valves = self.Valves()
@@ -2248,7 +2267,17 @@ class Tools:
                 "time_budget_seconds": settings["TIME_BUDGET_SECONDS"],
                 "budget_exhausted": context["budget_exhausted"],
             }
-            return json.dumps(payload, ensure_ascii=False, indent=2)
+            compact = settings.get("COMPACT_OUTPUT", False)
+            if compact:
+                rules = {}
+                for item in [*payload.get("results", []), *payload.get("additional_sources", [])]:
+                    discipline = item.get("claim_discipline", {})
+                    for key in ("event_date_rule", "custody_state_rule"):
+                        if key in discipline:
+                            rules[key] = discipline.pop(key)
+                payload["claim_discipline_rules"] = rules
+            return json.dumps(payload, ensure_ascii=False, indent=None if compact else 2,
+                              separators=(",", ":") if compact else None)
         except SearchToolError as exc:
             return _error_payload(str(exc), clock=_current_time_context())
         except Exception as exc:
@@ -2279,7 +2308,8 @@ class Tools:
         if cleaned != " ".join(query.split()):
             warnings.append("Query was shortened to the tool's character/word limit.")
         historical = _query_is_explicitly_historical(cleaned, clock)
-        if mode == "auto":
+        automatic_mode = mode == "auto"
+        if automatic_mode:
             mode = ("web" if historical else "local" if _looks_like_local_news_query(cleaned)
                     else "live" if _looks_like_active_event_query(cleaned)
                     else "headlines" if _looks_like_main_news_query(cleaned)
@@ -2288,7 +2318,18 @@ class Tools:
         past_range = bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}to\d{4}-\d{2}-\d{2}", freshness))
         if historical or past_range:
             mode = "web" if mode in {"local", "live", "headlines"} else mode
-        local_query = _local_news_location_query(cleaned) if mode == "local" else cleaned
+        local_query = cleaned
+        if mode == "local":
+            try:
+                local_query = _local_news_location_query(cleaned)
+            except SearchToolError:
+                if not automatic_mode:
+                    raise
+                mode = "news"
+                local_query = _clean_query(re.sub(
+                    r"\b(?:near me|around me|in my area|local)\b", "", cleaned,
+                    flags=re.IGNORECASE)) or "news"
+                warnings.append("No locality configured; searched general news without assuming a location.")
         query_date_corrected = False
         if freshness == "auto" and not historical:
             search_query = _build_search_query(
@@ -2298,9 +2339,9 @@ class Tools:
             search_query = local_query
         effective_freshness = (None if freshness == "none" or (freshness == "auto" and historical)
                                else _freshness_filter(cleaned) if freshness == "auto" else freshness)
-        if freshness == "auto" and mode in {"local", "news", "headlines"}:
+        if freshness == "auto" and not historical and mode in {"local", "news", "headlines"}:
             effective_freshness = "pw"
-        elif freshness == "auto" and mode == "live":
+        elif freshness == "auto" and not historical and mode == "live":
             effective_freshness = "pd"
         api_key = settings["BRAVE_API_KEY"].strip() or _read_brave_key()
         if not api_key:
