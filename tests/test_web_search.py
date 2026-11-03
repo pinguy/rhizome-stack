@@ -167,6 +167,24 @@ class WebSearchRoutingTests(unittest.TestCase):
         self.assertNotIn('freshness', request.call_args_list[1].kwargs['params'])
         self.assertFalse(request.call_args.kwargs['allow_redirects'])
 
+    def test_fallback_does_not_spend_a_call_to_fill_a_small_shortfall(self):
+        for returned in (3, 9):
+            with self.subTest(returned=returned), \
+                 patch.object(web_search.requests, 'request',
+                              return_value=self.response(items=self.items(returned))) as request:
+                result = self.run_search('UK news', count=10)
+            self.assertEqual(request.call_count, 1)
+            self.assertFalse(result['freshness_relaxed'])
+            self.assertEqual(len(result['results']), returned)
+
+    def test_metered_key_can_disable_automatic_fallback(self):
+        with patch.object(web_search.requests, 'request',
+                          return_value=self.response(items=self.items(1))) as request:
+            result = self.run_search('UK news', count=10, AUTO_FRESHNESS_FALLBACK=False)
+        self.assertEqual(request.call_count, 1)
+        self.assertFalse(result['freshness_relaxed'])
+        self.assertEqual(len(result['results']), 1)
+
     def test_explicit_freshness_is_never_relaxed(self):
         for freshness in ('pd', 'pw', 'pm', 'py', 'none', '2024-01-01to2024-12-31'):
             with self.subTest(freshness=freshness), \
@@ -286,6 +304,33 @@ class WebSearchHeuristicTests(unittest.TestCase):
             ('The suspect may be released', 'rumour/speculation'),
             ('The bank could cut rates', 'rumour/speculation'),
             ('The bank reportedly revised its forecast', 'rumour/speculation'),
+            ('Government may ban social media', 'rumour/speculation'),
+            ('Ministers may impose new restrictions', 'rumour/speculation'),
+            ('Court may block the merger', 'rumour/speculation'),
+            ('Apple may launch a product', 'rumour/speculation'),
+            ('Council may approve the plan', 'rumour/speculation'),
+            ('Council may unanimously approve the plan', 'rumour/speculation'),
+            ('This may block the merger', 'rumour/speculation'),
+            ('GOVERNMENT MAY BAN SOCIAL MEDIA', 'rumour/speculation'),
+            ('Theresa May may ban social media', 'rumour/speculation'),
+            ('On 5 May ministers may impose restrictions', 'rumour/speculation'),
+            ('May data may indicate growth', 'rumour/speculation'),
+            ('The review in May may conclude early', 'rumour/speculation'),
+            ('Government may bank on support', 'rumour/speculation'),
+            ('Figures for 5th May show growth', 'primary_source_unverified'),
+            ('May the 5th is the publication date', 'primary_source_unverified'),
+            ('May Day celebrations', 'primary_source_unverified'),
+            ('May bank holiday opening times', 'primary_source_unverified'),
+            ('The figures were published in May', 'primary_source_unverified'),
+            ('The figures were published during May', 'primary_source_unverified'),
+            ('The deadline falls next May', 'primary_source_unverified'),
+            ('This May, the council published figures', 'primary_source_unverified'),
+            ('This May the council published figures', 'primary_source_unverified'),
+            ('Mid-May figures show growth', 'primary_source_unverified'),
+            ('Philip May attended the event', 'primary_source_unverified'),
+            ('Brian May attended the event', 'primary_source_unverified'),
+            ('Mrs. May attended the event', 'primary_source_unverified'),
+            ('May said the figures were published', 'primary_source_unverified'),
         ]
         for text, label in cases:
             with self.subTest(text=text):

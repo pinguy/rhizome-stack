@@ -1,7 +1,7 @@
 """
 title: Rhizome Brave Search
 description: Public web search with source discovery, news checks and bounded enrichment.
-version: 1.9.3
+version: 1.9.4
 requirements: requests>=2.31.0,pydantic>=2.0.0
 
 Import this single file under Open WebUI Workspace > Tools. Configure Valves
@@ -65,7 +65,7 @@ if not logger.handlers:
 
 OPENWEBUI_DB = Path(os.environ.get("OPENWEBUI_DB", str(Path.home() / ".local/share/rhizome-stack/state/openwebui-data/webui.db")))
 OPENCLAW_CONFIG = Path(os.environ.get("OPENCLAW_CONFIG", str(Path.home() / ".openclaw/openclaw.json")))
-TOOL_VERSION = "1.9.3"
+TOOL_VERSION = "1.9.4"
 
 
 def _env_number(name: str, default: float, low: float, high: float) -> float:
@@ -254,6 +254,29 @@ SPECULATION_TERMS = (
     "fiction",
     "denied",
 )
+
+# Match the individual token, not a surrounding window: "Theresa May may ban"
+# contains both a surname and a modal. Ambiguous uses remain uncertainty hints.
+NON_MODAL_MAY_PATTERNS = tuple(re.compile(pattern, re.IGNORECASE) for pattern in (
+    r"\b\d{1,2}(?:st|nd|rd|th)?\s+(?P<may>may)\b",
+    r"\b(?:in|on|by|since|until|till|during|of|from|to|for)\s+(?P<may>may)\b",
+    r"\b(?:theresa|philip|brian|james|mrs\.?|ms\.?|mr\.?|dr\.?)\s+(?P<may>may)\b",
+    r"\b(?P<may>may)\s+(?:\d|the\s+\d|day\b|bank\s+holiday\b)",
+    r"\b(?P<may>may)\s+(?:data|figures|statistics|results|elections|meeting)\b",
+    r"\b(?P<may>may)\s+(?:is|was|has|had|said|says|wrote|writes|announced)\b",
+    r"\b(?:early|late|mid)[-–](?P<may>may)\b",
+    # A temporal determiner alone is insufficient: "this may block" is modal.
+    r"\b(?:early|late|mid|last|next|this|every)\s+(?P<may>may)\b"
+    r"(?=\s*(?:$|[,;:.!?]|\d|(?:we|I|he|she|they|it|the|a|an)\b))",
+))
+
+
+def _has_modal_may(text: str) -> bool:
+    excluded = {match.start("may") for pattern in NON_MODAL_MAY_PATTERNS
+                for match in pattern.finditer(text)}
+    return any(match.start() not in excluded
+               for match in re.finditer(r"\bmay\b", text, re.IGNORECASE))
+
 
 CONFIRMATION_TERMS = (
     "announced",
@@ -1990,11 +2013,7 @@ def _claim_label_for_result(result: dict, clock: dict) -> dict:
         label = "credibly_reported"
         reason = "Reputable reporting, but not direct official confirmation."
 
-    # Bare "may" also names a month or a person. Require a modal-verb phrase.
-    modal_may = re.search(
-        r"\bmay\s+(?:not\s+)?(?:have|be|face|win|lose|join|announce|cut|raise|fall|rise|"
-        r"increase|decrease|lead|cause|change|need|remain|return)\b", claim_text, re.IGNORECASE)
-    if _contains_any(claim_text, SPECULATION_TERMS) or modal_may:
+    if _contains_any(claim_text, SPECULATION_TERMS) or _has_modal_may(claim_text):
         label = "rumour/speculation"
         reason = "The title or snippet contains explicit uncertainty, denial, or report-claim language."
     elif source_relation == "general_web" and _contains_any(
@@ -2230,6 +2249,7 @@ class Tools:
         UPSTREAM_SOURCES: bool = Field(default=True, description="Follow institutional references towards primary sources.")
         CUSTODY_CHECKS: bool = Field(default=True, description="Look for recent custody-status snippets; not factual verification.")
         F1_SCHEDULE: bool = Field(default=True, description="Try the optional Formula 1 public calendar endpoint.")
+        AUTO_FRESHNESS_FALLBACK: bool = Field(default=True, description="Allow one unfiltered fallback when an automatic search returns fewer than three usable results (or the requested count if lower). Disable to save provider calls.")
         COMPACT_OUTPUT: bool = Field(default=False, description="Minify JSON and hoist repeated result rules; retain evidence and response policy.")
 
     def __init__(self):
@@ -2389,8 +2409,9 @@ class Tools:
         context = _run_context.get()
         # Only inferred windows are soft. An explicit caller window is a contract.
         # Do not spend another request after a provider refusal or exhausted budget.
-        if (freshness == "auto" and effective_freshness and stage_successes
-                and len(_dedupe_results(candidates)) < safe_count
+        if (settings.get("AUTO_FRESHNESS_FALLBACK", True)
+                and freshness == "auto" and effective_freshness and stage_successes
+                and len(_dedupe_results(candidates)) < min(3, safe_count)
                 and _domain_for_url(BRAVE_SEARCH_URL) not in context["blocked_hosts"]):
             broader = attempt("Unfiltered fallback", lambda: search(search_query, None), None)
             if broader is not None:

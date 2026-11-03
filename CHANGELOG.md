@@ -2,6 +2,11 @@
 
 ## 0.1.0-alpha.16 - 2026-11-03
 
+- Update Brave search to 1.9.4: replace the incomplete modal-May verb shortlist
+  with per-token date/name exclusions and expand uncertainty regressions.
+- Limit automatic freshness fallback to fewer than three usable results (or
+  the requested count if lower), with an off switch for metered provider keys.
+
 - Update Brave search to 1.9.3: keep news about historical subjects current while
   preserving explicit history/archive queries; extend routing/modal regressions.
 

@@ -114,14 +114,16 @@ are distributed under this repository's MIT licence.
 
 ## Search routing and freshness
 
-The packaged Brave tool (1.9.3) keeps release-note and other ordinary web queries
+The packaged Brave tool (1.9.4) keeps release-note and other ordinary web queries
 free of inferred ISO dates. Generic `new`, `release`, `update`, `now` and `live`
 words alone do not request recent articles; explicit current-version and live
 coverage phrases still do. Use the `mode` and `freshness` arguments when intent
 is ambiguous.
 
-With `freshness=auto`, a sparse filtered baseline can retry once without the
-provider time filter, using the same request/time budget. `freshness_relaxed`
+With `freshness=auto`, a filtered baseline with fewer than three usable results
+(or the requested count if lower) can retry once without the provider time
+filter, using the same request/time budget. Set the `AUTO_FRESHNESS_FALLBACK`
+Valve to `False` to disable this extra call on metered keys. `freshness_relaxed`
 reports a completed broader search; original results are retained and current
 news still passes the same publication-age checks. Explicit windows and
 `freshness=none` never trigger this fallback. Snippets remain discovery leads.
