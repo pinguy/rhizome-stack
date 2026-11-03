@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1118">
-  <title>WAN Video Desk</title>
+  <title>Local Video Desk</title>
   <link rel="manifest" href="/video-studio/manifest.webmanifest">
   <link rel="icon" href="/video-studio/static/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/video-studio/static/app.css">
@@ -13,11 +13,11 @@
   <header class="masthead">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      <div><p class="eyebrow">LOCAL MOTION UTILITY</p><h1>WAN Video Desk</h1></div>
+      <div><p class="eyebrow">LOCAL MOTION UTILITY</p><h1>Local Video Desk</h1></div>
     </div>
     <div class="system-strip" aria-label="System status">
       <span class="status-pill" id="openclawStatus">OpenClaw · checking</span>
-      <span class="status-pill" id="wanStatus">WAN · checking</span>
+      <span class="status-pill" id="wanStatus">Video engine · checking</span>
       <span class="status-pill" id="queueStatus">Queue · idle</span>
     </div>
   </header>
@@ -32,7 +32,7 @@
         <label class="field grow"><span>OpenClaw prompt model</span><select id="modelSelect"><option>Loading models…</option></select></label>
         <button id="expandBtn" class="button primary" type="button">Build motion prompt</button>
       </div>
-      <p class="field-note" id="modelNote">The selected model prepares the motion prompt. WAN generates the video locally.</p>
+      <p class="field-note" id="modelNote">The selected model prepares the wording. Your chosen video model runs locally.</p>
 
       <div class="prompt-rail">
         <article class="prompt-card raw-card">
@@ -40,7 +40,7 @@
           <p id="originalPreview" class="prompt-preview">Your original wording stays visible here.</p>
         </article>
         <article class="prompt-card final-card">
-          <header><span>FINAL FOR WAN</span><span id="expandedCount">0 chars</span></header>
+          <header><span>FINAL VIDEO PROMPT</span><span id="expandedCount">0 chars</span></header>
           <textarea id="expandedPrompt" rows="9" placeholder="Build the motion prompt, use the rough idea unchanged, or edit the final wording here."></textarea>
           <div class="inline-actions"><button id="reexpandBtn" class="button quiet" type="button">Rebuild</button><button id="rawBtn" class="button quiet" type="button">Use rough idea</button></div>
         </article>
@@ -67,6 +67,7 @@
         <div class="segmented generator-grid" id="videoModelChoices">
           <label><input type="radio" name="videoModel" value="wan2.2-t2v-rapid-aio-v10-nsfw-Q5_K.gguf" checked><span><b id="t2vModelLabel">wan2.2-t2v-rapid-aio-v10-nsfw-Q5_K.gguf</b><small>Text input · Q5_K</small></span></label>
           <label><input type="radio" name="videoModel" value="wan2.2-i2v-rapid-aio-v10-nsfw-Q5_K.gguf"><span><b id="i2vModelLabel">wan2.2-i2v-rapid-aio-v10-nsfw-Q5_K.gguf</b><small>Text or Image input · Q5_K</small></span></label>
+          <label><input type="radio" name="videoModel" value="minimax-h3-fl2va-pruned-nf4.safetensors"><span><b id="h3ModelLabel">MiniMax H3 · FL2VA pruned NF4</b><small>Text or first-frame input · native audio</small></span></label>
         </div>
       </fieldset>
 
@@ -101,9 +102,9 @@
       <div class="duration-block">
         <div class="duration-copy"><label for="durationInput">Duration</label><span id="durationTimecode">00:03</span></div>
         <div class="duration-control">
-          <input id="durationRange" type="range" min="1" max="10" step="1" value="3" aria-label="Duration in seconds">
+          <input id="durationRange" type="range" min="1" max="15" step="1" value="3" aria-label="Duration in seconds">
           <span class="filmstrip" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-          <div class="seconds-input"><input id="durationInput" type="number" min="1" max="10" step="1" value="3"><span>seconds</span></div>
+          <div class="seconds-input"><input id="durationInput" type="number" min="1" max="15" step="1" value="3"><span>seconds</span></div>
         </div>
         <p id="formatReadout">832 × 480 · 49 frames · 16 fps</p>
       </div>
@@ -113,7 +114,7 @@
           <legend>Frame rate</legend>
           <div class="segmented" id="fpsChoices">
             <label><input type="radio" name="fps" value="16" checked><span><b>16 fps</b><small>WAN native · faster</small></span></label>
-            <label><input type="radio" name="fps" value="24"><span><b>24 fps</b><small>Smoother · more frames</small></span></label>
+            <label><input type="radio" name="fps" value="24"><span><b>24 fps</b><small>H3 native · smoother</small></span></label>
           </div>
         </fieldset>
 
@@ -134,7 +135,7 @@
 
       <button id="generateBtn" class="button generate" type="button"><span>Generate video</span><b id="generateSummary">3 sec · 16 fps · 4 steps</b></button>
       <p id="actionStatus" class="action-status" role="status" aria-live="polite">Ready. Video jobs run one at a time.</p>
-      <div class="generation-clock" aria-live="off"><span><b id="generationTimerLabel">Generation time</b><small id="generationTimerNote">Starts when the WAN job begins.</small></span><strong id="generationTimer">—</strong></div>
+      <div class="generation-clock" aria-live="off"><span><b id="generationTimerLabel">Generation time</b><small id="generationTimerNote">Starts when the local video job begins.</small></span><strong id="generationTimer">—</strong></div>
 
       <section class="queue-panel" aria-label="Generation queue">
         <header><span>QUEUE</span><span id="jobCount">0 jobs</span></header>
@@ -155,7 +156,21 @@
         <button id="showFolderBtn" class="button" type="button">Show in folder</button>
         <button id="reuseBtn" class="button" type="button">Reuse settings</button>
         <button id="rerunBtn" class="button" type="button">Same seed again</button>
+        <label class="field upscale-method"><span>1080p method</span><select id="upscaleMethod"><option value="lanczos">Lanczos</option><option value="realesrgan">Real-ESRGAN + Lanczos</option></select></label>
+        <button id="upscaleBtn" class="button upscale-button" type="button">Make 1080p master</button>
       </div>
+      <section id="upscalePanel" class="upscale-panel" aria-label="1080p upscale progress" hidden>
+        <header><span><b>1080P FILM LAB</b><small id="upscaleStatus">Ready</small></span><strong id="upscalePercent">0%</strong></header>
+        <div id="upscaleProgress" class="upscale-progress" role="progressbar" aria-label="1080p upscale" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+        <ol class="upscale-stages" aria-hidden="true"><li data-upscale-stage="extracting">Frames</li><li data-upscale-stage="enhancing">Neural 4×</li><li data-upscale-stage="mastering">1080p master</li></ol>
+        <p id="upscaleDetail" class="upscale-detail"></p>
+        <div id="upscaleActions" class="upscale-actions" hidden>
+          <button id="playUpscaleBtn" class="button primary" type="button">Play 1080p</button>
+          <button id="playOriginalBtn" class="button" type="button">Play original</button>
+          <a id="downloadUpscaleBtn" class="button link-button" download>Download 1080p</a>
+          <button id="showUpscaleBtn" class="button" type="button">Show 1080p in folder</button>
+        </div>
+      </section>
 
       <div class="history-head"><div><p class="eyebrow">TAKE LIBRARY</p><h3>Generated videos</h3></div><span id="historyCount">0 videos</span></div>
       <div id="history" class="history-grid"><p class="empty-small">Generated videos stay on disk and collect here.</p></div>

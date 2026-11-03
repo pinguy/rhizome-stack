@@ -612,6 +612,15 @@ def install_creative(runner: Runner, download_models: bool) -> None:
         print(f"+ apply hash-guarded patch set {patch_set} to {gguf}")
     else:
         runner.run([sys.executable, str(PROJECT / "tools/apply_patch_set.py"), str(patch_set), str(gguf)])
+    diffsynth = STACK_ROOT / "creative/DiffSynth-Studio"
+    if not diffsynth.exists():
+        runner.run(["git", "clone", "--filter=blob:none",
+                    "https://github.com/modelscope/DiffSynth-Studio.git", str(diffsynth)])
+        runner.run(["git", "-C", str(diffsynth), "checkout", "--detach",
+                    VERSIONS["diffsynth_git"]])
+    h3_runtime = STACK_ROOT / "creative/h3-runtime/site-packages"
+    runner.run([str(pip), "install", "--target", str(h3_runtime),
+                "accelerate==1.15.0", "bitsandbytes==0.50.2", "imageio[ffmpeg]==2.38.1"])
     if download_models:
         runner.run([str(venv / "bin/python"), str(PROJECT / "tools/fetch_creative_models.py"),
                     "--comfy-root", str(source)])

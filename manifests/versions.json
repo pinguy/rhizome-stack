@@ -10,6 +10,7 @@
   "chatterbox_git": "5de7a54aa4e5e2baadb0182dde554908b48b85c2",
   "comfyui_git": "af89add63f71a487fde45efc7fba744f3455ae73",
   "comfyui_gguf_git": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a",
+  "diffsynth_git": "e5a44c42776978457b61d51d595a1f6746c3d87a",
   "creative_torch": "2.13.0",
   "creative_torchvision": "0.28.0",
   "creative_torchaudio": "2.11.0",

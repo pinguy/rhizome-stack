@@ -1,4 +1,4 @@
-# Known limitations — 0.1.0-alpha.15 candidate
+# Known limitations — 0.1.0-alpha.16 candidate
 
 - Full installation and browser acceptance still need testing in disposable
   native Linux and actual WSL2 environments. Static and mocked-provider tests
@@ -58,6 +58,10 @@
   generation still needs native Linux and WSL2 acceptance.
 - Creative model licences differ from the stack licence. Weights are downloaded
   from their pinned upstream repositories and are never redistributed here.
+- MiniMax H3's NF4/processor set adds roughly 26 GB and its clean-target
+  DiffSynth GPU path still needs acceptance on each host. Real-ESRGAN mastering
+  needs a separately supplied NCNN/Vulkan executable and matching
+  `realesrgan-x4plus` model pair; only Lanczos is self-contained in the profile.
 - Qwen Image Desk, MiniMax Music 3 and WAN Video Desk share one ComfyUI endpoint
   and therefore serialise practical GPU use. Each app may stop only the exact
   ComfyUI process it started.

@@ -483,12 +483,13 @@ class Handler(LocalRequestHandler):
         self.wfile.write(raw)
 
     def send_file(self, path: Path):
-        raw = path.read_bytes()
-        self.send_response(200)
-        self.send_header("Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream")
-        self.send_header("Content-Length", str(len(raw)))
-        self.end_headers()
-        self.wfile.write(raw)
+        with path.open("rb") as stream:
+            size = os.fstat(stream.fileno()).st_size
+            self.send_response(200)
+            self.send_header("Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+            self.send_header("Content-Length", str(size))
+            self.end_headers()
+            shutil.copyfileobj(stream, self.wfile, length=1024 * 1024)
 
     def do_GET(self):
         try:

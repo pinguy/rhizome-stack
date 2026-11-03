@@ -95,6 +95,13 @@ def main() -> int:
               "WAN tight-memory decoder fallback is not 32/12")
         check(wan.apply_decode_fallback(i2v, wan.WAN_BACKEND, "i2v", 0) == (48, 12),
               "WAN I2V first decoder fallback is not 48/12")
+        check(wan.H3_BACKEND == "minimax-h3-nf4" and wan.H3_FPS == 24,
+              "MiniMax H3 backend contract is missing")
+        h3_runner = (wan_dir / "h3_runner.py").read_text()
+        check('request["model_root"]' in h3_runner,
+              "MiniMax H3 worker does not resolve its portable model root")
+        check("/500GB" not in h3_runner and "/home/" not in h3_runner,
+              "MiniMax H3 worker contains a reference-machine path")
     print("PASS standalone Qwen and WAN graph/dimension boundaries")
 
     creative = ROOT / "components/creative"
@@ -112,7 +119,9 @@ def main() -> int:
         check(len(item["sha256"]) == 64, f"bad digest: {item['destination']}")
         check(item["destination"] not in destinations, f"duplicate destination: {item['destination']}")
         destinations.add(item["destination"])
-    check(len(destinations) == 11, "creative model set is incomplete")
+    check(len(destinations) == 22, "creative model set is incomplete")
+    check(sum(item["component"] == "minimax-h3" for item in manifest["models"]) == 11,
+          "MiniMax H3 model and processor set is incomplete")
     print("PASS creative model revision and checksum manifest")
 
     for name, port in (("qwen-image-desk.service", "8841"), ("minimax-music-api.service", "8830"),

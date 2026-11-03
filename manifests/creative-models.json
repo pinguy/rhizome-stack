@@ -88,6 +88,94 @@
       "source_path": "split_files/clip_vision/clip_vision_h.safetensors",
       "destination": "clip_vision/clip_vision_h.safetensors",
       "sha256": "64a7ef761bfccbadbaa3da77366aac4185a6c58fa5de5f589b42a65bcc21f161"
+    },
+    {
+      "component": "minimax-h3",
+      "repository": "DiffSynth-Studio/MiniMax-H3-NF4",
+      "revision": "363fdc8fbd7ae55f5b9e7fb87cf3d508df28ee0d",
+      "source_path": "minimax-h3-fl2va-pruned-nf4.safetensors",
+      "destination": "minimax_h3_nf4/minimax-h3-fl2va-pruned-nf4.safetensors",
+      "sha256": "7c7b5080f6ee907a85cb44caa233ce121e8fa84de9dbac1e24d964c2232baea4"
+    },
+    {
+      "component": "minimax-h3",
+      "repository": "DiffSynth-Studio/MiniMax-H3-NF4",
+      "revision": "363fdc8fbd7ae55f5b9e7fb87cf3d508df28ee0d",
+      "source_path": "minimax-h3-text-encoder-nf4.safetensors",
+      "destination": "minimax_h3_nf4/minimax-h3-text-encoder-nf4.safetensors",
+      "sha256": "0964f0634856e68522aa64b801afcd31b4e878619eff21a82324e2cd61690f13"
+    },
+    {
+      "component": "minimax-h3",
+      "repository": "DiffSynth-Studio/MiniMax-H3-NF4",
+      "revision": "363fdc8fbd7ae55f5b9e7fb87cf3d508df28ee0d",
+      "source_path": "video_vae_nf4.safetensors",
+      "destination": "minimax_h3_nf4/video_vae_nf4.safetensors",
+      "sha256": "6d0cb4ff02ebb74cc6bca40018e6efae5082ccd7eb066fa1263098c6dbf8f6f1"
+    },
+    {
+      "component": "minimax-h3",
+      "repository": "DiffSynth-Studio/MiniMax-H3-NF4",
+      "revision": "363fdc8fbd7ae55f5b9e7fb87cf3d508df28ee0d",
+      "source_path": "audio_vae_nf4.safetensors",
+      "destination": "minimax_h3_nf4/audio_vae_nf4.safetensors",
+      "sha256": "759662130ba3618b7f196da8f983f857a1f1ec6af8110d657796d9792c0d64e5"
+    },
+    {
+      "component": "minimax-h3",
+      "repository": "MiniMaxAI/MiniMax-H3",
+      "revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "source_path": "FL2VA/processor/chat_template.json",
+      "destination": "minimax_h3_nf4/FL2VA/processor/chat_template.json",
+      "sha256": "5c72a170d2a4a1a3bc5adad2e689ae28138a9700e5b8c96c0266331e86c0acce"
+    },
+    {
+      "component": "minimax-h3",
+      "repository": "MiniMaxAI/MiniMax-H3",
+      "revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "source_path": "FL2VA/processor/merges.txt",
+      "destination": "minimax_h3_nf4/FL2VA/processor/merges.txt",
+      "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3"
+    },
+    {
+      "component": "minimax-h3",
+      "repository": "MiniMaxAI/MiniMax-H3",
+      "revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "source_path": "FL2VA/processor/preprocessor_config.json",
+      "destination": "minimax_h3_nf4/FL2VA/processor/preprocessor_config.json",
+      "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516"
+    },
+    {
+      "component": "minimax-h3",
+      "repository": "MiniMaxAI/MiniMax-H3",
+      "revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "source_path": "FL2VA/processor/tokenizer.json",
+      "destination": "minimax_h3_nf4/FL2VA/processor/tokenizer.json",
+      "sha256": "a5d85b6dcc535e6b93115a9ef287e6132fdbf30270da6218194ba742261173c7"
+    },
+    {
+      "component": "minimax-h3",
+      "repository": "MiniMaxAI/MiniMax-H3",
+      "revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "source_path": "FL2VA/processor/tokenizer_config.json",
+      "destination": "minimax_h3_nf4/FL2VA/processor/tokenizer_config.json",
+      "sha256": "a07e942ac874baa13758de8d1fbdb186683cc03416b5589e1b6671c6b3057c68"
+    },
+    {
+      "component": "minimax-h3",
+      "repository": "MiniMaxAI/MiniMax-H3",
+      "revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "source_path": "FL2VA/processor/video_preprocessor_config.json",
+      "destination": "minimax_h3_nf4/FL2VA/processor/video_preprocessor_config.json",
+      "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13"
+    },
+    {
+      "component": "minimax-h3",
+      "repository": "MiniMaxAI/MiniMax-H3",
+      "revision": "42ed227ee7df40d41602854ae760620d6eb651fe",
+      "source_path": "FL2VA/processor/vocab.json",
+      "destination": "minimax_h3_nf4/FL2VA/processor/vocab.json",
+      "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
     }
   ]
 }

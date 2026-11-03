@@ -3,7 +3,7 @@
 const state = {
   models: [], formats: {}, takes: [], jobs: [], selectedTake: null,
   videoModels: [], reference: null, expanderModel: null, promptMode: "direct",
-  busy: false, busyUpload: false,
+  busy: false, busyUpload: false, configuredVideoModel: null, upscale: null,
 };
 
 const ui = {
@@ -17,13 +17,17 @@ const ui = {
   referencePanel: document.querySelector("#referencePanel"), referenceHint: document.querySelector("#referenceHint"), chooseReference: document.querySelector("#chooseReferenceBtn"), referenceDrop: document.querySelector("#referenceDropZone"), referenceInput: document.querySelector("#referenceInput"),
   referenceEmpty: document.querySelector("#referenceEmpty"), referenceImage: document.querySelector("#referenceImage"), referenceMeta: document.querySelector("#referenceMeta"),
   referenceName: document.querySelector("#referenceName"), removeReference: document.querySelector("#removeReferenceBtn"),
-  t2vModel: document.querySelector("#t2vModelLabel"), i2vModel: document.querySelector("#i2vModelLabel"),
+  t2vModel: document.querySelector("#t2vModelLabel"), i2vModel: document.querySelector("#i2vModelLabel"), h3Model: document.querySelector("#h3ModelLabel"),
   generate: document.querySelector("#generateBtn"), generateSummary: document.querySelector("#generateSummary"), action: document.querySelector("#actionStatus"),
   timer: document.querySelector("#generationTimer"), timerLabel: document.querySelector("#generationTimerLabel"), timerNote: document.querySelector("#generationTimerNote"), timerBox: document.querySelector(".generation-clock"),
   jobList: document.querySelector("#jobList"), jobCount: document.querySelector("#jobCount"),
   emptyPreview: document.querySelector("#emptyPreview"), video: document.querySelector("#resultVideo"), previewTimecode: document.querySelector("#previewTimecode"),
   resultMeta: document.querySelector("#resultMeta"), resultActions: document.querySelector("#resultActions"), download: document.querySelector("#downloadBtn"),
   showFolder: document.querySelector("#showFolderBtn"), reuse: document.querySelector("#reuseBtn"), rerun: document.querySelector("#rerunBtn"),
+  upscale: document.querySelector("#upscaleBtn"), upscaleMethod: document.querySelector("#upscaleMethod"), upscalePanel: document.querySelector("#upscalePanel"), upscaleStatus: document.querySelector("#upscaleStatus"),
+  upscalePercent: document.querySelector("#upscalePercent"), upscaleProgress: document.querySelector("#upscaleProgress"), upscaleDetail: document.querySelector("#upscaleDetail"),
+  upscaleActions: document.querySelector("#upscaleActions"), playUpscale: document.querySelector("#playUpscaleBtn"), playOriginal: document.querySelector("#playOriginalBtn"),
+  downloadUpscale: document.querySelector("#downloadUpscaleBtn"), showUpscale: document.querySelector("#showUpscaleBtn"),
   history: document.querySelector("#history"), historyCount: document.querySelector("#historyCount"), toast: document.querySelector("#toast"),
 };
 
@@ -59,8 +63,14 @@ function checked(name) { return document.querySelector(`input[name="${name}"]:ch
 function currentVideoModel() { return checked("videoModel") || "wan2.2-t2v-rapid-aio-v10-nsfw-Q5_K.gguf"; }
 function selectedVideoModel() { return state.videoModels.find(item => item.id === currentVideoModel()); }
 function currentMode() { return checked("videoMode") === "i2v" ? "i2v" : "t2v"; }
-function currentFps() { return [16, 24].includes(Number(checked("fps"))) ? Number(checked("fps")) : 16; }
-function currentSteps() { return Math.max(4, Math.min(20, Math.round(Number(ui.steps.value) || 4))); }
+function currentFps() {
+  const options = selectedVideoModel()?.fps_options || [16, 24];
+  return options.length === 1 ? Number(options[0]) : (options.includes(Number(checked("fps"))) ? Number(checked("fps")) : Number(options[0] || 16));
+}
+function currentSteps() {
+  const recipe = selectedVideoModel()?.steps || {default:4, min:4, max:20};
+  return Math.max(recipe.min, Math.min(recipe.max, Math.round(Number(ui.steps.value) || recipe.default)));
+}
 
 function elapsedSeconds(job, now = Date.now() / 1000) {
   if (!job?.started_at) return null;
@@ -87,11 +97,15 @@ function updatePromptViews() {
 function currentFormat() {
   const quality = checked("quality") || "480p";
   const aspect = checked("aspect") || "16:9";
-  const size = state.formats?.[quality]?.[aspect] || ([quality, aspect].join("/") === "720p/16:9" ? [1280, 720] : [832, 480]);
-  const duration = Math.max(1, Math.min(10, Math.round(Number(ui.duration.value) || 3)));
+  const formats = selectedVideoModel()?.formats || state.formats;
+  const size = formats?.[quality]?.[aspect] || ([quality, aspect].join("/") === "720p/16:9" ? [1280, 720] : [832, 480]);
+  const maxSeconds = selectedVideoModel()?.max_seconds || 10;
+  const duration = Math.max(1, Math.min(maxSeconds, Math.round(Number(ui.duration.value) || 3)));
   const fps = currentFps();
   const steps = currentSteps();
-  return {quality, aspect, width: size[0], height: size[1], duration, fps, steps, frames: duration * fps + 1};
+  const h3 = selectedVideoModel()?.backend?.startsWith("minimax-h3-nf4");
+  const frames = h3 ? Math.max(5, Math.round((duration * fps - 5) / 17) * 17 + 5) : duration * fps + 1;
+  return {quality, aspect, width: size[0], height: size[1], duration, fps, steps, frames};
 }
 
 function updateFormat() {
@@ -103,7 +117,7 @@ function updateFormat() {
   ui.stepsReadout.textContent = format.steps;
   ui.durationTimecode.textContent = `00:${String(format.duration).padStart(2, "0")}`;
   ui.formatReadout.textContent = `${format.width} × ${format.height} · ${format.frames} frames · ${format.fps} fps`;
-  ui.generateSummary.textContent = `${currentMode() === "i2v" ? "Image" : "Text"} input · ${format.duration} sec · ${format.fps} fps · ${format.steps} steps`;
+  ui.generateSummary.textContent = `${currentMode() === "i2v" ? "Image" : "Text"} input · ${format.duration} sec · ${format.fps} fps · ${format.steps} steps${selectedVideoModel()?.native_audio ? " · native audio" : ""}`;
 }
 
 function setReference(reference) {
@@ -123,6 +137,24 @@ function setReference(reference) {
 
 function updateVideoModel() {
   const selected = selectedVideoModel();
+  const recipe = selected?.steps || {default:4, min:4, max:20};
+  if (state.configuredVideoModel !== selected?.id) {
+    ui.steps.value = ui.stepsRange.value = recipe.default;
+    state.configuredVideoModel = selected?.id || null;
+  }
+  ui.steps.min = ui.stepsRange.min = recipe.min;
+  ui.steps.max = ui.stepsRange.max = recipe.max;
+  const maxSeconds = selected?.max_seconds || 10;
+  ui.duration.max = ui.durationRange.max = maxSeconds;
+  if (Number(ui.duration.value) > maxSeconds) ui.duration.value = ui.durationRange.value = maxSeconds;
+  const fpsOptions = selected?.fps_options || [16, 24];
+  document.querySelectorAll('input[name="fps"]').forEach(input => {
+    input.disabled = !fpsOptions.includes(Number(input.value));
+  });
+  if (!fpsOptions.includes(Number(checked("fps")))) setRadio("fps", fpsOptions[0]);
+  const h3 = selected?.backend?.startsWith("minimax-h3-nf4");
+  ui.negative.disabled = h3;
+  ui.negative.title = h3 ? "MiniMax H3 NF4 is CFG-distilled; negative guidance is not used." : "";
   const needsReference = currentMode() === "i2v";
   const supportedModes = selected?.modes || (selected?.mode ? [selected.mode] : []);
   const incompatible = Boolean(supportedModes.length && !supportedModes.includes(currentMode()));
@@ -132,11 +164,11 @@ function updateVideoModel() {
     : state.reference
       ? "Reference stored, but Text input will not use it."
       : "Text input does not use a reference image.";
-  ui.generate.disabled = state.busy || Boolean(selected && !selected.ready) || incompatible || (needsReference && !state.reference);
+  ui.generate.disabled = state.busy || state.upscale?.status === "running" || Boolean(selected && !selected.ready) || incompatible || (needsReference && !state.reference);
   if (selected && !selected.ready) setAction(`${selected.name} is missing a required local model.`, true);
-  else if (incompatible) setAction(`${selected.name} cannot run with ${currentMode() === "i2v" ? "Image" : "Text"} input. Pick the matching WAN architecture; both controls remain changeable.`, true);
+  else if (incompatible) setAction(`${selected.name} cannot run with ${currentMode() === "i2v" ? "Image" : "Text"} input. Pick a compatible model.`, true);
   else if (needsReference && !state.reference) setAction("Image input needs a reference image.");
-  else setAction(`${currentMode() === "i2v" ? "Image" : "Text"} input with ${selected?.name || currentVideoModel()}. Ready to queue.`);
+  else setAction(`${currentMode() === "i2v" ? "Image" : "Text"} input with ${selected?.name || currentVideoModel()}${selected?.native_audio ? " and native stereo audio" : ""}. Ready to queue.`);
   updateFormat();
 }
 
@@ -176,13 +208,13 @@ async function loadModels() {
     updateModelNote();
   } catch (error) {
     ui.model.innerHTML = '<option value="">Prompt models unavailable</option>';
-    ui.modelNote.textContent = "Prompt expansion is unavailable; direct WAN prompting still works.";
+    ui.modelNote.textContent = "Prompt expansion is unavailable; direct video prompting still works.";
   }
 }
 
 function updateModelNote() {
   const model = state.models.find(item => item.id === ui.model.value);
-  ui.modelNote.textContent = model ? `${model.name} prepares wording ${model.source === "local" ? "locally" : "through OpenClaw"}; WAN generates the video on this workstation.` : "Use the rough idea directly or select a prompt model.";
+  ui.modelNote.textContent = model ? `${model.name} prepares wording ${model.source === "local" ? "locally" : "through OpenClaw"}; the selected video model runs on this workstation.` : "Use the rough idea directly or select a prompt model.";
 }
 
 async function expandPrompt() {
@@ -243,13 +275,13 @@ async function generate(overrides = {}) {
   };
   state.busy = true;
   ui.generate.disabled = true;
-  setAction("Adding the WAN video job to the local queue…");
+  setAction(`Adding the ${selected?.name || "local video"} job to the queue…`);
   try {
     const result = await api("/api/video-studio/generate", {
       method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload),
     });
     notify(`Queued ${result.jobs.length} video ${result.jobs.length === 1 ? "take" : "takes"}.`);
-    setAction("Queued. WAN runs one video at a time.");
+    setAction("Queued. Local video jobs run one at a time.");
     await refreshState();
   } catch (error) { setAction(error.message, true); notify(error.message, true); }
   finally {
@@ -294,7 +326,7 @@ function updateGenerationTimer() {
     ui.timerBox.classList.remove("running");
   } else {
     ui.timerLabel.textContent = "Generation time";
-    ui.timerNote.textContent = "Starts when the WAN job begins.";
+    ui.timerNote.textContent = "Starts when the local video job begins.";
     ui.timer.textContent = "—";
     ui.timerBox.classList.remove("running");
   }
@@ -320,6 +352,53 @@ function renderJobs() {
 
 function formatAspect(value) { return value === "mobile" ? "9:16 mobile" : value; }
 
+function playSelectedSource(url, sourceId, play = true) {
+  if (!url || !state.selectedTake) return;
+  if (ui.video.dataset.takeId !== sourceId) {
+    ui.video.src = url;
+    ui.video.dataset.takeId = sourceId;
+    ui.video.load();
+  }
+  if (play) ui.video.play().catch(() => {});
+}
+
+function renderUpscale() {
+  const job = state.upscale || {status:"idle", progress:0};
+  const selected = state.selectedTake;
+  const running = job.status === "running";
+  const matches = Boolean(selected && job.take_id === selected.id);
+  const visible = running || (matches && ["complete", "failed"].includes(job.status));
+  ui.upscalePanel.hidden = !visible;
+  ui.upscale.disabled = !selected || running || (matches && job.status === "complete") || state.jobs.some(item => ["queued", "running"].includes(item.status));
+  ui.upscaleMethod.disabled = running;
+  ui.upscale.textContent = running ? "Making 1080p master…" : matches && job.status === "complete" ? "1080p master ready" : "Make 1080p master";
+  if (!visible) return;
+
+  const progress = Math.max(0, Math.min(100, Number(job.progress) || 0));
+  const labels = {preparing:"Preparing", extracting:"Extracting source frames", enhancing:"Real-ESRGAN neural 4×", mastering:"Encoding Lanczos 1080p master", complete:"1080p master complete", failed:"Mastering failed", interrupted:"Mastering interrupted"};
+  ui.upscaleStatus.textContent = labels[job.stage] || String(job.stage || job.status);
+  ui.upscalePercent.textContent = `${Math.round(progress)}%`;
+  ui.upscaleProgress.setAttribute("aria-valuenow", String(Math.round(progress)));
+  ui.upscaleProgress.querySelector("i").style.width = `${progress}%`;
+  const frameText = job.total_frames ? `${job.current_frame || 0} / ${job.total_frames} frames` : "";
+  const sourceText = running && !matches ? ` · source ${job.take_id}` : "";
+  ui.upscaleDetail.textContent = job.status === "failed"
+    ? job.error || "The upscaler stopped before producing a master."
+    : `${frameText}${frameText ? " · " : ""}${formatElapsed(job.elapsed_seconds)} elapsed · ${job.method === "realesrgan" ? "Real-ESRGAN + Lanczos" : "Lanczos"}${sourceText}`;
+  const order = ["extracting", "enhancing", "mastering"];
+  const stageIndex = job.stage === "complete" ? order.length : order.indexOf(job.stage);
+  document.querySelectorAll("[data-upscale-stage]").forEach((element, index) => {
+    element.classList.toggle("active", index === stageIndex);
+    element.classList.toggle("done", stageIndex > index);
+  });
+  const complete = matches && job.status === "complete";
+  ui.upscaleActions.hidden = !complete;
+  if (complete) {
+    ui.downloadUpscale.href = job.media_url;
+    ui.downloadUpscale.download = `${selected.id}_1080p.mp4`;
+  }
+}
+
 function selectTake(take, play = false) {
   state.selectedTake = take;
   ui.emptyPreview.hidden = true;
@@ -340,6 +419,7 @@ function selectTake(take, play = false) {
     ["Format", `${take.quality || "custom"} · ${formatAspect(take.aspect_ratio || "16:9")} · ${take.width}×${take.height}`],
     ["Running time", `${take.duration_seconds ?? ((take.frames - 1) / (take.fps || 16))} sec · ${take.frames} frames · ${take.fps || 16} fps`],
     ["Generation time", formatElapsed(take.generation_seconds)],
+    ["Audio", take.native_audio ? `Native stereo · ${take.audio_sample_rate || 32000} Hz` : "No generated audio"],
     ["Seed", take.seed], ["Model", `${take.model || "WAN 2.2 Rapid"} · ${take.quant || "Q5_K"}`],
     ["Recipe", `${take.steps || 4} steps · CFG ${take.cfg ?? 1} · ${take.sampler || "euler_ancestral"} · ${take.scheduler || "beta"} · shift ${take.shift || 8}`],
     ["QC", `${String(take.qc?.status || "unscored").toUpperCase()}${take.qc?.warnings?.length ? ` · ${take.qc.warnings.join(" · ")}` : " · no automated warnings"}`],
@@ -347,6 +427,7 @@ function selectTake(take, play = false) {
   ];
   ui.resultMeta.innerHTML = `<dl>${rows.map(([key,value]) => `<div class="meta-row"><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>`;
   ui.resultMeta.hidden = ui.resultActions.hidden = false;
+  renderUpscale();
   updateTimecode();
 }
 
@@ -379,16 +460,21 @@ async function refreshState() {
     state.videoModels = data.video_models || state.videoModels;
     const t2v = state.videoModels.find(item => item.id === "wan2.2-t2v-rapid-aio-v10-nsfw-Q5_K.gguf");
     const i2v = state.videoModels.find(item => item.id === "wan2.2-i2v-rapid-aio-v10-nsfw-Q5_K.gguf");
+    const h3 = state.videoModels.find(item => item.id === "minimax-h3-fl2va-pruned-nf4.safetensors");
     if (t2v) ui.t2vModel.textContent = `${t2v.name}${t2v.ready ? "" : " · unavailable"}`;
     if (i2v) ui.i2vModel.textContent = `${i2v.name}${i2v.ready ? "" : " · unavailable"}`;
+    if (h3) ui.h3Model.textContent = `${h3.name}${h3.ready ? "" : " · downloading"}`;
     state.takes = data.takes || [];
     state.jobs = data.jobs || [];
+    state.upscale = data.upscale || null;
     pill(ui.openclaw, data.openclaw.online ? `OpenClaw · ${data.openclaw.models} models` : "OpenClaw · unavailable", data.openclaw.online ? "good" : "bad");
     const active = state.jobs.find(job => job.status === "running");
     const queued = state.jobs.filter(job => job.status === "queued").length;
-    pill(ui.wan, active ? `WAN · ${jobLabel(active)}` : (data.queue.engine.online ? "WAN · ready" : "WAN · ready on demand"), active ? "busy" : "good");
-    pill(ui.queue, active ? `Queue · 1 running, ${queued} waiting` : queued ? `Queue · ${queued} waiting` : "Queue · idle", active || queued ? "busy" : "good");
-    renderJobs(); renderHistory(); updateFormat(); updateGenerationTimer();
+    const upscaling = state.upscale?.status === "running";
+    const activeEngine = active?.backend?.startsWith("minimax-h3-nf4") ? "MiniMax H3" : "WAN";
+    pill(ui.wan, upscaling ? "1080p master · running" : active ? `${activeEngine} · ${jobLabel(active)}` : "Video engine · ready on demand", active || upscaling ? "busy" : "good");
+    pill(ui.queue, upscaling ? `Film lab · ${Math.round(state.upscale.progress || 0)}%` : active ? `Queue · 1 running, ${queued} waiting` : queued ? `Queue · ${queued} waiting` : "Queue · idle", active || queued || upscaling ? "busy" : "good");
+    renderJobs(); renderHistory(); updateVideoModel(); updateGenerationTimer();
     if (state.takes[0] && (!state.selectedTake || state.takes[0].id !== previousNewest)) {
       selectTake(state.takes[0], Boolean(previousNewest) && state.takes[0].id !== previousNewest);
     } else if (!state.takes.length) {
@@ -397,15 +483,18 @@ async function refreshState() {
       ui.previewTimecode.hidden = true; ui.emptyPreview.hidden = false;
       ui.resultMeta.hidden = ui.resultActions.hidden = true;
     }
-    if (active) setAction(`Generating — ${jobLabel(active)}.`);
+    renderUpscale();
+    if (upscaling) setAction(`Making the 1080p master — ${Math.round(state.upscale.progress || 0)}%.`);
+    else if (active) setAction(`Generating — ${jobLabel(active)}.`);
     else if (queued) setAction(`${queued} video ${queued === 1 ? "job" : "jobs"} waiting.`);
     else {
       const latest = state.jobs[state.jobs.length - 1];
-      if (latest?.status === "failed") setAction(`Failed — ${latest.error || "generation error"}`, true);
+      if (state.upscale?.status === "failed") setAction(`Upscale failed — ${state.upscale.error || "upscale error"}`, true);
+      else if (latest?.status === "failed") setAction(`Failed — ${latest.error || "generation error"}`, true);
       else if (latest?.status === "complete") setAction("Finished — play the take and judge the motion.");
     }
   } catch (error) {
-    pill(ui.wan, "WAN · backend unavailable", "bad");
+    pill(ui.wan, "Video engine · backend unavailable", "bad");
     setAction(error.message, true);
   }
 }
@@ -427,6 +516,7 @@ function reuseTake(take) {
   setRadio("fps", take.fps || 16);
   const restoredModel = take.model;
   if (restoredModel) setRadio("videoModel", restoredModel);
+  state.configuredVideoModel = restoredModel || null;
   setRadio("videoMode", take.mode || "t2v");
   setReference(take.reference_image || null);
   if (take.expander_model && [...ui.model.options].some(option => option.value === take.expander_model)) ui.model.value = take.expander_model;
@@ -474,6 +564,33 @@ ui.stepsRange.addEventListener("input", () => { ui.steps.value = ui.stepsRange.v
 ui.randomSeed.addEventListener("click", randomSeed); ui.generate.addEventListener("click", () => generate());
 ui.video.addEventListener("timeupdate", updateTimecode);
 ui.reuse.addEventListener("click", () => state.selectedTake && reuseTake(state.selectedTake));
+ui.upscale.addEventListener("click", async () => {
+  if (!state.selectedTake || state.upscale?.status === "running") return;
+  ui.upscale.disabled = true;
+  try {
+    const method = ui.upscaleMethod.value;
+    state.upscale = await api("/api/video-studio/upscale", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({take_id:state.selectedTake.id, method})});
+    renderUpscale();
+    setAction(`${method === "realesrgan" ? "Real-ESRGAN + Lanczos" : "Lanczos"} 1080p master started.`);
+    notify("1080p film-lab job started.");
+  } catch (error) { notify(error.message, true); setAction(error.message, true); renderUpscale(); }
+});
+ui.playUpscale.addEventListener("click", () => {
+  if (state.upscale?.status !== "complete") return;
+  playSelectedSource(state.upscale.media_url, `upscale:${state.upscale.id}`);
+});
+ui.playOriginal.addEventListener("click", () => {
+  if (state.selectedTake) playSelectedSource(state.selectedTake.media_url, state.selectedTake.id);
+});
+ui.showUpscale.addEventListener("click", async () => {
+  if (state.upscale?.status !== "complete") return;
+  ui.showUpscale.disabled = true;
+  try {
+    const result = await api("/api/video-studio/show-output", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({path:state.upscale.output_path})});
+    notify(result.selected ? "Selected the 1080p master in the system file manager." : "Opened the 1080p output folder.");
+  } catch (error) { notify(error.message, true); }
+  finally { ui.showUpscale.disabled = false; }
+});
 ui.rerun.addEventListener("click", () => state.selectedTake && generate({
   original_prompt: state.selectedTake.original_prompt || state.selectedTake.prompt,
   final_prompt: state.selectedTake.expanded_prompt || state.selectedTake.prompt,

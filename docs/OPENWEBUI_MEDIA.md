@@ -10,8 +10,8 @@ The local model can call:
 
 - `qwen_image.create_image` to generate a PNG or edit an uploaded image;
 - `minimax_music_3.create_song` to generate an MP3; and
-- `wan_video.create_video` to generate a text-to-video MP4 or condition one on
-  an uploaded image.
+- `wan_video.create_video` to generate a WAN or MiniMax H3 MP4 from text or an
+  uploaded first-frame image. H3 adds native stereo audio.
 
 PNGs render inline. MP3s use Open WebUI's native File card and Preview player.
 MP4s are durable file attachments rendered by the pinned Open WebUI 0.11.0
@@ -86,12 +86,18 @@ Examples:
 - “Create a 30-second instrumental synthwave track called Neon Drive Home.”
 - “Create a five-second 4:3 video of waves rolling over black volcanic sand.”
 - Attach an image, then ask: “Animate this as a subtle five-second WAN video.”
+- “Create a five-second MiniMax H3 video with native audio of rain striking a
+  greenhouse roof.”
 
 Qwen edits and WAN image-to-video requests accept only a PNG, JPEG or WebP file
 owned by the authenticated Open WebUI user and no larger than 20 MiB. The tools
 pass the owned Open WebUI file ID, never an arbitrary filesystem path or remote
 URL. WAN defaults to T2V v10 Q5_K, 640×480 (4:3), 480p, 16 FPS, four steps and
 five seconds unless the caller deliberately overrides a supported setting.
+Selecting `minimax-h3-fl2va-pruned-nf4.safetensors` changes the validated
+contract to fixed 24 FPS, 20 default steps (4–50), up to 15 seconds and native
+32 kHz stereo audio. H3 polling is bounded at six hours rather than WAN's
+30-minute bound; submission is still exactly once.
 
 ## Failure boundaries
 

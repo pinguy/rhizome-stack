@@ -16,6 +16,9 @@ authorship over OpenClaw, Open WebUI or the other projects it connects.
 | Optional GLiNER2 library and GLiNER2.5-Decide weights | Apache-2.0 upstream terms; weights are not bundled | https://github.com/fastino-ai/GLiNER2 and https://huggingface.co/fastino/GLiNER2.5-Decide |
 | ComfyUI installed at runtime | GPL-3.0 | https://github.com/Comfy-Org/ComfyUI |
 | ComfyUI-GGUF installed at runtime and one-line compatibility patch | Apache-2.0 | https://github.com/city96/ComfyUI-GGUF |
+| DiffSynth-Studio installed at runtime for MiniMax H3 | Apache-2.0 | https://github.com/modelscope/DiffSynth-Studio |
+| MiniMax H3 NF4 and processor files | Upstream repository/model terms; weights are not bundled | https://huggingface.co/DiffSynth-Studio/MiniMax-H3-NF4 and https://huggingface.co/MiniMaxAI/MiniMax-H3 |
+| Optional external Real-ESRGAN NCNN/Vulkan executable and models | Upstream terms; not downloaded or bundled by this stack | https://github.com/xinntao/Real-ESRGAN |
 | Qwen Image 2.1 model files | Qwen Research licence; weights are not bundled | https://huggingface.co/Comfy-Org/Qwen-Image-2.1 |
 | Qwen Image 2.1 Uncensored GGUF | Repository terms; weights are not bundled | https://huggingface.co/abenzerps/Qwen-Image-2.1-Uncensored-GGUF |
 | MiniMax Music 3 ComfyUI model files | Apache-2.0 repository terms; weights are not bundled | https://huggingface.co/Comfy-Org/MiniMax-Music-3 |

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.0-alpha.16 - 2026-11-03
+
+- Add revision-pinned MiniMax H3 FL2VA pruned NF4 generation to Video Desk and
+  Open WebUI: Text or first-frame input, fixed 24 fps, native 32 kHz stereo
+  audio, 1–15 second jobs, and hash-verified model/processor downloads.
+- Add selectable Lanczos-only and Real-ESRGAN NCNN/Vulkan plus Lanczos 1080p
+  masters to Screening Room, with single-flight locking, bounded scratch,
+  progress, output validation, audio preservation and cleanup.
+- Keep Real-ESRGAN optional and portable: the release does not redistribute its
+  executable or weights, and resolves them only through documented environment
+  variables or `PATH`.
+
+- Preserve the alpha.15 GitHub fixes for failed/malformed memory-worker health
+  and idempotent uninstall, which were absent from the uploaded snapshot.
+- Repair reference-conditioned WAN video and Video Desk image edits: reference
+  inputs no longer bypass ComfyUI inference or become the registered result.
+- Refuse H3/mastering hand-offs while work is queued, running or its queue state
+  is unknown; require an owned engine to stop successfully before proceeding.
+- Fall back to packet counting when FFprobe reports an unavailable frame count.
+- Stream Qwen media downloads in 1 MiB chunks instead of holding the whole file
+  in memory; add HTTP and generation-path regression coverage.
+
 ## 0.1.0-alpha.15 candidate — 18 October 2026 independent-audit corrections
 
 - Resolve curated Markdown fallback and recall tracking from the configured
@@ -21,8 +43,6 @@
   owner-operated deployment boundary.
 - Add focused lifecycle, session-isolation, worker-failure, upload-wiring,
   configuration-rollback, tool-drift and retry-identity regressions.
-- Follow-up audit: treat explicit memory-worker failures and invalid JSON as
-  unhealthy, and make repeated uninstall a true no-op without extra archives.
 
 ## 0.1.0-alpha.14 candidate — 16 October 2026 hygiene follow-up
 

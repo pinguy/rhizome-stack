@@ -34,6 +34,9 @@ class CreativeUITest(unittest.TestCase):
         script = (module_dir / 'static/app.js').read_text()
         self.assertIn('name="videoMode"', page)
         self.assertIn('name="videoModel"', page)
+        self.assertIn('minimax-h3-fl2va-pruned-nf4.safetensors', page)
+        self.assertIn('<option value="lanczos">Lanczos</option>', page)
+        self.assertIn('<option value="realesrgan">Real-ESRGAN + Lanczos</option>', page)
         self.assertIn('video_model: videoModel, mode, reference_image_id: referenceId', script)
 
     def test_qwen_gallery_prunes_stale_records_and_deletes_via_trash(self):

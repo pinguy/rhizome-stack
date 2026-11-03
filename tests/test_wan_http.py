@@ -98,6 +98,84 @@ class WanHTTPTest(unittest.TestCase):
                 self.assertEqual(status, 400, data)
         self.app.QUEUE.add.assert_not_called()
 
+    def test_mastering_never_stops_queued_or_active_generation(self):
+        project = {'shots': [{'takes': [{'id': 'fixture', 'path': 'generated/fixture.mp4'}]}]}
+        for status in ('queued', 'running'):
+            with self.subTest(status=status), \
+                 patch.object(self.app, 'ensure_project', return_value=project), \
+                 patch.object(self.app.QUEUE, 'snapshot', return_value={'jobs': [{'status': status}]}), \
+                 patch.object(self.app, 'UPSCALE') as upscale:
+                upscale.running.return_value = False
+                self.app.QUEUE.engine.reset_mock()
+                with self.assertRaisesRegex(RuntimeError, 'generation'):
+                    self.app.start_video_upscale('fixture', 'lanczos')
+                self.app.QUEUE.engine.stop_owned.assert_not_called()
+                upscale.start.assert_not_called()
+
+    def test_mastering_requires_idle_engine_and_successful_stop(self):
+        project = {'shots': [{'takes': [{'id': 'fixture', 'path': 'generated/fixture.mp4'}]}]}
+        for running, pending, stopped in ((1, 0, True), (0, 1, True), (None, None, True), (0, 0, False)):
+            with self.subTest(running=running, pending=pending, stopped=stopped), \
+                 patch.object(self.app, 'ensure_project', return_value=project), \
+                 patch.object(self.app.QUEUE, 'snapshot', return_value={'jobs': []}), \
+                 patch.object(self.app, 'UPSCALE') as upscale:
+                upscale.running.return_value = False
+                self.app.QUEUE.engine.reset_mock()
+                self.app.QUEUE.engine.status.return_value = {
+                    'online': True, 'owned': True, 'running': running, 'pending': pending,
+                }
+                self.app.QUEUE.engine.stop_owned.return_value = stopped
+                with self.assertRaises(RuntimeError):
+                    self.app.start_video_upscale('fixture', 'lanczos')
+                if running != 0 or pending != 0:
+                    self.app.QUEUE.engine.stop_owned.assert_not_called()
+                upscale.start.assert_not_called()
+
+    def test_h3_validation_uses_fixed_fps_legal_frames_and_portable_models(self):
+        for path in self.app.H3_REQUIRED_FILES:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        payload = self.app.validate_job({
+            'prompt': 'synthetic H3 shot', 'video_model': self.app.H3_MODEL,
+            'mode': 't2v', 'fps': 24, 'steps': 20,
+            'frames': self.app.h3_frames_for_seconds(5),
+            'width': 832, 'height': 480, 'seed': 42,
+        })
+        self.assertEqual(payload['backend'], self.app.H3_BACKEND)
+        self.assertEqual(payload['frames'] % 17, 5)
+        with self.assertRaisesRegex(ValueError, '24 fps'):
+            self.app.validate_job({**payload, 'fps': 16})
+        with self.assertRaisesRegex(ValueError, r'17n\+5'):
+            self.app.validate_job({**payload, 'frames': 120})
+
+    def test_h3_gallery_preserves_requested_duration(self):
+        project = self.app.ensure_project()
+        take = {
+            'id': 'take-h3duration', 'path': 'generated/fixture.mp4',
+            'frames': self.app.h3_frames_for_seconds(5), 'fps': 24,
+            'duration_seconds': 5, 'created_at': 1,
+        }
+        project['shots'][0]['takes'] = [take]
+        self.app.save_project(project)
+        self.app.QUEUE.snapshot.return_value = {
+            'jobs': [], 'pause_after_current': False, 'engine': {'online': False},
+        }
+        with patch.object(self.app, 'openclaw_models', return_value=[]):
+            snapshot = self.app.state()
+        self.assertEqual(snapshot['takes'][0]['duration_seconds'], 5)
+
+    def test_1080p_endpoint_preserves_selected_method(self):
+        origin = 'http://%s:%s' % self.server.server_address
+        with patch.object(self.app, 'start_video_upscale',
+                          return_value={'status': 'running', 'method': 'realesrgan'}) as start:
+            status, _, data = self.request(
+                'POST', '/api/video-studio/upscale',
+                json.dumps({'take_id': 'take-deadbeef', 'method': 'realesrgan'}),
+                {'Origin': origin, 'Content-Type': 'application/json'},
+            )
+        self.assertEqual(status, 202, data)
+        start.assert_called_once_with('take-deadbeef', 'realesrgan')
+
 
 class WanBatchTest(unittest.TestCase):
     def setUp(self):
@@ -123,6 +201,77 @@ class WanBatchTest(unittest.TestCase):
                  patch.object(Path, 'read_bytes', return_value=('\0'.join(args) + '\0').encode()), \
                  patch.object(os, 'getpgid', return_value=pid):
                 self.assertEqual(owned.owned_pid(), expected)
+
+    def test_reference_jobs_submit_inference_and_register_generated_output(self):
+        # A reference path must never satisfy the finished-output sentinel.
+        for kind, mode, reference in (('video', 'i2v', True), ('video', 't2v', False),
+                                       ('art', 't2v', True)):
+            with self.subTest(kind=kind, mode=mode), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project_dir = root / 'projects/fixture'
+                project_dir.mkdir(parents=True)
+                (project_dir / 'reference.png').write_bytes(b'reference pixels')
+                inputs, outputs = root / 'input', root / 'output'
+                inputs.mkdir()
+                result_dir = outputs / 'wan-video-desk/fixture'
+                result_dir.mkdir(parents=True)
+                extension = '.png' if kind == 'art' else '.mp4'
+                (result_dir / ('job-fixture_00001' + extension)).write_bytes(b'generated result')
+                project = {'id': 'fixture', 'shots': [{'id': 'shot-fixture', 'takes': []}]}
+                job = {'id': 'job-fixture', 'project_id': 'fixture', 'shot_id': 'shot-fixture',
+                       'kind': kind, 'mode': mode, 'backend': engine.WAN_BACKEND,
+                       'prompt': 'synthetic shot', 'seed': 42, 'width': 640, 'height': 480,
+                       'frames': 81, 'fps': 16, 'steps': 4}
+                if reference:
+                    job['reference_image'] = {'path': 'reference.png'}
+                self.queue.root = root
+                self.queue.engine = Mock()
+                self.queue.load_project = Mock(return_value=project)
+                self.queue.save_project = Mock()
+                def request(path, payload=None, timeout=None):
+                    if path == '/prompt':
+                        return {'prompt_id': 'prompt-fixture'}
+                    return {'prompt-fixture': {'status': {'status_str': 'success'}}}
+                with patch.object(engine, 'COMFY_INPUT', inputs), \
+                     patch.object(engine, 'COMFY_OUTPUT', outputs), \
+                     patch.object(engine, '_json_request', side_effect=request) as submit, \
+                     patch.object(engine.time, 'sleep'), \
+                     patch.object(engine, 'qc_video', return_value={'status': 'pass'}):
+                    self.queue._run(job)
+                self.assertEqual(job['status'], 'complete', job.get('error'))
+                self.assertEqual(sum(call.args[0] == '/prompt' for call in submit.call_args_list), 1)
+                self.assertEqual((project_dir / job['result']['path']).read_bytes(), b'generated result')
+                self.assertEqual(list(inputs.iterdir()), [])
+                self.queue.save_project.assert_called_once()
+
+    def test_h3_does_not_start_until_owned_engine_is_idle_and_stopped(self):
+        for running, pending, stopped in ((1, 0, True), (0, 1, True), (None, None, True), (0, 0, False)):
+            with self.subTest(running=running, pending=pending, stopped=stopped):
+                self.queue.root = Path('/synthetic')
+                self.queue.load_project = Mock(return_value={})
+                self.queue.engine = Mock()
+                self.queue.engine.status.return_value = {
+                    'online': True, 'owned': True, 'running': running, 'pending': pending,
+                }
+                self.queue.engine.stop_owned.return_value = stopped
+                job = {'id': 'fixture', 'project_id': 'fixture', 'kind': 'video',
+                       'backend': engine.H3_BACKEND}
+                with patch.object(engine, 'run_h3') as run:
+                    self.queue._run(job)
+                self.assertEqual(job['status'], 'failed')
+                run.assert_not_called()
+                if running != 0 or pending != 0:
+                    self.queue.engine.stop_owned.assert_not_called()
+
+    def test_upscale_probe_falls_back_when_frame_count_is_unavailable(self):
+        import upscaler
+        probe = {'streams': [{'codec_type': 'video', 'avg_frame_rate': '24/1',
+                              'nb_frames': 'N/A', 'width': 640, 'height': 480}]}
+        with patch.object(upscaler.subprocess, 'check_output',
+                          side_effect=[json.dumps(probe), '24\n']) as check:
+            info = upscaler.UpscaleManager._probe(Path('/synthetic/video.mkv'))
+        self.assertEqual(info['frames'], 24)
+        self.assertIn('-count_packets', check.call_args_list[1].args[0])
 
     def test_zero_seed_batch_stays_sequential_and_keeps_caller_payload(self):
         payload = {'seed': 0, 'take_count': 3, 'prompt': 'fixture'}

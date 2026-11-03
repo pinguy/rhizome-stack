@@ -49,6 +49,23 @@ WAN_DECODE_TEMPORAL_OVERLAP = 16
 # +0.3032 for 32/8. Try the higher-quality 48/12 window first; reserve 32/12
 # for a second decoder OOM on tighter hardware.
 WAN_DECODE_FALLBACKS = ((48, 12), (32, 12))
+H3_BACKEND = "minimax-h3-nf4"
+H3_MODEL = "minimax-h3-fl2va-pruned-nf4.safetensors"
+H3_FPS = 24
+H3_MAX_SECONDS = 15
+H3_DEFAULT_STEPS = 20
+H3_MIN_STEPS = 4
+H3_MAX_STEPS = 50
+H3_MODEL_ROOT = Path(os.environ.get(
+    "H3_MODEL_ROOT", COMFY_DIR / "models/minimax_h3_nf4"
+)).expanduser()
+H3_RUNTIME = Path(os.environ.get(
+    "H3_RUNTIME", STACK_ROOT / "creative/h3-runtime/site-packages"
+)).expanduser()
+H3_SOURCE = Path(os.environ.get(
+    "H3_DIFFSYNTH_SOURCE", STACK_ROOT / "creative/DiffSynth-Studio"
+)).expanduser()
+H3_RUNNER = Path(__file__).resolve().parent / "h3_runner.py"
 
 
 def atomic_json(path: Path, data: object) -> None:
@@ -438,6 +455,68 @@ def wan_i2v_graph(job: dict, prefix: str, reference_name: str) -> dict:
     }
 
 
+def run_h3(job: dict, project_dir: Path, output_dir: Path) -> Path:
+    """Run the isolated DiffSynth low-VRAM H3 worker and return its MP4."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    logs = project_dir / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    request_path = logs / f"h3-{job['id']}.request.json"
+    log_path = logs / f"h3-{job['id']}.log"
+    output_path = output_dir / f"{job['id']}_00001.mp4"
+    reference_path = None
+    if job.get("mode") == "i2v":
+        reference = job.get("reference_image")
+        if not isinstance(reference, dict) or not reference.get("path"):
+            raise ValueError("MiniMax H3 Image input needs a valid first-frame reference")
+        candidate = (project_dir / str(reference["path"])).resolve(strict=True)
+        if not candidate.is_relative_to(project_dir.resolve()):
+            raise ValueError("MiniMax H3 reference image must belong to this project")
+        reference_path = str(candidate)
+    request = {
+        "schema": "minimax-h3-nf4.request/v1", "job_id": job["id"],
+        "prompt": job["prompt"], "seed": int(job["seed"]),
+        "width": int(job["width"]), "height": int(job["height"]),
+        "frames": int(job["frames"]),
+        "steps": int(job.get("steps", H3_DEFAULT_STEPS)),
+        "reference_path": reference_path, "model": H3_MODEL,
+        "model_root": str(H3_MODEL_ROOT), "runtime": "DiffSynth-Studio",
+        "native_audio": True, "fps": H3_FPS,
+    }
+    atomic_json(request_path, request)
+    env = dict(os.environ)
+    python_path = os.pathsep.join((str(H3_RUNTIME), str(H3_SOURCE)))
+    if env.get("PYTHONPATH"):
+        python_path += os.pathsep + env["PYTHONPATH"]
+    env.update({
+        "PYTHONPATH": python_path,
+        "TOKENIZERS_PARALLELISM": "false",
+        "DIFFSYNTH_SKIP_DOWNLOAD": "True",
+        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
+    })
+    visible_devices = os.environ.get("COMFY_CUDA_VISIBLE_DEVICES")
+    if visible_devices:
+        env.update({"CUDA_DEVICE_ORDER": "PCI_BUS_ID",
+                    "CUDA_VISIBLE_DEVICES": visible_devices})
+    with log_path.open("ab") as log:
+        result = subprocess.run(
+            [str(PYTHON), str(H3_RUNNER), str(request_path), str(output_path)],
+            cwd=H3_SOURCE, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+            env=env, timeout=21600, check=False, start_new_session=True,
+        )
+    if result.returncode != 0:
+        try:
+            detail = log_path.read_text(errors="replace")[-8000:]
+        except OSError:
+            detail = ""
+        raise RuntimeError(
+            f"MiniMax H3 exited {result.returncode}; see {log_path}"
+            + (f"\n{detail}" if detail else "")
+        )
+    if not output_path.is_file() or output_path.stat().st_size < 1024:
+        raise RuntimeError(f"MiniMax H3 returned no playable output; see {log_path}")
+    return output_path
+
+
 def decode_fallback_plan(backend: str) -> tuple[tuple[int, int], ...]:
     """Return bounded temporal decode retries in quality-first order."""
     return WAN_DECODE_FALLBACKS if backend == WAN_BACKEND else ((16, 8),)
@@ -577,21 +656,36 @@ class GenerationQueue:
             prefix = f"wan-video-desk/{job['project_id']}/{job['id']}"
             kind = job["kind"]
             backend = job.get("backend") or project.get("settings", {}).get("video_backend") or WAN_BACKEND
-            profile = "wan-dynamic" if kind == "video" and backend == WAN_BACKEND else "legacy-static"
-            if not self.engine.start(profile=profile):
-                raise RuntimeError("ComfyUI did not become ready; see state/comfy.log")
-            # Free previous department's models before changing from art to video or vice versa.
-            self.engine.free_models()
+            h3_job = kind == "video" and backend == H3_BACKEND
+            if h3_job:
+                engine_status = self.engine.status()
+                if engine_status.get("online"):
+                    if engine_status.get("owned"):
+                        if engine_status.get("running") != 0 or engine_status.get("pending") != 0:
+                            raise RuntimeError("ComfyUI has active work; MiniMax H3 did not interrupt it")
+                        if not self.engine.stop_owned():
+                            raise RuntimeError("Could not stop owned ComfyUI before MiniMax H3")
+                    else:
+                        raise RuntimeError(
+                            "ComfyUI is owned by another process; MiniMax H3 did not interrupt it"
+                        )
+            else:
+                profile = "wan-dynamic" if kind == "video" and backend == WAN_BACKEND else "legacy-static"
+                if not self.engine.start(profile=profile):
+                    raise RuntimeError("ComfyUI did not become ready; see state/comfy.log")
+                # Free previous department's models before changing from art to video or vice versa.
+                self.engine.free_models()
             reference_name = None
+            source = None
             if kind == "art":
                 self._set(job, stage="encoding art prompt")
                 reference = job.get("reference_image")
                 if reference:
-                    source = (project_dir / reference["path"]).resolve(strict=True)
-                    if not source.is_relative_to(project_dir.resolve()):
+                    reference_source = (project_dir / reference["path"]).resolve(strict=True)
+                    if not reference_source.is_relative_to(project_dir.resolve()):
                         raise ValueError("Reference image must belong to this project")
                     reference_name = f"wan-video-desk-{job['id']}.png"
-                    shutil.copy2(source, COMFY_INPUT / reference_name)
+                    shutil.copy2(reference_source, COMFY_INPUT / reference_name)
                     self._set(job, stage="encoding reference and edit prompt")
                 graph = qwen_graph(job["prompt"], job.get("negative", ""), job["seed"],
                                    job.get("width", 768), job.get("height", 448), prefix,
@@ -599,16 +693,22 @@ class GenerationQueue:
             else:
                 self._set(job, stage="encoding video prompt")
                 mode = job.get("mode", "t2v")
-                if backend == WAN_BACKEND:
+                if backend == H3_BACKEND:
+                    self._set(job, stage="MiniMax H3 low-VRAM inference")
+                    source = run_h3(
+                        job, project_dir,
+                        COMFY_OUTPUT / "wan-video-desk" / job["project_id"],
+                    )
+                elif backend == WAN_BACKEND:
                     if mode == "i2v":
                         reference = job.get("reference_image")
                         if not reference:
                             raise ValueError("WAN 2.2 I2V job has no valid reference image")
-                        source = (project_dir / reference["path"]).resolve(strict=True)
-                        if not source.is_relative_to(project_dir.resolve()):
+                        reference_source = (project_dir / reference["path"]).resolve(strict=True)
+                        if not reference_source.is_relative_to(project_dir.resolve()):
                             raise ValueError("Reference image must belong to this project")
                         reference_name = f"wan-video-desk-{job['id']}.png"
-                        shutil.copy2(source, COMFY_INPUT / reference_name)
+                        shutil.copy2(reference_source, COMFY_INPUT / reference_name)
                         self._set(job, stage="encoding reference and motion prompt")
                         graph = wan_i2v_graph(job, prefix, reference_name)
                     else:
@@ -620,15 +720,17 @@ class GenerationQueue:
                         asset = next((a for a in project.get("assets", []) if a["id"] == job.get("reference_asset_id")), None)
                         if not asset:
                             raise ValueError("I2V job has no valid approved reference")
-                        source = project_dir / asset["path"]
-                        reference_name = f"wan-video-desk-{job['id']}{source.suffix.lower()}"
-                        shutil.copy2(source, COMFY_INPUT / reference_name)
+                        reference_source = (project_dir / asset["path"]).resolve(strict=True)
+                        if not reference_source.is_relative_to(project_dir.resolve()):
+                            raise ValueError("Reference image must belong to this project")
+                        reference_name = f"wan-video-desk-{job['id']}{reference_source.suffix.lower()}"
+                        shutil.copy2(reference_source, COMFY_INPUT / reference_name)
                     graph = video_graph(template, job, prefix, reference_name)
                 else:
                     raise ValueError(f"Unknown video backend: {backend}")
             history = None
             decode_fallbacks = decode_fallback_plan(backend) if kind == "video" else ()
-            for decode_attempt in range(len(decode_fallbacks) + 1):
+            for decode_attempt in range(len(decode_fallbacks) + 1) if source is None else ():
                 self._set(job, stage="sampling" if decode_attempt == 0 else "retrying safe tiled decode")
                 response = _json_request("/prompt", {"prompt": graph, "client_id": "wan-video-desk"}, timeout=30)
                 prompt_id = response.get("prompt_id")
@@ -673,14 +775,16 @@ class GenerationQueue:
                     continue
                 break
             else:
-                raise RuntimeError("safe tiled decode fallback was exhausted")
+                if source is None:
+                    raise RuntimeError("safe tiled decode fallback was exhausted")
 
             extension = ".png" if kind == "art" else ".mp4"
-            candidates = sorted((COMFY_OUTPUT / "wan-video-desk" / job["project_id"]).glob(job["id"] + "*" + extension),
-                                key=lambda p: p.stat().st_mtime)
-            if not candidates:
-                raise FileNotFoundError(f"ComfyUI completed but no {extension} result was found")
-            source = candidates[-1]
+            if source is None:
+                candidates = sorted((COMFY_OUTPUT / "wan-video-desk" / job["project_id"]).glob(job["id"] + "*" + extension),
+                                    key=lambda p: p.stat().st_mtime)
+                if not candidates:
+                    raise FileNotFoundError(f"ComfyUI completed but no {extension} result was found")
+                source = candidates[-1]
             if kind == "art":
                 target_dir = project_dir / "references"
                 target = target_dir / (job["id"] + source.suffix)
@@ -713,6 +817,7 @@ class GenerationQueue:
             else:
                 backend = job.get("backend") or project.get("settings", {}).get("video_backend") or WAN_BACKEND
                 is_wan = backend == WAN_BACKEND
+                is_h3 = backend == H3_BACKEND
                 generation_seconds = round(max(0.0, time.time() - float(job.get("started_at") or time.time())), 3)
                 take = {
                     "id": "take-" + uuid.uuid4().hex[:10], "path": rel, "prompt": job["prompt"],
@@ -728,11 +833,15 @@ class GenerationQueue:
                     "backend": backend,
                     "model": (str(job.get("video_model") or
                                   (WAN_I2V_MODEL if job.get("mode") == "i2v" else WAN_T2V_MODEL))
-                              if is_wan else "LTX-2.5"),
-                    "quant": "Q5_K" if is_wan else "Q3_K_M", "fps": job.get("fps", WAN_FPS) if is_wan else 24,
-                    "steps": job.get("steps", WAN_MIN_STEPS) if is_wan else None, "cfg": WAN_CFG if is_wan else None,
-                    "sampler": "euler_ancestral" if is_wan else None,
-                    "scheduler": "beta" if is_wan else None, "shift": 8.0 if is_wan else None,
+                              if (is_wan or is_h3) else "LTX-2.5"),
+                    "quant": "NF4 pruned" if is_h3 else ("Q5_K" if is_wan else "Q3_K_M"),
+                    "fps": H3_FPS if is_h3 else (job.get("fps", WAN_FPS) if is_wan else 24),
+                    "steps": job.get("steps", H3_DEFAULT_STEPS if is_h3 else WAN_MIN_STEPS) if (is_wan or is_h3) else None,
+                    "cfg": 1.0 if is_h3 else (WAN_CFG if is_wan else None),
+                    "sampler": "DiffSynth FlowMatch" if is_h3 else ("euler_ancestral" if is_wan else None),
+                    "scheduler": "flow shift 12/audio 3" if is_h3 else ("beta" if is_wan else None),
+                    "shift": 12.0 if is_h3 else (8.0 if is_wan else None),
+                    "native_audio": is_h3, "audio_sample_rate": 32000 if is_h3 else None,
                     "reference_asset_id": job.get("reference_asset_id"),
                     "reference_image": job.get("reference_image"),
                     "job_id": job["id"], "generation_seconds": generation_seconds,

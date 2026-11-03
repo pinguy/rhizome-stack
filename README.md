@@ -9,7 +9,7 @@ Open WebUI and other open-source projects; upstream authorship is preserved in
 skills and optional speech.** Start with one working model, then add what you
 need. Linux and WSL2 use the same setup wizard.
 
-**Status: 0.1.0-alpha.15 candidate.** Installer and regression checks are automated; complete
+**Status: 0.1.0-alpha.16 candidate.** Installer and regression checks are automated; complete
 native Linux and WSL2 installations still need acceptance testing.
 Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working machine.
 
@@ -27,7 +27,7 @@ Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working ma
 | CPU MiniLM retrieval | Revision-pinned semantic support for bounded workforce jobs | Optional |
 | Qwen Image Desk | Local image generation/editing from its desk or directly inside an Open WebUI chat | Optional |
 | MiniMax Music 3 | Local song generation from its desk or directly inside an Open WebUI chat | Optional |
-| WAN Video Desk | Local text/image-to-video generation from its desk or directly inside an Open WebUI chat | Optional |
+| Video Desk | WAN 2.2 or MiniMax H3 text/first-frame video, plus Lanczos or Real-ESRGAN 1080p masters | Optional |
 
 OpenClaw stays pinned to **2026.7.1-2** and Open WebUI to **0.11.0**.
 The pinned versions are compatibility choices, not promises that they are the
@@ -36,14 +36,14 @@ path first.
 
 ## Images, music and video inside Open WebUI
 
-Qwen Image Desk, MiniMax Music 3 and WAN Video Desk are not limited to their standalone web
+Qwen Image Desk, MiniMax Music 3 and Video Desk are not limited to their standalone web
 interfaces. After the creative profile and packaged Open WebUI tools are
 installed, an ordinary saved chat can:
 
 - create a Qwen image and keep the PNG inline in that chat;
 - edit an image uploaded by the signed-in Open WebUI user;
 - create a MiniMax song and keep the MP3 as a native playable file card;
-- create or image-condition a WAN video, keep the MP4 inline in the chat and
+- create or image-condition a WAN or MiniMax H3 video, keep the MP4 inline in the chat and
   retain the take in Video Desk; and
 - continue the conversation with the local chat model after generation.
 
@@ -100,7 +100,7 @@ Open **http://localhost:8080**, create the first local administrator, choose a
 model and send a real message. A model catalogue or healthy HTTP endpoint does
 not prove that inference works. [First-run guide](docs/FIRST_RUN.md) covers
 provider setup, optional modules and packaged Open WebUI tools. The Qwen,
-MiniMax and WAN tools are opt-in registrations: they safely hand the local GPU from an
+MiniMax and video tools are opt-in registrations: they safely hand the local GPU from an
 idle Ollama model to ComfyUI, persist the generated file in the saved chat, and
 then release ComfyUI so chat inference can resume.
 
@@ -149,7 +149,7 @@ browser profiles and model weights are never seeded from the reference machine.
 - [Memory formats, provenance and rebuilding](docs/MEMORY.md)
 - [Skills and companion projects](docs/INTEGRATIONS.md)
 - [GLiNER routing advice and the Ornith workforce](docs/WORKFORCE.md)
-- [ComfyUI, Qwen Image Desk, MiniMax Music 3 and WAN Video Desk](docs/CREATIVE.md)
+- [ComfyUI, Qwen Image Desk, MiniMax Music 3 and Video Desk](docs/CREATIVE.md)
 - [Browser showcase: all three desks and Open WebUI media embeds](docs/SHOWCASE.md)
 - [Updating and troubleshooting](docs/MAINTENANCE.md)
 - [Native Linux](docs/LINUX.md) · [WSL2](docs/WSL.md)

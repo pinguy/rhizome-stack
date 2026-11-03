@@ -26,6 +26,14 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from engine import (
     GenerationQueue,
+    H3_BACKEND,
+    H3_DEFAULT_STEPS,
+    H3_FPS,
+    H3_MAX_SECONDS,
+    H3_MAX_STEPS,
+    H3_MIN_STEPS,
+    H3_MODEL,
+    H3_MODEL_ROOT,
     WAN_BACKEND,
     WAN_CLIP_VISION,
     WAN_FPS,
@@ -40,6 +48,7 @@ from engine import (
     WAN_VAE,
     atomic_json,
 )
+from upscaler import UpscaleManager
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -59,6 +68,10 @@ VIDEO_FORMATS = {
     "480p": {"16:9": (832, 480), "4:3": (640, 480), "mobile": (480, 832)},
     "720p": {"16:9": (1280, 720), "4:3": (960, 720), "mobile": (720, 1280)},
 }
+H3_VIDEO_FORMATS = {
+    "480p": {"16:9": (832, 480), "4:3": (640, 480), "mobile": (480, 832)},
+    "720p": {"16:9": (1344, 768), "4:3": (1024, 768), "mobile": (768, 1344)},
+}
 WAN_MODEL_FILES = {
     WAN_T2V_MODEL: COMFY_DIR / "models/diffusion_models" / WAN_T2V_MODEL,
     WAN_I2V_MODEL: COMFY_DIR / "models/diffusion_models" / WAN_I2V_MODEL,
@@ -68,6 +81,19 @@ WAN_COMMON_FILES = (
     COMFY_DIR / "models/vae" / WAN_VAE,
 )
 WAN_CLIP_FILE = COMFY_DIR / "models/clip_vision" / WAN_CLIP_VISION
+H3_REQUIRED_FILES = (
+    H3_MODEL_ROOT / H3_MODEL,
+    H3_MODEL_ROOT / "minimax-h3-text-encoder-nf4.safetensors",
+    H3_MODEL_ROOT / "video_vae_nf4.safetensors",
+    H3_MODEL_ROOT / "audio_vae_nf4.safetensors",
+    H3_MODEL_ROOT / "FL2VA/processor/chat_template.json",
+    H3_MODEL_ROOT / "FL2VA/processor/merges.txt",
+    H3_MODEL_ROOT / "FL2VA/processor/preprocessor_config.json",
+    H3_MODEL_ROOT / "FL2VA/processor/tokenizer.json",
+    H3_MODEL_ROOT / "FL2VA/processor/tokenizer_config.json",
+    H3_MODEL_ROOT / "FL2VA/processor/video_preprocessor_config.json",
+    H3_MODEL_ROOT / "FL2VA/processor/vocab.json",
+)
 _MODELS_CACHE: tuple[float, list[dict]] = (0.0, [])
 _MODELS_LOCK = threading.Lock()
 
@@ -77,6 +103,11 @@ for directory in (PROJECTS, ROOT / "state", ROOT / "logs"):
 
 def now() -> float:
     return time.time()
+
+
+def h3_frames_for_seconds(seconds: int) -> int:
+    """Choose the closest legal 17n+5 H3 frame count at fixed 24 fps."""
+    return max(5, round((int(seconds) * H3_FPS - 5) / 17) * 17 + 5)
 
 
 def project_dir() -> Path:
@@ -307,7 +338,10 @@ def state() -> dict:
     for take in takes:
         take["absolute_path"] = str(project_dir() / take["path"])
         take["media_url"] = f"/media/{VIDEO_PROJECT_ID}/{urllib.parse.quote(take['path'])}"
-        take["duration_seconds"] = round((int(take.get("frames", 17)) - 1) / int(take.get("fps", WAN_FPS)), 3)
+        if take.get("duration_seconds") is None:
+            take["duration_seconds"] = round(
+                (int(take.get("frames", 17)) - 1) / int(take.get("fps", WAN_FPS)), 3
+            )
         source_job = jobs_by_take.get(take.get("id"))
         if not take.get("generation_seconds") and source_job and source_job.get("started_at") and source_job.get("finished_at"):
             take["generation_seconds"] = round(source_job["finished_at"] - source_job["started_at"], 3)
@@ -324,10 +358,27 @@ def state() -> dict:
         if "i2v" in WAN_MODEL_MODES[name]:
             required.append(WAN_CLIP_FILE)
         model_rows.append({"id": name, "name": name, "modes": list(WAN_MODEL_MODES[name]),
-                           "mode": WAN_MODEL_MODES[name][-1],
+                           "mode": WAN_MODEL_MODES[name][-1], "backend": WAN_BACKEND,
+                           "formats": {quality: {aspect: list(size) for aspect, size in aspects.items()}
+                                       for quality, aspects in VIDEO_FORMATS.items()},
+                           "fps_options": list(WAN_FPS_OPTIONS), "max_seconds": WAN_MAX_SECONDS,
+                           "steps": {"default": WAN_MIN_STEPS, "min": WAN_MIN_STEPS,
+                                     "max": WAN_MAX_STEPS},
                            "ready": all(path.is_file() for path in required)})
+    model_rows.append({
+        "id": H3_MODEL, "name": "MiniMax H3 NF4 · native stereo audio",
+        "modes": ["t2v", "i2v"], "mode": "i2v", "backend": H3_BACKEND,
+        "native_audio": True,
+        "formats": {quality: {aspect: list(size) for aspect, size in aspects.items()}
+                    for quality, aspects in H3_VIDEO_FORMATS.items()},
+        "fps_options": [H3_FPS], "max_seconds": H3_MAX_SECONDS,
+        "steps": {"default": H3_DEFAULT_STEPS, "min": H3_MIN_STEPS,
+                  "max": H3_MAX_STEPS},
+        "ready": all(path.is_file() for path in H3_REQUIRED_FILES),
+    })
     return {
         "project_id": VIDEO_PROJECT_ID, "takes": takes, "jobs": jobs,
+        "upscale": UPSCALE.snapshot(),
         "queue": {"pause_after_current": snapshot["pause_after_current"], "engine": snapshot["engine"]},
         "openclaw": adapter,
         "backend": {"id": WAN_BACKEND, "name": "WAN 2.2 Rapid Q5_K", "fps": WAN_FPS,
@@ -339,6 +390,37 @@ def state() -> dict:
         "fps_options": list(WAN_FPS_OPTIONS),
         "steps": {"default": WAN_MIN_STEPS, "min": WAN_MIN_STEPS, "max": WAN_MAX_STEPS},
     }
+
+
+def require_upscale_idle() -> None:
+    if UPSCALE.running():
+        raise RuntimeError("Wait for the 1080p master to finish before starting another media job")
+
+
+def start_video_upscale(take_id: str, method: str) -> dict:
+    require_upscale_idle()
+    if any(job.get("status") in {"queued", "running"}
+           for job in QUEUE.snapshot().get("jobs", [])):
+        raise RuntimeError("Wait for queued video generation to finish before mastering")
+    project = ensure_project()
+    take = next((item for item in project["shots"][0].get("takes", [])
+                 if item.get("id") == take_id), None)
+    if take is None:
+        raise ValueError("Choose a generated video take to master")
+    base = project_dir().resolve()
+    source = (base / str(take.get("path") or "")).resolve(strict=True)
+    if not source.is_relative_to(base) or not source.is_file():
+        raise ValueError("Generated video is missing or outside Video Desk")
+    engine = QUEUE.engine.status()
+    if engine.get("online"):
+        if engine.get("owned"):
+            if engine.get("running") != 0 or engine.get("pending") != 0:
+                raise RuntimeError("ComfyUI has active work; mastering did not interrupt it")
+            if not QUEUE.engine.stop_owned():
+                raise RuntimeError("Could not stop owned ComfyUI before mastering")
+        else:
+            raise RuntimeError("ComfyUI is owned by another process; mastering did not interrupt it")
+    return UPSCALE.start(take_id, source, base / "generated", method)
 
 
 def delete_take(take_id: str) -> dict:
@@ -373,37 +455,57 @@ def validate_job(body: dict) -> dict:
     model = str(body.get("video_model") or WAN_T2V_MODEL)
     if mode not in ("t2v", "i2v"):
         raise ValueError("Video input must be Text or Image")
-    if model not in WAN_MODEL_FILES:
-        raise ValueError("Choose an installed WAN video model")
-    if mode not in WAN_MODEL_MODES[model]:
-        raise ValueError(f"{model} does not support {mode.upper()} input")
-    required = [WAN_MODEL_FILES[model], *WAN_COMMON_FILES]
-    if mode == "i2v":
-        required.append(WAN_CLIP_FILE)
+    if model == H3_MODEL:
+        backend = H3_BACKEND
+        required = list(H3_REQUIRED_FILES)
+    elif model in WAN_MODEL_FILES:
+        backend = WAN_BACKEND
+        if mode not in WAN_MODEL_MODES[model]:
+            raise ValueError(f"{model} does not support {mode.upper()} input")
+        required = [WAN_MODEL_FILES[model], *WAN_COMMON_FILES]
+        if mode == "i2v":
+            required.append(WAN_CLIP_FILE)
+    else:
+        raise ValueError("Choose an installed local video model")
     missing = [path.name for path in required if not path.is_file()]
     if missing:
-        raise ValueError("WAN 2.2 is missing required files: " + ", ".join(missing))
+        label = "MiniMax H3" if backend == H3_BACKEND else "WAN 2.2"
+        raise ValueError(f"{label} is missing required files: " + ", ".join(missing))
     if mode == "i2v":
         reference = body.get("reference_image")
         if not isinstance(reference, dict) or not reference.get("path"):
             raise ValueError("Image input needs a reference image")
         source = (project_dir() / str(reference["path"])).resolve()
         if not source.is_relative_to(project_dir().resolve()) or not source.is_file():
-            raise ValueError("WAN 2.2 reference image is missing")
-    fps = int(body.get("fps", WAN_FPS))
-    steps = int(body.get("steps", WAN_MIN_STEPS))
+            raise ValueError("Reference image is missing")
+    fps = int(body.get("fps", H3_FPS if backend == H3_BACKEND else WAN_FPS))
+    steps = int(body.get("steps", H3_DEFAULT_STEPS if backend == H3_BACKEND else WAN_MIN_STEPS))
     frames = int(body.get("frames", 81))
     width = int(body.get("width", 640))
     height = int(body.get("height", 480))
-    if fps not in WAN_FPS_OPTIONS:
-        raise ValueError("WAN 2.2 fps must be 16 or 24")
-    if not WAN_MIN_STEPS <= steps <= WAN_MAX_STEPS:
-        raise ValueError("WAN 2.2 steps must be between 4 and 20")
-    if (frames - 1) % fps or not 1 <= (frames - 1) // fps <= WAN_MAX_SECONDS:
-        raise ValueError("WAN 2.2 frames must describe 1–10 whole seconds")
-    if not (256 <= width <= 1280 and 256 <= height <= 1280 and width % 16 == 0 and height % 16 == 0):
-        raise ValueError("Video dimensions must be 256–1280 and multiples of 16")
-    body.update(backend=WAN_BACKEND, mode=mode, video_model=model, fps=fps,
+    if backend == H3_BACKEND:
+        if fps != H3_FPS:
+            raise ValueError("MiniMax H3 runs at 24 fps")
+        if not H3_MIN_STEPS <= steps <= H3_MAX_STEPS:
+            raise ValueError("MiniMax H3 steps must be between 4 and 50")
+        if frames < 5 or (frames - 5) % 17:
+            raise ValueError("MiniMax H3 frames must use the 17n+5 sequence")
+        if frames > h3_frames_for_seconds(H3_MAX_SECONDS):
+            raise ValueError("MiniMax H3 duration must not exceed 15 seconds")
+        if (width, height) not in {size for formats in H3_VIDEO_FORMATS.values()
+                                  for size in formats.values()}:
+            raise ValueError("Choose a supported MiniMax H3 resolution")
+    else:
+        if fps not in WAN_FPS_OPTIONS:
+            raise ValueError("WAN 2.2 fps must be 16 or 24")
+        if not WAN_MIN_STEPS <= steps <= WAN_MAX_STEPS:
+            raise ValueError("WAN 2.2 steps must be between 4 and 20")
+        if (frames - 1) % fps or not 1 <= (frames - 1) // fps <= WAN_MAX_SECONDS:
+            raise ValueError("WAN 2.2 frames must describe 1–10 whole seconds")
+        if not (256 <= width <= 1280 and 256 <= height <= 1280
+                and width % 16 == 0 and height % 16 == 0):
+            raise ValueError("Video dimensions must be 256–1280 and multiples of 16")
+    body.update(backend=backend, mode=mode, video_model=model, fps=fps,
                 steps=steps, frames=frames, width=width, height=height,
                 project_id=VIDEO_PROJECT_ID, shot_id="shot-video-desk", kind="video")
     project["settings"]["fps"] = fps
@@ -411,6 +513,7 @@ def validate_job(body: dict) -> dict:
 
 
 QUEUE = GenerationQueue(ROOT, APP_DIR / "workflows", load_project, save_project)
+UPSCALE = UpscaleManager(ROOT / "state/upscale.json", log_dir=ROOT / "logs")
 
 
 class Handler(LocalRequestHandler):
@@ -562,7 +665,13 @@ class Handler(LocalRequestHandler):
                 return self._json(show_output(self._body_json().get("path", "")))
             if path == "/api/video-studio/delete":
                 return self._json(delete_take(self._body_json().get("id", "")))
+            if path == "/api/video-studio/upscale":
+                body = self._body_json()
+                return self._json(start_video_upscale(
+                    str(body.get("take_id") or ""), str(body.get("method") or "lanczos")
+                ), 202)
             if path == "/api/video-studio/generate":
+                require_upscale_idle()
                 body = self._body_json()
                 final_prompt = str(body.get("final_prompt") or "").strip()
                 original_prompt = str(body.get("original_prompt") or final_prompt).strip()
@@ -571,34 +680,44 @@ class Handler(LocalRequestHandler):
                     raise ValueError("Review or enter the final motion prompt before generating")
                 if len(final_prompt) > 12_000 or len(negative) > 8_000:
                     raise ValueError("Prompt is too long")
+                video_model = str(body.get("video_model") or WAN_T2V_MODEL)
+                if video_model == H3_MODEL:
+                    formats = H3_VIDEO_FORMATS
+                    default_fps, default_steps, max_seconds = H3_FPS, H3_DEFAULT_STEPS, H3_MAX_SECONDS
+                elif video_model in WAN_MODEL_FILES:
+                    formats = VIDEO_FORMATS
+                    default_fps, default_steps, max_seconds = WAN_FPS, WAN_MIN_STEPS, WAN_MAX_SECONDS
+                else:
+                    raise ValueError("Choose an installed local video model")
                 quality = str(body.get("quality") or "480p")
                 aspect = str(body.get("aspect") or "4:3")
-                if quality not in VIDEO_FORMATS or aspect not in VIDEO_FORMATS[quality]:
+                if quality not in formats or aspect not in formats[quality]:
                     raise ValueError("Choose a supported resolution and aspect ratio")
                 try:
                     duration = int(body.get("duration_seconds", 5))
-                    fps = int(body.get("fps", WAN_FPS))
-                    steps = int(body.get("steps", WAN_MIN_STEPS))
+                    fps = int(body.get("fps", default_fps))
+                    steps = int(body.get("steps", default_steps))
                     seed = int(body.get("seed"))
                     batch = max(1, min(4, int(body.get("batch_count", 1))))
                 except (TypeError, ValueError) as exc:
                     raise ValueError("Duration, fps, steps, seed and take count must be numbers") from exc
-                if not 1 <= duration <= WAN_MAX_SECONDS:
-                    raise ValueError("Duration must be a whole number from 1 to 10 seconds")
+                if not 1 <= duration <= max_seconds:
+                    raise ValueError(f"Duration must be a whole number from 1 to {max_seconds} seconds")
                 if not 0 <= seed < 2**63:
                     raise ValueError("Seed must be between 0 and 9223372036854775807")
                 mode = str(body.get("mode") or "t2v")
                 reference = reference_info(body.get("reference_image_id")) if mode == "i2v" else None
-                width, height = VIDEO_FORMATS[quality][aspect]
+                width, height = formats[quality][aspect]
                 payload = validate_job({
-                    "video_model": str(body.get("video_model") or WAN_T2V_MODEL),
+                    "video_model": video_model,
                     "mode": mode, "reference_image": reference,
                     "prompt": final_prompt, "negative": negative,
                     "original_prompt": original_prompt, "expanded_prompt": final_prompt,
                     "expander_model": body.get("expander_model") or None,
                     "prompt_mode": body.get("prompt_mode") or "edited",
                     "duration_seconds": duration, "quality": quality, "aspect_ratio": aspect,
-                    "seed": seed, "fps": fps, "steps": steps, "frames": duration * fps + 1,
+                    "seed": seed, "fps": fps, "steps": steps,
+                    "frames": h3_frames_for_seconds(duration) if video_model == H3_MODEL else duration * fps + 1,
                     "width": width, "height": height, "take_count": batch,
                 })
                 return self._json({"jobs": QUEUE.add(payload)}, 201)

@@ -1,44 +1,33 @@
-# WAN Video Desk
+# Video Desk
 
-WAN Video Desk is a loopback-only browser app for local WAN 2.2 Rapid video
-generation through the stack's pinned ComfyUI installation.
+Video Desk is a loopback-only browser app for local WAN 2.2 Rapid and MiniMax
+H3 FL2VA pruned NF4 generation.
 
-## Controls
+## Generation
 
-- **Input:** Text or Image.
-- **Model:** either exact installed Rapid v10 Q5_K GGUF.
-- 480p or 720p output in 16:9, 4:3 or mobile 9:16.
-- 1–10 whole seconds at 16 or 24 FPS.
-- 4–20 sampling steps and one to four queued takes.
-- Optional OpenClaw prompt expansion, editable final prompt and negative guidance.
-- Persistent local gallery with playback, reuse, same-seed reruns, download,
-  show-in-folder and Trash-based deletion.
+- Text or first-frame Image input.
+- WAN Rapid v10 Q5_K: 480p/720p, 16 or 24 FPS, 1–10 seconds, 4–20 steps.
+- MiniMax H3 NF4: 480p/720p, fixed 24 FPS, `17n+5` frames, 1–15 seconds,
+  4–50 steps and native 32 kHz stereo audio.
+- Optional OpenClaw prompt expansion and persistent local take history.
+- Exact-process ownership: H3 may stop this Desk's ComfyUI, never an external
+  process.
 
-Input and model are separate choices. A choice never silently rewrites the
-other. The selected model must support the selected input: image input requires
-the I2V model and a locally uploaded PNG, JPEG or WebP reference.
+## 1080p mastering
 
-## Runtime boundary
+Screening Room offers Lanczos-only mastering or Real-ESRGAN NCNN/Vulkan 4×
+enhancement followed by a Lanczos 1920×1080 master. Lanczos uses FFmpeg with no
+extra weights. Real-ESRGAN requires `VIDEO_UPSCALER_NCNN_BIN` and
+`VIDEO_UPSCALER_NCNN_MODELS`; its external executable and model pair are not
+bundled. Both paths preserve audio, validate frame count and resolution, use a
+single-flight lock, report progress and clean temporary data.
 
-The app starts only the exact ComfyUI process it owns, tracks its PID and process
-group, and releases it after the configured idle period. It does not use broad
-process killing. `COMFY_CUDA_VISIBLE_DEVICES` may be set in the local stack
-environment when a host needs an explicit CUDA device order; no reference-machine
-GPU identifier is bundled.
+## Model/runtime boundary
 
-Generated projects, references, MP4 files, logs, model weights and queue state
-remain under the installed stack's runtime directory. None are part of the
-release archive.
+`--download-creative-models` downloads the revision-pinned, SHA-256-verified WAN
+and H3 files listed in `manifests/creative-models.json`. DiffSynth-Studio is
+checked out at the pinned commit from `manifests/versions.json`; H3-only Python
+additions live under `$RHIZOME_STACK_ROOT/creative/h3-runtime`.
 
-## Models
-
-`--download-creative-models` downloads hash-verified copies of:
-
-- `wan2.2-t2v-rapid-aio-v10-nsfw-Q5_K.gguf`
-- `wan2.2-i2v-rapid-aio-v10-nsfw-Q5_K.gguf`
-- `umt5-xxl-encoder-Q4_K_M.gguf`
-- `wan_2.1_vae.safetensors`
-- `clip_vision_h.safetensors`
-
-The blobs are downloaded on the target machine and are not redistributed in
-Rhizome Stack.
+Generated projects, references, MP4 files, logs, weights and queue state remain
+under the installed stack's runtime directory. None are in the release archive.

@@ -223,7 +223,7 @@ async def import_reference(kind, file_id, user):
     )
 
 
-async def attach_result(kind, source, user, metadata, emitter):
+async def attach_result(kind, source, user, metadata, emitter, source_label=None):
     from open_webui.config import UPLOAD_DIR
     from open_webui.models.files import Files, FileForm
     from open_webui.models.chats import Chats
@@ -236,7 +236,8 @@ async def attach_result(kind, source, user, metadata, emitter):
     }
     if kind not in media:
         raise ValueError(f"Unknown local media kind: {kind}")
-    allowed, mime, source_label, attachment_type = media[kind]
+    allowed, mime, default_source_label, attachment_type = media[kind]
+    source_label = source_label or default_source_label
     if not path.is_relative_to(allowed.resolve()):
         raise ValueError("Generator returned an unexpected output path")
     file_id = str(uuid.uuid4())
@@ -290,7 +291,9 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
     labels = {"music": "MiniMax Music 3", "image": "Qwen Image Desk", "video": "WAN Video Desk"}
     if kind not in labels:
         return json.dumps({"status": "error", "error": f"Unknown local media kind: {kind}"})
-    label = labels[kind]
+    label = ("MiniMax H3" if kind == "video" and
+             payload.get("video_model") == "minimax-h3-fl2va-pruned-nf4.safetensors"
+             else labels[kind])
     try:
         key = retry_key(kind, payload, user["id"], metadata, reference_file_id, idempotency_key)
     except ValueError as exc:
@@ -329,7 +332,9 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
                 record["status"] = "running"
                 save_job(receipt, record)
             await status(f"{label} is generating…")
-            deadline = time.monotonic() + 1800
+            h3_video = (kind == "video" and
+                        payload.get("video_model") == "minimax-h3-fl2va-pruned-nf4.safetensors")
+            deadline = time.monotonic() + (21600 if h3_video else 1800)
             previous_stage = None
             while time.monotonic() < deadline:
                 # Once the engine stops, its in-memory history may disappear.
@@ -381,9 +386,10 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
                     await status(f"{label} · {stage}")
                     previous_stage = stage
             else:
-                raise TimeoutError("Generation is still pending after 30 minutes. Check the local app; no duplicate was started.")
+                limit = "six hours" if h3_video else "30 minutes"
+                raise TimeoutError(f"Generation is still pending after {limit}. Check the local app; no duplicate was started.")
             await asyncio.to_thread(release_models, kind)
-            media = await attach_result(kind, source, user, metadata, emitter)
+            media = await attach_result(kind, source, user, metadata, emitter, label)
             await asyncio.sleep(1)
             answer = {"status": "success", "generator": label, **media,
                       "message": "The generated file is attached to this chat. Briefly confirm completion and include the download link. Do not generate again."}

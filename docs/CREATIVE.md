@@ -5,7 +5,7 @@ The creative profile installs a separate pinned ComfyUI checkout under
 
 - Qwen Image Desk at `http://127.0.0.1:8841/image-studio/`
 - MiniMax Music 3 at `http://127.0.0.1:8830/`
-- WAN Video Desk at `http://127.0.0.1:8840/video-studio/`
+- Video Desk (WAN 2.2 + MiniMax H3) at `http://127.0.0.1:8840/video-studio/`
 
 Cutroom is not part of this package. Its source, LTX workflows, projects,
 outputs, logs and reference-machine state are excluded.
@@ -21,8 +21,9 @@ Preview first. Model downloads are large and remain optional:
 ```
 
 The installer checks out ComfyUI commit
-`af89add63f71a487fde45efc7fba744f3455ae73` and ComfyUI-GGUF commit
-`6ea2651e7df66d7585f6ffee804b20e92fb38b8a`. A hash-guarded one-line patch
+`af89add63f71a487fde45efc7fba744f3455ae73`, ComfyUI-GGUF commit
+`6ea2651e7df66d7585f6ffee804b20e92fb38b8a`, and DiffSynth-Studio commit
+`e5a44c42776978457b61d51d595a1f6746c3d87a`. A hash-guarded one-line patch
 admits the `qwen_image21` GGUF architecture. Current ComfyUI supplies native
 Qwen Image 2.1 and MiniMax Music 3 nodes.
 
@@ -64,6 +65,25 @@ Both WAN modes use the accepted 64/16 temporal decoder. A decoder-only
 out-of-memory failure retries at 48/12 first to preserve luminance consistency,
 then at 32/12 for tighter memory. Other failures do not enter that ladder.
 
+MiniMax H3 uses the FL2VA pruned NF4 DiffSynth path. It supports Text and
+first-frame Image input, fixed 24 FPS, 1–15 seconds, 4–50 steps and native
+32 kHz stereo audio. H3 frame counts use the model's required `17n+5`
+sequence. Its four NF4 weights and seven processor files are revision-pinned
+and SHA-256 verified; together they add about 26 GB. DiffSynth runs in an
+isolated worker and stops only the ComfyUI process owned by this Desk.
+
+Screening Room can create a 1920×1080 master in two ways. **Lanczos** uses
+FFmpeg and needs no extra model. **Real-ESRGAN + Lanczos** performs native 4×
+NCNN/Vulkan enhancement before the aspect-preserving master. Set
+`VIDEO_UPSCALER_NCNN_BIN` and `VIDEO_UPSCALER_NCNN_MODELS`; the executable and
+`realesrgan-x4plus.{param,bin}` are not redistributed. Both methods serialise
+local media work, preserve optional audio, validate output, report progress and
+clean their bounded temporary workspace. `VIDEO_UPSCALE_SCRATCH` relocates it.
+Mastering refuses queued/running Video Desk jobs. H3 and mastering also refuse
+an active or unreadable ComfyUI queue and require a successful owned-engine
+stop before proceeding. These checks do not provide cross-process isolation
+against another client submitting new work after the idle check.
+
 Qwen also accepts a local PNG, JPEG or WebP reference up to 20 MB. The reference
 is normalised into the Desk's private state directory and passed through Qwen
 Image 2.1's native image-conditioning path. Saved assets retain the reference
@@ -94,8 +114,9 @@ MiniMax validates generation settings before starting ComfyUI: 8–300 seconds,
 (or `random`). Its JSON requests and Qwen's are limited to 128 KiB. Invalid
 settings return HTTP 400 with an explanation.
 
-WAN validates its model/input pairing, reference ownership, 1–10 second length,
-16/24 FPS, 4–20 steps, dimensions and seed before queue insertion. Its JSON
+Video Desk validates model/input pairing, reference ownership, WAN's 1–10
+second 16/24 FPS and 4–20 step range, H3's 1–15 second fixed-24 FPS and 4–50
+step range, dimensions and seed before queue insertion. Its JSON
 requests are limited to 16 MiB and image references to 20 MiB.
 
 Audio downloads and recipe operations must stay inside the ComfyUI output tree;

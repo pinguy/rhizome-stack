@@ -275,6 +275,20 @@ class CreativeHTTPTest(unittest.TestCase):
                         child.terminate()
                     child.wait(timeout=2)
 
+    def test_qwen_media_streams_without_loading_whole_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            expected = b'synthetic pixels' * (1024 * 150)
+            (output / 'fixture.png').write_bytes(expected)
+            with patch.object(qwen, 'COMFY_OUTPUT', output), \
+                 patch.object(Path, 'read_bytes', side_effect=AssertionError('whole-file read')), \
+                 serve(qwen.Handler) as address:
+                status, headers, body = request(address, 'GET', '/media/fixture.png')
+            self.assertEqual(status, 200)
+            self.assertEqual(headers['Content-Type'], 'image/png')
+            self.assertEqual(int(headers['Content-Length']), len(expected))
+            self.assertEqual(body, expected)
+
     def test_qwen_oversized_reference_rejected_before_pixel_decode(self):
         opened = unittest.mock.MagicMock(format='PNG', width=10000, height=10000)
         opened.__enter__.return_value = opened

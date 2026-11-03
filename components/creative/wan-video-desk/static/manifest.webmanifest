@@ -1,5 +1,5 @@
 {
-  "name": "WAN Video Desk",
+  "name": "Local Video Desk",
   "short_name": "Video Desk",
   "start_url": "/video-studio/",
   "display": "standalone",
