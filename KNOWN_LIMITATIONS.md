@@ -1,4 +1,4 @@
-# Known limitations — 0.1.0-alpha.16 candidate
+# Known limitations — 0.1.0-alpha.18 candidate
 
 - Full installation and browser acceptance still need testing in disposable
   native Linux and actual WSL2 environments. Static and mocked-provider tests
@@ -72,6 +72,14 @@
 - WAN Video Desk's T2V and I2V paths were accepted on the reference machine,
   but its roughly 28 GB optional model set and clean-machine GPU path still need
   separate native-Linux and WSL2 acceptance on each target.
+- Cutroom's UI and deterministic editor path passed reference-machine browser
+  acceptance, but this portable two-service layout and its clean-machine model
+  paths still need native-Linux and WSL2 acceptance. Projects, songs, generated
+  media and model weights are not bundled.
+- Lifeboat is distributed as reviewed controller source, tests and a deliberately
+  incomplete example configuration. It is not installed, privileged, monitored
+  or armed by Rhizome Stack. Safe deployment requires a host inventory, exact
+  mount identity, schema expectations and an isolated destructive acceptance test.
 
 - The optional GLiNER/Ornith workforce is agent-operated through CLI helpers,
   not automatic browser routing. One reference machine has real shadow-mode and

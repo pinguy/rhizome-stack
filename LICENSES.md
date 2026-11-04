@@ -6,6 +6,8 @@ authorship over OpenClaw, Open WebUI or the other projects it connects.
 | Material | Licence | Upstream |
 |---|---|---|
 | Original installer, wizard, importers, glue and documentation | MIT (`LICENSE`) | This repository |
+| Cutroom UI, backend, workflow adapters and renderer | MIT (`LICENSE`) | Original Rhizome Stack material; Slopus informed product study only, no source/assets copied |
+| Rhizome Lifeboat controller and retention source | MIT (`LICENSE`) | Original companion source at the pinned revision in `manifests/versions.json` |
 | `patches/openclaw/` and OpenClaw-derived integration behaviour | MIT | https://github.com/openclaw/openclaw |
 | `patches/open-webui/` and Open WebUI-derived modifications | Open WebUI multi-licence terms | https://github.com/open-webui/open-webui |
 | Chatterbox integration and upstream source installed at runtime | MIT | https://github.com/resemble-ai/chatterbox |

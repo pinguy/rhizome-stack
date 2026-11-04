@@ -105,7 +105,11 @@ def main() -> int:
     print("PASS standalone Qwen and WAN graph/dimension boundaries")
 
     creative = ROOT / "components/creative"
-    source = "\n".join(path.read_text(errors="replace") for path in creative.rglob("*") if path.is_file())
+    source = "\n".join(
+        path.read_text(errors="replace")
+        for path in creative.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+    )
     check("pkill" not in source, "creative source contains broad pkill")
     check("/home/ComfyUI" not in source, "creative source contains reference-machine path")
     check("music_video_studio" not in source, "creative source still depends on the excluded studio")

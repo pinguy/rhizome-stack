@@ -3,6 +3,8 @@
   "units": [
     "chatterbox-nano.service",
     "chatterbox-voice-app.service",
+    "cutroom-backend.service",
+    "cutroom-ui.service",
     "minimax-music-api.service",
     "open-webui.service",
     "openclaw-gateway.service",

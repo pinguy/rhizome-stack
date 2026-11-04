@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rhizome-lifeboat"
+version = "0.1.0"
+description = "Independent deterministic recovery controller for Rhizome/OpenClaw"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+rhizome-lifeboat = "rhizome_lifeboat.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

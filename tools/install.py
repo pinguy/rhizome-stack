@@ -124,7 +124,10 @@ class Runner:
     def deploy_tree(self, source: Path, destination: Path) -> None:
         """Refresh shipped code; seed-only copying is reserved for user content."""
         for source_path in sorted(source.rglob("*")):
-            if not source_path.is_file() or "__pycache__" in source_path.parts or source_path.suffix == ".pyc":
+            if (not source_path.is_file()
+                    or "__pycache__" in source_path.parts
+                    or "node_modules" in source_path.parts
+                    or source_path.suffix == ".pyc"):
                 continue
             target = destination / source_path.relative_to(source)
             if target == source_path:
@@ -621,6 +624,11 @@ def install_creative(runner: Runner, download_models: bool) -> None:
     h3_runtime = STACK_ROOT / "creative/h3-runtime/site-packages"
     runner.run([str(pip), "install", "--target", str(h3_runtime),
                 "accelerate==1.15.0", "bitsandbytes==0.50.2", "imageio[ffmpeg]==2.38.1"])
+    cutroom_ui = STACK_ROOT / "components/cutroom/ui"
+    node_bin = STACK_ROOT / f"runtime/node-v{VERSIONS['node_runtime']}-linux-x64/bin"
+    node_path = f"PATH={node_bin}:/usr/local/bin:/usr/bin:/bin"
+    runner.run(["env", node_path, str(node_bin / "npm"), "ci", "--prefix", str(cutroom_ui)])
+    runner.run(["env", node_path, str(node_bin / "npm"), "run", "--prefix", str(cutroom_ui), "build"])
     if download_models:
         runner.run([str(venv / "bin/python"), str(PROJECT / "tools/fetch_creative_models.py"),
                     "--comfy-root", str(source)])

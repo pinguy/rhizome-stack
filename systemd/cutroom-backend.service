@@ -1,0 +1,22 @@
+[Unit]
+Description=Cutroom internal production backend
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+Environment=RHIZOME_STACK_ROOT=@@STACK_ROOT@@
+Environment=STUDIO_HOST=127.0.0.1
+Environment=STUDIO_PORT=8843
+Environment=STUDIO_ROOT=@@STACK_ROOT@@/creative/state/cutroom
+Environment=COMFY_DIR=@@STACK_ROOT@@/creative/ComfyUI
+Environment=COMFY_PY=@@STACK_ROOT@@/creative/ComfyUI/.venv/bin/python
+Environment=COMFY_IDLE_SECONDS=300
+WorkingDirectory=@@STACK_ROOT@@/components/cutroom/backend
+ExecStart=@@STACK_ROOT@@/creative/ComfyUI/.venv/bin/python @@STACK_ROOT@@/components/cutroom/backend/app.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

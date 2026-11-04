@@ -1,0 +1,20 @@
+[Unit]
+Description=Cutroom production workspace
+After=cutroom-backend.service
+Requires=cutroom-backend.service
+
+[Service]
+Type=simple
+EnvironmentFile=@@HOME@@/.config/rhizome-stack/stack.env
+Environment=CUTROOM_UI_HOST=127.0.0.1
+Environment=CUTROOM_UI_PORT=8842
+Environment=CUTROOM_UPSTREAM_HOST=127.0.0.1
+Environment=CUTROOM_UPSTREAM_PORT=8843
+WorkingDirectory=@@STACK_ROOT@@/components/cutroom/ui
+ExecStart=@@STACK_ROOT@@/venvs/components/bin/python @@STACK_ROOT@@/components/cutroom/ui/server.py
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target

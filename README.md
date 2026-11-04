@@ -9,7 +9,7 @@ Open WebUI and other open-source projects; upstream authorship is preserved in
 skills and optional speech.** Start with one working model, then add what you
 need. Linux and WSL2 use the same setup wizard.
 
-**Status: 0.1.0-alpha.16 candidate.** Installer and regression checks are automated; complete
+**Status: 0.1.0-alpha.18 candidate.** Installer and regression checks are automated; complete
 native Linux and WSL2 installations still need acceptance testing.
 Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working machine.
 End-to-end runtime testing so far has been on the author's machine; automated
@@ -30,6 +30,8 @@ regressions also run separately, but clean native Linux and WSL2 acceptance is p
 | Qwen Image Desk | Local image generation/editing from its desk or directly inside an Open WebUI chat | Optional |
 | MiniMax Music 3 | Local song generation from its desk or directly inside an Open WebUI chat | Optional |
 | Video Desk | WAN 2.2 or MiniMax H3 text/first-frame video, plus Lanczos or Real-ESRGAN 1080p masters | Optional |
+| Cutroom | Music-first planning, generation, timeline editing and deterministic FFmpeg rendering | Optional creative companion |
+| Rhizome Lifeboat | Independent checkpoint/recovery controller source and tests | Source companion; never armed automatically |
 
 OpenClaw stays pinned to **2026.7.1-2** and Open WebUI to **0.11.0**.
 The pinned versions are compatibility choices, not promises that they are the
@@ -121,6 +123,7 @@ then release ComfyUI so chat inference can resume.
 rhizome-stack creative qwen
 rhizome-stack creative minimax
 rhizome-stack creative wan
+rhizome-stack creative cutroom
 
 # Prepare, preview and select a local Chatterbox voice.
 rhizome-stack voice-lab
@@ -151,7 +154,7 @@ browser profiles and model weights are never seeded from the reference machine.
 - [Memory formats, provenance and rebuilding](docs/MEMORY.md)
 - [Skills and companion projects](docs/INTEGRATIONS.md)
 - [GLiNER routing advice and the Ornith workforce](docs/WORKFORCE.md)
-- [ComfyUI, Qwen Image Desk, MiniMax Music 3 and Video Desk](docs/CREATIVE.md)
+- [ComfyUI, Qwen Image Desk, MiniMax Music 3, Video Desk and Cutroom](docs/CREATIVE.md)
 - [Browser showcase: all three desks and Open WebUI media embeds](docs/SHOWCASE.md)
 - [Updating and troubleshooting](docs/MAINTENANCE.md)
 - [Native Linux](docs/LINUX.md) · [WSL2](docs/WSL.md)

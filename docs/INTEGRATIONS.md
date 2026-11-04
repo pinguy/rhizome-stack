@@ -9,6 +9,16 @@ runtimes and ownership clear.
 | [RhizomeML](https://github.com/pinguy/RhizomeML) | Imports its detailed/compact JSONL and PDF JSON formats with provenance | Training code, dependencies, model weights and existing private indexes stay separate |
 | [Chatterbox TTS add-on](https://github.com/pinguy/chatterbox-tts-addon) | Voice Lab is packaged here; browser extensions remain companion components | Its full installer overlaps this stack's audio service names and ports |
 | [GGUF Converter Studio](https://github.com/pinguy/GGUF-Converter-Studio) | Prepare a GGUF, then select it through the welcome wizard's advanced Ollama route | Conversion/build dependencies stay in the converter environment |
+| Cutroom | Complete source, optional creative-profile UI build and loopback services | No projects, songs, generated media, logs, browser state or model weights |
+| Rhizome Lifeboat | Reviewed controller source, example config and regression tests | No host policy, privileged install, checkpoints, receipts, Monit config or automatic arming |
+
+## Lifeboat
+
+`components/lifeboat/` is a recovery source companion, not a generic one-click
+backup profile. Its example configuration intentionally leaves retention off
+and uses placeholders. A target host must establish its exact files, SQLite
+schemas, service commands, protected mount identity and independent recovery
+procedure before any privileged integration. The stack installer never arms it.
 
 ## Skills
 

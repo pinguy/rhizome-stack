@@ -20,40 +20,40 @@
       "bytes": 10139
     },
     "CHANGELOG.md": {
-      "sha256": "82078421d15f1c003ddac194287010b2f122fc6d1a5c9a51d3fffd2f18041a08",
-      "bytes": 16131
+      "sha256": "d777dfdd27e5e1cece92f7b8ae7c3d104d3c7263b5b9ca3900cff84bcbf048ef",
+      "bytes": 17519
     },
     "CONTRIBUTING.md": {
       "sha256": "2bfbecec36a7d23d4a9bb8b0a585eda9f1c718fe26a83fa53a7df90a9d2d4213",
       "bytes": 1429
     },
     "KNOWN_LIMITATIONS.md": {
-      "sha256": "cdd49f053687fec304843dc4803d3d66c6b8905d317cbf74b727fa6af23f4480",
-      "bytes": 6426
+      "sha256": "d6cea6be1fc08d31b1ae26cda805510dc6d4bd462a3ff76769b1a6c23c5a18b9",
+      "bytes": 7028
     },
     "LICENSE": {
       "sha256": "67ea3970ebe4b38715135fd1d41d1c4ca5dcd60cd8fa3839a1c46fd4eb85e801",
       "bytes": 1309
     },
     "LICENSES.md": {
-      "sha256": "c221d95bd59bcc922e265a6d83e4430dc06c5c9001112c46fa26aaec8cda4923",
-      "bytes": 4298
+      "sha256": "c582e338a264c07dfb370ad21bd71ae07f9348088b6baf36aa072900fdc38955",
+      "bytes": 4618
     },
     "README.md": {
-      "sha256": "97d4a35c4fa1be638dff220824a483521d3218a52e713367e71a540e914ce905",
-      "bytes": 9890
+      "sha256": "3cd3acff959612c53ba363634b25312844f318f1619222b477b4bfe1f9b8197c",
+      "bytes": 10189
     },
     "SECURITY.md": {
       "sha256": "a96d79fa9316cc2afb1e2f0914e37277c0296348777084d7fefa99184ac94c93",
       "bytes": 1314
     },
     "VERSION": {
-      "sha256": "d5d967a5776ba1a0b1ccaf06c6ea56764c9e102eb9cabd1f1fb379aff6c6f7aa",
+      "sha256": "7398c4c6efe36009608eb1eda77024378995d2246a80df1d434241badb197f92",
       "bytes": 15
     },
     "bin/rhizome-stack": {
-      "sha256": "75f7c6e772cb16c5047589501f161a20198e2badb938ccdbc9981aa949f69cf8",
-      "bytes": 5551
+      "sha256": "c342b2901ef129f8d53aa19d62b6cba8c65f102c0053cc414f5b7f36f1ce1512",
+      "bytes": 5839
     },
     "components/chatterbox_nano_server.py": {
       "sha256": "db44ba9fc74bf0bd31ec8932fcf4a0c502b9929e3b53313d7efdd343ada700a9",
@@ -146,6 +146,266 @@
     "components/creative/wan-video-desk/upscaler.py": {
       "sha256": "751aac6b2bb1339d3afb0c00a2a72f3b68cf555cc3b9a06b531f0c6fd0dedba3",
       "bytes": 15813
+    },
+    "components/cutroom/README.md": {
+      "sha256": "d164afcaacbedfd9a9d910e060389748037b0bef95092626be2455b830de0966",
+      "bytes": 2522
+    },
+    "components/cutroom/backend/analysis.py": {
+      "sha256": "135ac1626751e39c3576b8b55ea7b53d198a3ef759bb2ff4af4a4bf7ee4bf33b",
+      "bytes": 7916
+    },
+    "components/cutroom/backend/app.py": {
+      "sha256": "ef0989324000822b2c70cad905be87d432a7b7cf09577489e9cc4cf761644312",
+      "bytes": 73565
+    },
+    "components/cutroom/backend/engine.py": {
+      "sha256": "cd93991b8f5619c8f9a692bec95feb2cb1165ed3e331e3ed1e1a736b8adca85a",
+      "bytes": 45810
+    },
+    "components/cutroom/backend/h3_runner.py": {
+      "sha256": "186b57aa6a92f00933a5939d89736ccb3febffdc45a3e5fa6dd2587cfe0b1f8f",
+      "bytes": 3892
+    },
+    "components/cutroom/backend/image_presets.py": {
+      "sha256": "3829060c867b8dd00b6f64ca68678541c567acfc3f23cead72594c1b83a80fa4",
+      "bytes": 4044
+    },
+    "components/cutroom/backend/image_static/app.css": {
+      "sha256": "1abef787fc2771e7cbffa7cd4ace5da535f34ad2d83a286643fb449a15800d0b",
+      "bytes": 12328
+    },
+    "components/cutroom/backend/image_static/app.js": {
+      "sha256": "6cfc712169227b07421777397640115a91799eea1deb88de7e54c74a5f088f6f",
+      "bytes": 20567
+    },
+    "components/cutroom/backend/image_static/icon.svg": {
+      "sha256": "61a8bb542075e82f1b6a4d42674d81cdd8e092c01f495eedfcf632b8af1c4dd6",
+      "bytes": 544
+    },
+    "components/cutroom/backend/image_static/index.html": {
+      "sha256": "eabefa389cd1533db99861c765b32e75cb45c98b5bba3358d3ef7dcecce7f4c8",
+      "bytes": 7054
+    },
+    "components/cutroom/backend/image_static/manifest.webmanifest": {
+      "sha256": "1eae0d0712c48d2a2e02da396f6cfff5477f739b99d791540058e1cc2b52f35c",
+      "bytes": 342
+    },
+    "components/cutroom/backend/image_static/sw.js": {
+      "sha256": "f411241def4f28dfb02ed7ff93c12bb883be1b4cb9a9589a55df56c630ae4bef",
+      "bytes": 902
+    },
+    "components/cutroom/backend/renderer.py": {
+      "sha256": "0738172f8f8069924b61d42eabc749adb232238797325dfa5f3359bff24c32d3",
+      "bytes": 8862
+    },
+    "components/cutroom/backend/static/app.css": {
+      "sha256": "c9594be6029b4d59eb6f56dcbc7453e7ea5873abaa3d77d8323e5641420cd511",
+      "bytes": 28093
+    },
+    "components/cutroom/backend/static/app.js": {
+      "sha256": "6cca92480d1a51c782a3959335e763b4ea91f24d675504adee4096209403f331",
+      "bytes": 73735
+    },
+    "components/cutroom/backend/static/icon.svg": {
+      "sha256": "5d1f3fc8469af580c3e6eb907502ba401b79b3a649e8808ba9314870357d566e",
+      "bytes": 575
+    },
+    "components/cutroom/backend/static/index.html": {
+      "sha256": "b564a449526817bfcaa4d8124458cbe3f7ddfb194f4cfee8109867d3fea8d6c6",
+      "bytes": 14822
+    },
+    "components/cutroom/backend/static/manifest.webmanifest": {
+      "sha256": "4439c1c35baae7e2cf84eeb5a70fcf7c1672c22dc537e99060a171d7cdfe359e",
+      "bytes": 427
+    },
+    "components/cutroom/backend/static/sw.js": {
+      "sha256": "2505c8a2481d085042ffb866852e1ac68c1cdc882cf85ecbc228c4a152ed2def",
+      "bytes": 1054
+    },
+    "components/cutroom/backend/upscaler.py": {
+      "sha256": "751aac6b2bb1339d3afb0c00a2a72f3b68cf555cc3b9a06b531f0c6fd0dedba3",
+      "bytes": 15813
+    },
+    "components/cutroom/backend/video_static/app.css": {
+      "sha256": "fd033fb681e238fa0ff4d9c6dded2cc4e432d3a2aba88216c98516111ced6791",
+      "bytes": 20408
+    },
+    "components/cutroom/backend/video_static/app.js": {
+      "sha256": "c47259a4f05c4edbc57a8cc75e8f7b207636910c31863d4343bc1f96fe9bdf4a",
+      "bytes": 38514
+    },
+    "components/cutroom/backend/video_static/icon.svg": {
+      "sha256": "8f827d8e2eebf0d8ea884be56ac535176bcaba52ec13c895ebcda22bb6264df9",
+      "bytes": 528
+    },
+    "components/cutroom/backend/video_static/index.html": {
+      "sha256": "528d332e89f5385585ea15abefb263c449314410f25801cd4fb49e0ff553fc62",
+      "bytes": 12806
+    },
+    "components/cutroom/backend/video_static/manifest.webmanifest": {
+      "sha256": "783bb442663be8bd59d4e82da61c8bcec2f1828996f4ccdf6c5f06cea353500b",
+      "bytes": 280
+    },
+    "components/cutroom/backend/video_static/sw.js": {
+      "sha256": "f8f8ba24f62255b06d1564c061320991c53621765fb02f4124235a665098e88a",
+      "bytes": 1112
+    },
+    "components/cutroom/backend/workflows/ltx_i2v.json": {
+      "sha256": "90373ad528cdd8886e56b898c372037ffe1c14e0f7df1b8319ca73d9d07c23f1",
+      "bytes": 3252
+    },
+    "components/cutroom/backend/workflows/ltx_t2v.json": {
+      "sha256": "f231fe31354189a51a2889e86752b6ac0e4d619373ea0b1d327315c3213aa1f9",
+      "bytes": 3029
+    },
+    "components/cutroom/backend/workflows/ltx_t2v_quality_anchor.json": {
+      "sha256": "825a61b71f53a1b1ae693773f089642249e11f9ef472e62c49482f1d918f2e56",
+      "bytes": 4870
+    },
+    "components/cutroom/ui/DESIGN.md": {
+      "sha256": "65020f98ac8e90b02f7134c2a92ab014cb98f991857e7ae56305011c845cc637",
+      "bytes": 1339
+    },
+    "components/cutroom/ui/index.html": {
+      "sha256": "af553b70262f575959c68087142a8f6fb56a66900a25ba57095bac54f9fc0aeb",
+      "bytes": 347
+    },
+    "components/cutroom/ui/package-lock.json": {
+      "sha256": "7a3a58be33b24b27a371e4a909f42d3083c1f2e7923f448f96a69601658952b8",
+      "bytes": 69590
+    },
+    "components/cutroom/ui/package.json": {
+      "sha256": "99eb97796df9e4a1714fa3e1c3d3e52f2d0c83d84740877403f52f5ccb6d88eb",
+      "bytes": 546
+    },
+    "components/cutroom/ui/server.py": {
+      "sha256": "40a8b44ce37088f1e4b784d593efd420c7d9eb1c2864a6d03c269fcbb1837374",
+      "bytes": 6784
+    },
+    "components/cutroom/ui/src/App.tsx": {
+      "sha256": "7e7f4e16233eb3ba4071bb47499f945b2a58b9962ee9efa78ddef1becdd1d21e",
+      "bytes": 32650
+    },
+    "components/cutroom/ui/src/api.ts": {
+      "sha256": "d2747a2345a31c72f4bb19f5afc51a23343046ed13f370384b6dc18d0dce79ac",
+      "bytes": 4360
+    },
+    "components/cutroom/ui/src/components/ProductionWorkspace.tsx": {
+      "sha256": "26c044c43d29ad3e3145354cabca039ab45d2ce6497fd2ff8759a4754fc3f2f6",
+      "bytes": 28352
+    },
+    "components/cutroom/ui/src/components/Timeline.tsx": {
+      "sha256": "d91c60da92312a68536bea952b7a288171e855f8c06eb336303d6ddf1b525338",
+      "bytes": 7365
+    },
+    "components/cutroom/ui/src/editor.test.ts": {
+      "sha256": "e9ae3a8cb21198f6a7c0f57085ed2c381fcba7ea996cca99a0bfcad8c15bada5",
+      "bytes": 1888
+    },
+    "components/cutroom/ui/src/editor.ts": {
+      "sha256": "680bdf77686c8b61b9a226102845ebf75e6581b986359f8bf09c13bc713b9d5b",
+      "bytes": 5849
+    },
+    "components/cutroom/ui/src/main.tsx": {
+      "sha256": "806173917b12038a05079d5d10bee3b6679a7222e4c95bfc41ff737f0979b0a6",
+      "bytes": 242
+    },
+    "components/cutroom/ui/src/styles.css": {
+      "sha256": "65a617d7ee54211ec6b44d9137c923aa27d4e03a38710df2a3e4a0f6ee5f2246",
+      "bytes": 38759
+    },
+    "components/cutroom/ui/src/types.ts": {
+      "sha256": "e7cf5c960268d13ea2ad2257b9fe48b8264f1eb137127009f040588823446d95",
+      "bytes": 4366
+    },
+    "components/cutroom/ui/tsconfig.json": {
+      "sha256": "e34b9e86ade5665af88225644c777328180aaaf9c4a39624968c4284f4fce3ef",
+      "bytes": 540
+    },
+    "components/cutroom/ui/tsconfig.node.json": {
+      "sha256": "3dc28b63563e20fab0d9f652f3039ed50e6c46bbdec66631a14822e8309b230d",
+      "bytes": 231
+    },
+    "components/cutroom/ui/vite.config.ts": {
+      "sha256": "6104352b9f025a4c6583e374211f1296cf8dfe7b44df439e04d3217327771982",
+      "bytes": 373
+    },
+    "components/lifeboat/README.md": {
+      "sha256": "9fce40b799920695dbf28bcc82362bf79ba270dc8eec894b1752c83b9e9b30db",
+      "bytes": 1739
+    },
+    "components/lifeboat/config.example.toml": {
+      "sha256": "b1e3fa868d90e883bcb9052ec20e2af2a06efd5a557071fe2e9e5c4d0c78c87b",
+      "bytes": 1853
+    },
+    "components/lifeboat/pyproject.toml": {
+      "sha256": "32faf9fdf97e09232fc4cc67e92e8ecaa376ccd6f5416f14ba725159b94b49a0",
+      "bytes": 429
+    },
+    "components/lifeboat/src/rhizome_lifeboat/__init__.py": {
+      "sha256": "a6d3a99a9b65f63e0e172bf739a5a45e13fc0e5944261bc8ad7e7b4636beb807",
+      "bytes": 94
+    },
+    "components/lifeboat/src/rhizome_lifeboat/__main__.py": {
+      "sha256": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
+      "bytes": 48
+    },
+    "components/lifeboat/src/rhizome_lifeboat/audit.py": {
+      "sha256": "7c13a1b883684d870f0e0e95b4ccb1fe3cade7a1cdba0eda7c9abb1748dfb9e0",
+      "bytes": 4152
+    },
+    "components/lifeboat/src/rhizome_lifeboat/checkpoint.py": {
+      "sha256": "1064cdbcc541ea6652efc3b7c101a1ec12b1226198895eea1814f579674b986c",
+      "bytes": 19799
+    },
+    "components/lifeboat/src/rhizome_lifeboat/cli.py": {
+      "sha256": "6c229d84098ca166144e089898968d522b376999260ddf1600482d0f071d2629",
+      "bytes": 4838
+    },
+    "components/lifeboat/src/rhizome_lifeboat/config.py": {
+      "sha256": "6e71b58895fa684996810fd8c921608374241aafcdffcad910350093cda30b29",
+      "bytes": 9149
+    },
+    "components/lifeboat/src/rhizome_lifeboat/drill.py": {
+      "sha256": "738ea308d224f4f97f99d7bc9dc6a5f169b3a3b1b949b07c84963b7ce46b5dbf",
+      "bytes": 4253
+    },
+    "components/lifeboat/src/rhizome_lifeboat/health.py": {
+      "sha256": "eef42765553457071b313bc9c98b7177f25d88ab2d65a641b894f23516283d98",
+      "bytes": 9819
+    },
+    "components/lifeboat/src/rhizome_lifeboat/recovery.py": {
+      "sha256": "2f8a19dca48414ee12e17e1cb23f45ec0a0621eb251eede8f2059a8db2d21383",
+      "bytes": 25533
+    },
+    "components/lifeboat/src/rhizome_lifeboat/retention.py": {
+      "sha256": "6eafa2af3a2b8cb9e2b3f2a1e930b1b2b4c4a06ddc5f44281531c5183622bff7",
+      "bytes": 15702
+    },
+    "components/lifeboat/src/rhizome_lifeboat/util.py": {
+      "sha256": "8711ec1bbd2a6692b6504d7452d6e8c41d53bb8f57a8005241444961432207fe",
+      "bytes": 6591
+    },
+    "components/lifeboat/src/rhizome_lifeboat/window.py": {
+      "sha256": "5cf18563c220dfb6d361e8e48d90b3995a2f52aa329ac84244277c1fa52ab31b",
+      "bytes": 5012
+    },
+    "components/lifeboat/tests/test_checkpoint.py": {
+      "sha256": "1bcf41b434ccf3af4be53ad32b7e59502ce987ce2a9a17bcc49afd182a2b0ccb",
+      "bytes": 8518
+    },
+    "components/lifeboat/tests/test_health.py": {
+      "sha256": "05d2f2630444dc051d614e8dae5d38fb24a3ce1319b7d024382b95903d82c485",
+      "bytes": 4449
+    },
+    "components/lifeboat/tests/test_recovery.py": {
+      "sha256": "6db67b22bd1ee3ecf7047c198d75c6d72cc622712dccaf8d06df80209a1d1357",
+      "bytes": 12510
+    },
+    "components/lifeboat/tests/test_retention.py": {
+      "sha256": "c3d564a0e7c046084d0d77736df120a3d909d74284371b22c30ce31c2be2be27",
+      "bytes": 11893
     },
     "components/local_http_security.py": {
       "sha256": "3b34b0d2459096c4d79d2b95da2b956ff1002a9bc1a1fe7533fa9f78bc301bc2",
@@ -380,8 +640,8 @@
       "bytes": 899
     },
     "config/stack.env.example": {
-      "sha256": "5d91812b2db353f9b0aa7315a75eaaf1b8894138b7e2abea1b0e06d4c4d9ec46",
-      "bytes": 3370
+      "sha256": "11a847f7043611a4c351b34c920bac63410c9b8e77a3c17be61e72fe15d53809",
+      "bytes": 3455
     },
     "config/workforce-support-corpus.jsonl": {
       "sha256": "7f6192ba5e5d386840dd76db296ac4f76d12e103a065755ce9eeaa32a1627464",
@@ -408,8 +668,8 @@
       "bytes": 2545
     },
     "docs/CREATIVE.md": {
-      "sha256": "5953e4dea1b316e03e5f001a34dc70eb51f21f34bf2831e8909468d04936cdff",
-      "bytes": 6834
+      "sha256": "54015d46a6b20b534b3c060a8fdac9484afbb305cc10689ae7040570db481d0a",
+      "bytes": 7278
     },
     "docs/FIRST_RUN.md": {
       "sha256": "03216b756fb9f066ce6a2e18cc32dd2ecc4189516cc1404d9fb128fa012ce141",
@@ -432,8 +692,8 @@
       "bytes": 5458
     },
     "docs/INTEGRATIONS.md": {
-      "sha256": "cb2b649783b074b6af95078f28c27424f564deef48b663c4b30be44d6969958b",
-      "bytes": 7799
+      "sha256": "efc0350d287af372e2e62089afef144efeb08113ba3e7301eb267667333ea51f",
+      "bytes": 8547
     },
     "docs/LINUX.md": {
       "sha256": "6ad573dacf7e787f8ec0c7dd89f0e970e2a1db84f95ad98eae346d970248141c",
@@ -508,8 +768,8 @@
       "bytes": 163
     },
     "manifests/components.json": {
-      "sha256": "b97fb33dcfa7ba034cb0730554e0b4ab856bf186961d3766fd4d26816ce1f4ab",
-      "bytes": 1100
+      "sha256": "f1bd4102b615cbef5865940878d2aa7d751b8b48adcf18dc25bb279e8dd404f3",
+      "bytes": 1176
     },
     "manifests/creative-models.json": {
       "sha256": "5078ccba21eee561aea6fe1f9449fd9eeaa14d2e9103a67d073e06887a12d2ca",
@@ -520,20 +780,20 @@
       "bytes": 247
     },
     "manifests/release-files.json": {
-      "sha256": "a5f9de7864ac3f833a010a3331453a1c18c184979652e323c5c02f7a3648d16e",
-      "bytes": 10455
+      "sha256": "9e920ad7fe0fdc99531c96949a6e3a582534e8e758077af2a117957c448a76c0",
+      "bytes": 13934
     },
     "manifests/skills.json": {
       "sha256": "5980ae3aae5b9755d73a7e39b1dafd84f9f8784489a21f6143587a9eb9255b6e",
       "bytes": 4750
     },
     "manifests/systemd-units.json": {
-      "sha256": "0722eb8b8ebe67f5c6ed69df2245050b9f68932b718ab91217b5e1cd1d20b550",
-      "bytes": 704
+      "sha256": "87651ac8cff6dc9ff66c36f14b98e397c7a871c98a5f764b7277a06e6490feee",
+      "bytes": 761
     },
     "manifests/versions.json": {
-      "sha256": "bbf942d4d6cc75addd3e5801ec97cbb8faca9858ba84d50bf8eefd410f79e309",
-      "bytes": 1033
+      "sha256": "2d53f9a08ab1f90bcff562dbc60331a4a489e600bd96726dc499b3ace879dcea",
+      "bytes": 1234
     },
     "patches/chatterbox/5de7a54-float32-inputs.patch": {
       "sha256": "be763996d752f516501580045faa6ba3c3461ac76837cfada968788fe0455da9",
@@ -655,6 +915,14 @@
       "sha256": "05d36c5508474bdaa0d3172a34e237571beb41d8a0f85e44bfc74797687a08d7",
       "bytes": 791
     },
+    "systemd/cutroom-backend.service": {
+      "sha256": "f4ea3050e9901468695aa75337679adb701e909900ec468a7e063e462e4caf2e",
+      "bytes": 738
+    },
+    "systemd/cutroom-ui.service": {
+      "sha256": "89686176678b227b120710569eddaa8b11d3251981643fbda091032f1530f245",
+      "bytes": 584
+    },
     "systemd/minimax-music-api.service": {
       "sha256": "816ff59f2eab6a69c74ff17b743c8a087081dab8c2900e037df65d615296acaa",
       "bytes": 640
@@ -731,13 +999,21 @@
       "sha256": "b802da539653f4536ac7dd231cc221c6cfb3f864c33665e10bcd32ff53f87952",
       "bytes": 15452
     },
+    "tests/test_companions.py": {
+      "sha256": "34cd10302d668a14b8b35bf5c1a5304c55f05a40b42c089cffd3e279ca8fa8e5",
+      "bytes": 2561
+    },
     "tests/test_creative.py": {
-      "sha256": "a184672eec46062b84d9c6eb807420e1a0176347f1a44a4509de5105c07351bc",
-      "bytes": 7611
+      "sha256": "5ee694b5652a1da427e54d66d53d0083e3f097373b36c3fa90c4d880cbd55dd6",
+      "bytes": 7703
     },
     "tests/test_creative_ui.py": {
       "sha256": "ba4de08bf1354f8b9f64f1e3479ad2ae34d81235e7ead2d9609843fb597ce612",
       "bytes": 7108
+    },
+    "tests/test_cutroom_integrity.py": {
+      "sha256": "4189174789d064038c9702a6b0b80709729cb5baec9f06a2c66dcbe572b7ba65",
+      "bytes": 8622
     },
     "tests/test_lifecycle.py": {
       "sha256": "ac88824db54ed7e9db7c86c006e49c82ca8da8b8497f7ade16a52ba4f92562ca",
@@ -864,8 +1140,8 @@
       "bytes": 937
     },
     "tools/install.py": {
-      "sha256": "ff4f12c42e3fb042fcd469db81cb585f71677969ca011504a626a1326237bf0e",
-      "bytes": 34149
+      "sha256": "5323fd3021e063add7f338364b6d4ad25d5d9c94c4cc3f4f6c27f58722751614",
+      "bytes": 34650
     },
     "tools/privacy_audit.py": {
       "sha256": "ebfc9f090262d1b1d76271097185968bb8ab78535eb7fa1229e4ae413f9acee2",
