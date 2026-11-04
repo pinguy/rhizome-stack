@@ -1,14 +1,15 @@
 # Optional creative setup
 
 The creative profile installs a separate pinned ComfyUI checkout under
-`$RHIZOME_STACK_ROOT/creative/ComfyUI`. It adds three loopback-only browser apps:
+`$RHIZOME_STACK_ROOT/creative/ComfyUI`. It adds four loopback-only browser apps:
 
 - Qwen Image Desk at `http://127.0.0.1:8841/image-studio/`
 - MiniMax Music 3 at `http://127.0.0.1:8830/`
 - Video Desk (WAN 2.2 + MiniMax H3) at `http://127.0.0.1:8840/video-studio/`
+- Cutroom at `http://127.0.0.1:8842/` with its internal backend on port 8843
 
-Cutroom is not part of this package. Its source, LTX workflows, projects,
-outputs, logs and reference-machine state are excluded.
+Cutroom's source and LTX workflow templates are included. Its projects, songs,
+outputs, logs, model weights and reference-machine state are excluded.
 
 ## Install
 
@@ -37,9 +38,15 @@ resumes partial transfers and refuses any file whose SHA-256 differs from
 rhizome-stack creative qwen
 rhizome-stack creative minimax
 rhizome-stack creative wan
+rhizome-stack creative cutroom
 rhizome-stack creative status
 rhizome-stack creative stop
 ```
+
+Cutroom is built during `--with-creative` from its pinned package lock. Its UI
+and backend use separate ports so they do not replace the standalone desks.
+They share ComfyUI, so generation remains single-flight and a queue refuses to
+take ownership of an engine it did not start. See `components/cutroom/README.md`.
 
 All three apps start ComfyUI on demand at `127.0.0.1:8188`. They may reuse an
 already-running endpoint, but they never stop a process they do not own. Owned

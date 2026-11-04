@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0a0b0e">
+  <title>Cutroom — Local AI Music Video Studio</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail">
+      <button class="wordmark" data-action="home" aria-label="Cutroom home">
+        <span class="mark"><i></i><i></i><i></i></span>
+        <strong>CUTROOM</strong><small>LOCAL STUDIO</small>
+      </button>
+      <button class="new-project" data-action="new-project"><span>＋</span> New project</button>
+      <nav class="departments" aria-label="Production stages">
+        <button data-tab="plan" class="active"><b>01</b><span>Direct</span><small>Concept & shot plan</small></button>
+        <button data-tab="assets"><b>02</b><span>Build</span><small>References & assets</small></button>
+        <button data-tab="shots"><b>03</b><span>Shoot</span><small>Motion takes</small></button>
+        <button data-tab="edit"><b>04</b><span>Cut</span><small>Timeline & titles</small></button>
+        <button data-tab="render"><b>05</b><span>Finish</span><small>Render & deliver</small></button>
+      </nav>
+      <div class="recent-head"><span>Recent projects</span><button data-action="refresh" title="Refresh">↻</button></div>
+      <div id="recentProjects" class="recent-list"></div>
+      <div class="rail-foot">
+        <div class="engine-dot" id="engineDot"></div>
+        <div><strong id="engineLabel">Engines idle</strong><small id="engineDetail">Local only · loopback</small></div>
+      </div>
+    </aside>
+
+    <main class="stage">
+      <header class="topbar">
+        <div class="project-title"><span id="projectEyebrow">NO PROJECT</span><input id="projectName" value="Cutroom" aria-label="Project name" disabled></div>
+        <div class="top-actions">
+          <span class="save-state" id="saveState">Ready</span>
+          <button class="ghost" data-action="queue">Queue <em id="queueCount">0</em></button>
+          <button class="primary small" data-tab="render">Render video</button>
+        </div>
+      </header>
+
+      <section id="emptyState" class="empty-state">
+        <div class="reel-orbit" aria-hidden="true"><span></span><span></span><span></span><span></span><b>24</b></div>
+        <p class="kicker">FINISHED SONG → FINISHED VIDEO</p>
+        <h1>Your track is the clock.<br><em>Everything else is a take.</em></h1>
+        <p class="lede">Analyse the song, build one visual world, shoot short local AI clips, then cut the keepers to the master audio.</p>
+        <button class="primary hero" data-action="new-project">Start with a finished song <span>→</span></button>
+        <div class="capability-strip"><span>Qwen Image 2.1</span><i></i><span>WAN 2.2 Rapid Q5_K</span><i></i><span>Frame-accurate FFmpeg finish</span></div>
+      </section>
+
+      <section id="workspace" class="workspace hidden">
+        <div class="transport-card">
+          <div class="transport">
+            <button id="playButton" class="play" aria-label="Play">▶</button>
+            <div class="time"><strong id="playTime">00:00.000</strong><small id="durationLabel">/ 00:00.000</small></div>
+            <button id="snapButton" class="snap on">⌁ Snap</button>
+            <label class="zoom">Zoom <input id="zoomRange" type="range" min="1" max="8" value="1" step=".25"></label>
+          </div>
+          <div class="wave-wrap"><canvas id="waveform" height="108"></canvas><div id="playhead" class="playhead"></div></div>
+          <audio id="masterAudio" preload="metadata"></audio>
+        </div>
+
+        <section id="tab-plan" class="tab-panel active">
+          <div class="panel-heading"><div><span>DIRECTOR'S DESK</span><h2>Read the track. Choose the world.</h2></div><button class="ghost" data-action="reanalyze">Re-analyse song</button></div>
+          <div id="analysisCards" class="metric-row"></div>
+          <div class="grid two-thirds">
+            <article class="card director-card">
+              <div class="card-head"><div><span>AI DIRECTOR</span><h3>Creative brief</h3></div><select id="directorModel" aria-label="AI Director model"></select></div>
+              <textarea id="directorBrief" rows="5" placeholder="A performance film in a flooded brutalist observatory; intimate, strange, never glossy…"></textarea>
+              <details><summary>Lyrics / spoken text</summary><textarea id="lyrics" rows="8" placeholder="Optional lyrics help the director place visual callbacks."></textarea></details>
+              <button class="primary" data-action="direct">Propose concept & shot language</button>
+              <div id="directorProgress" class="work-progress" role="status" aria-live="polite" hidden>
+                <i aria-hidden="true"></i><div><strong>Building concept & shot plan</strong><small id="directorProgressDetail">Starting the Director…</small></div>
+              </div>
+              <p class="fineprint">Advisory only. Nothing is generated or replaced until you choose it.</p>
+            </article>
+            <article class="card structure-card"><div class="card-head"><div><span>SONG MAP</span><h3>Structure & energy</h3></div></div><div id="sections" class="sections"></div></article>
+          </div>
+          <article class="card bible-card"><div class="card-head"><div><span>CONTINUITY ANCHOR</span><h3>Visual bible</h3></div><button class="ghost" data-action="save">Save bible</button></div><div id="bibleFields" class="bible-grid"></div></article>
+          <article class="card"><div class="card-head"><div><span>PROPOSED COVERAGE</span><h3>Shot plan</h3></div><span id="shotCount" class="chip"></span></div><div id="shotPlan" class="shot-table"></div></article>
+        </section>
+
+        <section id="tab-assets" class="tab-panel">
+          <div class="panel-heading"><div><span>ART DEPARTMENT</span><h2>Make anchors, not random pictures.</h2></div><button class="ghost" data-action="upload-asset">Import reference</button></div>
+          <div class="grid sidebar-main">
+            <article class="card sticky-maker">
+              <div class="card-head"><div><span>NEW REFERENCE</span><h3>Build a visual anchor</h3></div></div>
+              <label>Use <select id="assetKind"><option>character reference</option><option>wardrobe</option><option>location</option><option>prop</option><option>shot reference</option><option>first frame</option><option>title art</option><option>texture</option></select></label>
+              <label>Attach to shot <select id="assetShot"><option value="">Project-wide</option></select></label>
+              <label>Prompt <textarea id="assetPrompt" rows="7" placeholder="Full-body reference of the same lead character…"></textarea></label>
+              <label>Negative guidance <textarea id="assetNegative" rows="3" placeholder="text, watermark, duplicate person…"></textarea></label>
+              <label>Prompt model <select id="assetModel" aria-label="Reference prompt model"><option value="">Loading models…</option></select></label>
+              <p id="assetModelNote" class="fineprint">The selected model prepares the prompt; Qwen generates the image locally.</p>
+              <div class="form-row"><label>Seed <span class="seed-input-row"><input id="assetSeed" type="number" min="1" max="9007199254740991" value="420251006"><button class="seed-random" type="button" data-action="random-asset-seed" title="Choose random seed" aria-label="Choose random reference seed">↻</button></span></label><label>Variants <input id="assetVariants" type="number" min="1" max="8" value="1"></label></div>
+              <label>Resolution <select id="assetResolution"><option value="">Loading shared sizes…</option></select></label>
+              <div class="form-row" id="assetCustomSize" hidden><label>Width <input id="assetWidth" type="number" value="1024" min="256" max="1792" step="64"></label><label>Height <input id="assetHeight" type="number" value="576" min="256" max="1792" step="64"></label></div>
+              <button class="primary" data-action="generate-art">Generate reference</button>
+              <div id="assetProgress" class="work-progress" role="status" aria-live="polite" hidden>
+                <i aria-hidden="true"></i><div><strong>Preparing reference</strong><small id="assetProgressDetail">Starting the prompt model…</small></div>
+              </div>
+            </article>
+            <div><div class="filter-bar"><button class="filter active" data-asset-filter="all">All</button><button class="filter" data-asset-filter="approved">Approved</button><button class="filter" data-asset-filter="favourite">Favourites</button><button class="filter" data-asset-filter="salvage">Salvage</button></div><div id="assetGallery" class="asset-gallery"></div></div>
+          </div>
+        </section>
+
+        <section id="tab-shots" class="tab-panel">
+          <div class="panel-heading"><div><span>CAMERA DEPARTMENT</span><h2>Shoot short. Judge motion.</h2></div><div class="segmented"><button class="active" data-shot-filter="all">All</button><button data-shot-filter="unshot">Needs takes</button><button data-shot-filter="review">Review</button><button data-shot-filter="kept">Kept</button></div></div>
+          <article class="card seed-vault">
+            <div class="card-head"><div><span>SEED VAULT</span><h3>Good motion is a take, not an accident.</h3></div><small>History is saved with the project.</small></div>
+            <div class="seed-add"><label>Seed<input id="seedValue" type="number" value="420251006"></label><label>Note<input id="seedNote" placeholder="Why this seed is useful…"></label><button class="ghost" data-action="random-seed">Random</button><button class="primary small" data-action="add-seed">Save seed</button></div>
+            <div id="seedList" class="seed-list"></div>
+          </article>
+          <div class="motion-warning"><b>▶ WATCH THE CLIP</b><span>A good still can hide broken motion. Keep, salvage or regenerate only after playback.</span></div>
+          <div id="shotFactory" class="shot-factory"></div>
+        </section>
+
+        <section id="tab-edit" class="tab-panel">
+          <div class="panel-heading"><div><span>EDIT SUITE</span><h2>The song owns the timeline.</h2></div><div class="edit-actions"><button class="ghost" data-timeline-action="split">＋ Cut at playhead</button><button class="ghost" data-timeline-action="merge">− Delete cut</button><button class="ghost" data-action="add-title">＋ Title</button><button class="ghost" data-action="save">Save edit</button></div></div>
+          <article class="timeline-card">
+            <div class="timeline-scroll"><div class="timeline-ruler" id="timelineRuler"></div><div id="editTimeline" class="edit-timeline"><canvas id="editWaveform" height="72"></canvas><div id="timelineBlocks" class="timeline-blocks"></div><div id="editPlayhead" class="edit-playhead"></div></div></div>
+            <div class="track-labels"><span>V1 · GENERATED SHOTS</span><span>T1 · TITLES / GRAPHICS</span><span>A1 · MASTER SONG · LOCKED</span></div>
+          </article>
+          <div class="grid sidebar-main reverse"><article class="card"><div class="card-head"><div><span>EDIT INSPECTOR</span><h3 id="inspectorTitle">Select a shot block</h3></div></div><div id="editInspector" class="edit-inspector"><p class="muted">Drag boundaries on the timeline or select a shot to adjust its trim, speed, fit and transition.</p></div></article><article class="card"><div class="card-head"><div><span>DELIVERY CHECK</span><h3>Coverage</h3></div></div><div id="coverageReport"></div></article></div>
+        </section>
+
+        <section id="tab-render" class="tab-panel">
+          <div class="render-hero"><span>FINAL ASSEMBLY</span><h2>One master clock.<br>One finished film.</h2><p>Cutroom normalises every kept take, applies the edit, and muxes the untouched source song to exact project duration.</p></div>
+          <div class="grid two-thirds">
+            <article class="card delivery-card"><div class="card-head"><div><span>OUTPUT</span><h3>Delivery master</h3></div></div><label class="radio-line"><input type="radio" name="renderPreset" value="720p" checked><b>1280 × 720</b><span>Quality master · H.264 / AAC</span></label><label class="radio-line"><input type="radio" name="renderPreset" value="480p"><b>854 × 480</b><span>Fast proof · H.264 / AAC</span></label><button class="primary render-button" data-action="render">Render music video <span>→</span></button><div id="renderState" class="render-state"></div></article>
+            <article class="card"><div class="card-head"><div><span>PACKAGE CONTENTS</span><h3>Nothing gets lost</h3></div></div><ul class="deliverables"><li>Synchronised MP4</li><li>Project manifest & timeline</li><li>Shot list, prompts and seeds</li><li>Reference provenance</li><li>FFmpeg render log</li></ul></article>
+          </div>
+          <div id="renderHistory" class="render-history"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div id="importModal" class="modal hidden" role="dialog" aria-modal="true"><div class="modal-card import-card"><button class="modal-close" data-action="close-modal">×</button><span>NEW PRODUCTION</span><h2>Start with the master song.</h2><p>The original stays untouched. Cutroom copies it into a recoverable project and builds the first timing map.</p><label>Project name <input id="newProjectName" placeholder="Untitled music video"></label><label id="dropZone" class="drop-zone"><input id="songFile" type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg"><b>Drop MP3, WAV or audio here</b><span>or click to choose a file</span><em id="chosenSong">No song selected</em></label><button class="primary" data-action="create-project">Import & analyse song</button><div id="importProgress" class="progress-line"></div></div></div>
+  <div id="queueDrawer" class="drawer"><div class="drawer-head"><div><span>UNATTENDED RUN</span><h2>Generation queue</h2></div><button data-action="queue">×</button></div><div class="queue-controls"><button class="ghost" data-action="pause-queue">Pause after current</button><button class="ghost" data-action="resume-queue">Resume</button></div><div id="queueList" class="queue-list"></div></div>
+  <div id="reviewModal" class="modal hidden"><div class="modal-card review-card"><button class="modal-close" data-action="close-review">×</button><div id="reviewContent"></div></div></div>
+  <input id="assetFile" class="hidden" type="file" accept="image/png,image/jpeg,image/webp">
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

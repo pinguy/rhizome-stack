@@ -32,7 +32,11 @@
       "qwen-image-desk",
       "minimax-music-3",
       "wan-video-desk",
+      "cutroom",
       "openwebui-local-media"
+    ],
+    "recovery_source": [
+      "rhizome-lifeboat"
     ]
   },
   "excluded_runtime_state": [
@@ -45,11 +49,11 @@
     "model-weights",
     "databases",
     "logs",
-    "backups"
+    "backups",
+    "checkpoints",
+    "recovery-receipts"
   ],
   "explicitly_not_packaged": [
-    "cutroom",
-    "ltx-video-workflows",
     "creative-projects-and-outputs"
   ]
 }

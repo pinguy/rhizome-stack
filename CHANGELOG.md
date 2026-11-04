@@ -1,6 +1,29 @@
 # Changelog
 
-## 0.1.0-alpha.16 - 2026-11-03
+## 0.1.0-alpha.18 - 2026-11-04
+
+- Harden Cutroom render preflight: release the single-flight lock when project
+  loading/saving fails, and reject unsupported presets before starting work.
+- Contain editable project media paths to their project directory, including
+  symlink escapes; use unique scratch/output paths, clean temporary FFmpeg data
+  on completion/failure and remove incomplete final MP4 files.
+- Correct Cutroom HTTP byte-range suffix handling and return 416 for
+  unsatisfiable requests. Add real-FFmpeg and simulated failure regressions.
+
+- Add the complete Cutroom source companion: the unified React/TypeScript
+  production workspace, loopback proxy, project API, analysis, generation queue,
+  LTX/WAN/MiniMax adapters and deterministic FFmpeg renderer. Projects, media,
+  logs, browser state and model weights remain excluded.
+- Build Cutroom's UI as part of the optional creative profile and stage separate
+  loopback services on ports 8842/8843 without replacing the standalone Qwen or
+  Video Desk units.
+- Add the Rhizome Lifeboat controller source and its recovery/retention regression
+  tests at revision `e995ffe0eb575f79031a81a048a38958f07a7689`.
+- Keep Lifeboat fail-closed in the portable release: no production configuration,
+  checkpoint store, receipts, Monit policy, root installer or automatic arming is
+  redistributed.
+
+## 0.1.0-alpha.17 - 2026-11-03
 
 - Update Brave search to 1.9.4: replace the incomplete modal-May verb shortlist
   with per-token date/name exclusions and expand uncertainty regressions.
@@ -26,16 +49,6 @@
 - Add 30 routing cases plus mocked HTTP refusal, fallback and budget regressions;
   document author-machine acceptance scope and clean-target tester receipts.
 
-- Add revision-pinned MiniMax H3 FL2VA pruned NF4 generation to Video Desk and
-  Open WebUI: Text or first-frame input, fixed 24 fps, native 32 kHz stereo
-  audio, 1–15 second jobs, and hash-verified model/processor downloads.
-- Add selectable Lanczos-only and Real-ESRGAN NCNN/Vulkan plus Lanczos 1080p
-  masters to Screening Room, with single-flight locking, bounded scratch,
-  progress, output validation, audio preservation and cleanup.
-- Keep Real-ESRGAN optional and portable: the release does not redistribute its
-  executable or weights, and resolves them only through documented environment
-  variables or `PATH`.
-
 - Preserve the alpha.15 GitHub fixes for failed/malformed memory-worker health
   and idempotent uninstall, which were absent from the uploaded snapshot.
 - Repair reference-conditioned WAN video and Video Desk image edits: reference
@@ -45,6 +58,18 @@
 - Fall back to packet counting when FFprobe reports an unavailable frame count.
 - Stream Qwen media downloads in 1 MiB chunks instead of holding the whole file
   in memory; add HTTP and generation-path regression coverage.
+
+## 0.1.0-alpha.16 - 2026-11-03
+
+- Add revision-pinned MiniMax H3 FL2VA pruned NF4 generation to Video Desk and
+  Open WebUI: Text or first-frame input, fixed 24 fps, native 32 kHz stereo
+  audio, 1–15 second jobs, and hash-verified model/processor downloads.
+- Add selectable Lanczos-only and Real-ESRGAN NCNN/Vulkan plus Lanczos 1080p
+  masters to Screening Room, with single-flight locking, bounded scratch,
+  progress, output validation, audio preservation and cleanup.
+- Keep Real-ESRGAN optional and portable: the release does not redistribute its
+  executable or weights, and resolves them only through documented environment
+  variables or `PATH`.
 
 ## 0.1.0-alpha.15 candidate — 18 October 2026 independent-audit corrections
 

@@ -1,0 +1,12 @@
+{
+  "name": "Qwen Image Desk",
+  "short_name": "Qwen Desk",
+  "start_url": "/image-studio/",
+  "scope": "/image-studio/",
+  "display": "standalone",
+  "background_color": "#0d1014",
+  "theme_color": "#12161b",
+  "icons": [
+    {"src": "/image-studio/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}

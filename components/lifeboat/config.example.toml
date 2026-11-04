@@ -1,0 +1,58 @@
+# Copy outside the source tree and replace every example value after inspecting
+# the target host. Retention and automatic recovery are intentionally not armed.
+
+[store]
+root = "/srv/rhizome-lifeboat"
+mountpoint = "/srv"
+minimum_free_bytes = 21474836480
+require_mountpoint = true
+expected_mount_source = "/dev/disk/by-uuid/REPLACE-ME"
+expected_filesystem = "ext4"
+
+[application]
+name = "OpenClaw"
+version = "REPLACE-ME"
+revision = "REPLACE-ME"
+
+[service]
+stop_command = ["/usr/bin/systemctl", "--user", "stop", "openclaw-gateway.service"]
+start_command = ["/usr/bin/systemctl", "--user", "start", "openclaw-gateway.service"]
+status_command = ["/usr/bin/systemctl", "--user", "is-active", "openclaw-gateway.service"]
+journal_command = ["/usr/bin/journalctl", "--user", "--unit", "openclaw-gateway.service", "--no-pager", "--lines", "300"]
+command_timeout_seconds = 45
+
+[health]
+base_url = "http://127.0.0.1:18789"
+health_path = "/healthz"
+startup_path = ""
+ready_path = "/readyz"
+functional_path = "/v1/models"
+token_file = "/etc/rhizome-lifeboat/gateway-probe.token"
+timeout_seconds = 5
+startup_grace_seconds = 60
+required_model_count = 1
+
+[policy]
+change_window_seconds = 1800
+maximum_automatic_rollbacks = 1
+failure_confirmation_attempts = 3
+failure_confirmation_interval_seconds = 5
+automatic_failure_classes = ["PROCESS_CRASH", "CONFIG_ADMISSION_FAILURE", "DATABASE_ADMISSION_FAILURE"]
+
+[retention]
+enabled = false
+daily = 3
+weekly = 2
+monthly = 1
+
+[[files]]
+name = "gateway-config"
+source = "/home/USER/.openclaw/openclaw.json"
+restore = "/home/USER/.openclaw/openclaw.json"
+
+[[databases]]
+name = "openclaw-state"
+source = "/home/USER/.openclaw/state/openclaw.sqlite"
+restore = "/home/USER/.openclaw/state/openclaw.sqlite"
+# Add expected_user_version and expected_schema_sha256 after inspecting a
+# verified compatible database. Do not guess them.
