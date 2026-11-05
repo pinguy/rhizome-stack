@@ -48,9 +48,11 @@ and backend use separate ports so they do not replace the standalone desks.
 They share ComfyUI, so generation remains single-flight and a queue refuses to
 take ownership of an engine it did not start. See `components/cutroom/README.md`.
 
-All three apps start ComfyUI on demand at `127.0.0.1:8188`. They may reuse an
-already-running endpoint, but they never stop a process they do not own. Owned
-engines are tracked by exact PID, command and process group; no broad `pkill`
+All three apps start ComfyUI on demand at `127.0.0.1:8188`. MiniMax Music and
+Video Desk require different memory profiles: they reuse only their own matching
+engine, or ask the recognised peer owner to release an idle engine before starting
+the required profile. A busy, unreadable or unknown-owner endpoint is refused.
+Engines are tracked by exact PID, command and process group; no broad `pkill`
 fallback exists. Qwen and MiniMax outputs stay under the installed ComfyUI
 output tree. WAN also retains each completed MP4 under
 `$RHIZOME_STACK_ROOT/creative/state/wan-video-desk/projects/wan-video-studio/generated/`
@@ -87,8 +89,8 @@ NCNN/Vulkan enhancement before the aspect-preserving master. Set
 local media work, preserve optional audio, validate output, report progress and
 clean their bounded temporary workspace. `VIDEO_UPSCALE_SCRATCH` relocates it.
 Mastering refuses queued/running Video Desk jobs. H3 and mastering also refuse
-an active or unreadable ComfyUI queue and require a successful owned-engine
-stop before proceeding. These checks do not provide cross-process isolation
+an active or unreadable ComfyUI queue and require a successful recognised-owner
+handoff before proceeding. These checks do not provide cross-process isolation
 against another client submitting new work after the idle check.
 
 Qwen also accepts a local PNG, JPEG or WebP reference up to 20 MB. The reference

@@ -27,6 +27,11 @@ COMFY_INPUT = COMFY_DIR / "input"
 COMFY_OUTPUT = COMFY_DIR / "output"
 PYTHON = Path(os.environ.get("COMFY_PY", COMFY_DIR / ".venv/bin/python"))
 COMFY_URL = os.environ.get("COMFY_URL", "http://127.0.0.1:8188").rstrip("/")
+MUSIC_API = os.environ.get("MINIMAX_MUSIC_URL", "http://127.0.0.1:8830").rstrip("/")
+MUSIC_PID_FILE = Path(os.environ.get(
+    "MINIMAX_MUSIC_COMFY_PIDFILE",
+    STACK_ROOT / "creative/state/minimax-music/comfy.pid",
+)).expanduser()
 COMFY_IDLE_SECONDS = max(60, int(os.environ.get("COMFY_IDLE_SECONDS", "300")))
 WAN_BACKEND = "wan-2.2-rapid"
 WAN_T2V_MODEL = "wan2.2-t2v-rapid-aio-v10-nsfw-Q5_K.gguf"
@@ -91,6 +96,42 @@ def comfy_up() -> bool:
         return True
     except Exception:
         return False
+
+
+def _comfy_pid(path: Path) -> int | None:
+    """Return only the exact detached ComfyUI process recorded by ``path``."""
+    try:
+        pid = int(path.read_text().strip())
+        command = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+        main = os.fsencode(str((COMFY_DIR / "main.py").resolve()))
+        if (pid > 1 and pid != os.getpid() and len(command) > 2
+                and command[1] == main
+                and any(command[i:i + 2] == [b"--port", b"8188"]
+                        for i in range(2, len(command) - 1))
+                and os.getpgid(pid) == pid):
+            return pid
+    except (OSError, TypeError, ValueError, ProcessLookupError):
+        pass
+    return None
+
+
+def _stop_music_engine() -> bool:
+    request = urllib.request.Request(
+        MUSIC_API + "/api/engine/stop",
+        data=b"{}",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            json.load(response)
+    except Exception:
+        return False
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        if not comfy_up():
+            return True
+        time.sleep(0.5)
+    return False
 
 
 def qc_video(path: Path, expected_frames: int, expected_fps: int | None = None) -> dict:
@@ -160,20 +201,7 @@ class ComfyEngine:
         self.lock = threading.RLock()
 
     def owned_pid(self) -> int | None:
-        try:
-            pid = int(self.pid_file.read_text().strip())
-            command = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
-            main = str((COMFY_DIR / "main.py").resolve())
-            # Match argv boundaries, not substrings of another program or port.
-            if (pid > 1 and pid != os.getpid() and len(command) > 2
-                    and command[1] == os.fsencode(main)
-                    and any(command[i:i + 2] == [b"--port", b"8188"]
-                            for i in range(2, len(command) - 1))
-                    and os.getpgid(pid) == pid):
-                return pid
-        except (OSError, ValueError, ProcessLookupError):
-            pass
-        return None
+        return _comfy_pid(self.pid_file)
 
     def status(self) -> dict:
         online = comfy_up()
@@ -198,11 +226,20 @@ class ComfyEngine:
                 except OSError:
                     pass
                 status = self.status()
-                if not status.get("owned") or active_profile == profile:
+                if status.get("owned") and active_profile == profile:
                     return True
-                self.stop_owned()
+                if status.get("running") != 0 or status.get("pending") != 0:
+                    return False
+                if status.get("owned"):
+                    if not self.stop_owned():
+                        return False
+                elif _comfy_pid(MUSIC_PID_FILE):
+                    if not _stop_music_engine():
+                        return False
+                else:
+                    # An unknown owner is neither compatible nor ours to signal.
+                    return False
             self.state_dir.mkdir(parents=True, exist_ok=True)
-            log = self.log_file.open("ab")
             env = dict(os.environ)
             visible_devices = os.environ.get("COMFY_CUDA_VISIBLE_DEVICES")
             if visible_devices:
@@ -216,11 +253,12 @@ class ComfyEngine:
             # to the controlled 640x480 I2V canary.
             if profile != "wan-dynamic":
                 args.extend(("--lowvram", "--disable-dynamic-vram"))
-            proc = subprocess.Popen(
-                args,
-                cwd=COMFY_DIR, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
-                start_new_session=True, env=env,
-            )
+            with self.log_file.open("ab") as log:
+                proc = subprocess.Popen(
+                    args,
+                    cwd=COMFY_DIR, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                    start_new_session=True, env=env,
+                )
             self.pid_file.write_text(str(proc.pid))
             self.profile_file.write_text(profile + "\n")
         deadline = time.time() + wait
@@ -231,6 +269,20 @@ class ComfyEngine:
                 break
             time.sleep(1.5)
         return False
+
+    def stop_idle_for_external_worker(self) -> bool:
+        """Release an idle known Comfy owner before DiffSynth/H3 uses the GPU."""
+        with self.lock:
+            if not comfy_up():
+                return True
+            status = self.status()
+            if status.get("running") != 0 or status.get("pending") != 0:
+                return False
+            if status.get("owned"):
+                return self.stop_owned()
+            if _comfy_pid(MUSIC_PID_FILE):
+                return _stop_music_engine()
+            return False
 
     def stop_owned(self) -> bool:
         with self.lock:
@@ -658,17 +710,10 @@ class GenerationQueue:
             backend = job.get("backend") or project.get("settings", {}).get("video_backend") or WAN_BACKEND
             h3_job = kind == "video" and backend == H3_BACKEND
             if h3_job:
-                engine_status = self.engine.status()
-                if engine_status.get("online"):
-                    if engine_status.get("owned"):
-                        if engine_status.get("running") != 0 or engine_status.get("pending") != 0:
-                            raise RuntimeError("ComfyUI has active work; MiniMax H3 did not interrupt it")
-                        if not self.engine.stop_owned():
-                            raise RuntimeError("Could not stop owned ComfyUI before MiniMax H3")
-                    else:
-                        raise RuntimeError(
-                            "ComfyUI is owned by another process; MiniMax H3 did not interrupt it"
-                        )
+                if not self.engine.stop_idle_for_external_worker():
+                    raise RuntimeError(
+                        "ComfyUI is busy, unreadable or has an unknown owner; MiniMax H3 did not interrupt it"
+                    )
             else:
                 profile = "wan-dynamic" if kind == "video" and backend == WAN_BACKEND else "legacy-static"
                 if not self.engine.start(profile=profile):

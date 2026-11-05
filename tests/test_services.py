@@ -363,10 +363,38 @@ class CreativeHTTPTest(unittest.TestCase):
             start.assert_not_called()
             submit.assert_not_called()
 
+    def test_music_engine_handoff_requires_known_idle_owner(self):
+        with patch.dict(music.STATE, {'busy': False}), \
+             patch.object(music, 'comfy_up', return_value=True), \
+             patch.object(music, '_owned_pid', return_value=False), \
+             patch.object(music, '_read_pid', return_value=None), \
+             patch.object(music, 'engine_start', return_value=True) as start:
+            with patch.object(music, '_comfy_queue_idle', return_value=False), \
+                 patch.object(music, '_stop_video_desk_engine') as stop:
+                with self.assertRaisesRegex(RuntimeError, 'busy'):
+                    music.prepare_music_engine()
+                stop.assert_not_called()
+                start.assert_not_called()
+
+            with patch.object(music, '_comfy_queue_idle', return_value=True), \
+                 patch.object(music, '_external_pid', return_value=None), \
+                 patch.object(music, '_stop_video_desk_engine') as stop:
+                with self.assertRaisesRegex(RuntimeError, 'owner is unknown'):
+                    music.prepare_music_engine()
+                stop.assert_not_called()
+                start.assert_not_called()
+
+            with patch.object(music, '_comfy_queue_idle', return_value=True), \
+                 patch.object(music, '_external_pid', return_value=4242), \
+                 patch.object(music, '_stop_video_desk_engine', return_value=True) as stop:
+                self.assertTrue(music.prepare_music_engine())
+                stop.assert_called_once()
+                start.assert_called_once()
+
     def test_generation_preserves_full_integer_seed(self):
         music.Handler.JOBS.clear()
         seed = 2**64 - 1
-        with patch.object(music, 'comfy_up', return_value=True), \
+        with patch.object(music, 'prepare_music_engine', return_value=True), \
              patch.object(music, 'submit', return_value={'prompt_id': 'synthetic-job'}) as submit, \
              patch.dict(music.STATE, {'busy': False}), serve(music.Handler) as address:
             status, _, body = request(address, 'POST', '/api/generate', json.dumps({'caption': 'A song', 'seed': str(seed)}))

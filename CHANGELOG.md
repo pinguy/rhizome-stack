@@ -2,6 +2,12 @@
 
 ## 0.1.0-alpha.18 - 2026-11-04
 
+- Keep MiniMax Music's normal-VRAM ComfyUI profile separate from Video Desk's
+  low-VRAM/dynamic profiles. Transfer only an idle engine through the recognised
+  loopback owner endpoint; refuse busy, unreadable or unknown-owner engines.
+- Apply the same recognised-owner handoff before DiffSynth H3 work, remove
+  parent-side Comfy log descriptor leaks and add cross-profile regressions.
+
 - Harden Cutroom render preflight: release the single-flight lock when project
   loading/saving fails, and reject unsupported presets before starting work.
 - Contain editable project media paths to their project directory, including

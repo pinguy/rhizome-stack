@@ -202,6 +202,38 @@ class WanBatchTest(unittest.TestCase):
                  patch.object(os, 'getpgid', return_value=pid):
                 self.assertEqual(owned.owned_pid(), expected)
 
+    def test_engine_profile_handoff_refuses_busy_or_unknown_owner(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            owned = engine.ComfyEngine(Path(temporary))
+            for status, external_pid in (
+                ({'online': True, 'owned': False, 'running': 1, 'pending': 0}, 4242),
+                ({'online': True, 'owned': False, 'running': 0, 'pending': 0}, None),
+                ({'online': True, 'owned': False}, 4242),
+            ):
+                with self.subTest(status=status, external_pid=external_pid), \
+                     patch.object(engine, 'comfy_up', return_value=True), \
+                     patch.object(owned, 'status', return_value=status), \
+                     patch.object(engine, '_comfy_pid', return_value=external_pid), \
+                     patch.object(engine, '_stop_music_engine') as stop:
+                    self.assertFalse(owned.start())
+                    stop.assert_not_called()
+
+    def test_engine_profile_handoff_stops_known_music_owner_then_starts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            owned = engine.ComfyEngine(Path(temporary))
+            process = Mock(pid=5151)
+            process.poll.return_value = None
+            status = {'online': True, 'owned': False, 'running': 0, 'pending': 0}
+            with patch.object(engine, 'comfy_up', return_value=True), \
+                 patch.object(owned, 'status', return_value=status), \
+                 patch.object(engine, '_comfy_pid', return_value=4242), \
+                 patch.object(engine, '_stop_music_engine', return_value=True) as stop, \
+                 patch.object(engine.subprocess, 'Popen', return_value=process) as popen:
+                self.assertTrue(owned.start(profile='legacy-static'))
+            stop.assert_called_once()
+            popen.assert_called_once()
+            self.assertEqual(owned.pid_file.read_text(), '5151')
+
     def test_reference_jobs_submit_inference_and_register_generated_output(self):
         # A reference path must never satisfy the finished-output sentinel.
         for kind, mode, reference in (('video', 'i2v', True), ('video', 't2v', False),
@@ -244,24 +276,18 @@ class WanBatchTest(unittest.TestCase):
                 self.assertEqual(list(inputs.iterdir()), [])
                 self.queue.save_project.assert_called_once()
 
-    def test_h3_does_not_start_until_owned_engine_is_idle_and_stopped(self):
-        for running, pending, stopped in ((1, 0, True), (0, 1, True), (None, None, True), (0, 0, False)):
-            with self.subTest(running=running, pending=pending, stopped=stopped):
-                self.queue.root = Path('/synthetic')
-                self.queue.load_project = Mock(return_value={})
-                self.queue.engine = Mock()
-                self.queue.engine.status.return_value = {
-                    'online': True, 'owned': True, 'running': running, 'pending': pending,
-                }
-                self.queue.engine.stop_owned.return_value = stopped
-                job = {'id': 'fixture', 'project_id': 'fixture', 'kind': 'video',
-                       'backend': engine.H3_BACKEND}
-                with patch.object(engine, 'run_h3') as run:
-                    self.queue._run(job)
-                self.assertEqual(job['status'], 'failed')
-                run.assert_not_called()
-                if running != 0 or pending != 0:
-                    self.queue.engine.stop_owned.assert_not_called()
+    def test_h3_does_not_start_until_comfy_owner_releases_idle_engine(self):
+        self.queue.root = Path('/synthetic')
+        self.queue.load_project = Mock(return_value={})
+        self.queue.engine = Mock()
+        self.queue.engine.stop_idle_for_external_worker.return_value = False
+        job = {'id': 'fixture', 'project_id': 'fixture', 'kind': 'video',
+               'backend': engine.H3_BACKEND}
+        with patch.object(engine, 'run_h3') as run:
+            self.queue._run(job)
+        self.assertEqual(job['status'], 'failed')
+        run.assert_not_called()
+        self.queue.engine.stop_idle_for_external_worker.assert_called_once()
 
     def test_upscale_probe_falls_back_when_frame_count_is_unavailable(self):
         import upscaler

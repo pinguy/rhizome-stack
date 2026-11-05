@@ -45,6 +45,11 @@ COMFY_OUTPUT = os.environ.get("COMFY_OUTPUT", os.path.join(COMFY_DIR, "output"))
 COMFY_PY = os.environ.get("COMFY_PY", os.path.join(COMFY_DIR, ".venv/bin/python"))
 COMFY_MAIN = os.path.join(COMFY_DIR, "main.py")
 LOGDIR = os.environ.get("MINIMAX_LOGDIR", os.path.join(STACK_ROOT, "creative", "state", "minimax-music"))
+VIDEO_DESK_API = os.environ.get("WAN_VIDEO_DESK_API_URL", "http://127.0.0.1:8840").rstrip("/")
+VIDEO_DESK_PIDFILE = os.environ.get(
+    "WAN_VIDEO_DESK_COMFY_PIDFILE",
+    os.path.join(STACK_ROOT, "creative", "state", "wan-video-desk", "state", "comfy.pid"),
+)
 
 # Stop the engine after this many seconds with no generation activity (0 = never).
 # Default OFF; use the manual "Stop engine" button or enable idle auto-stop.
@@ -285,6 +290,43 @@ def _owned_pid(pid):
         return False
 
 
+def _external_pid(path):
+    try:
+        with open(path) as stream:
+            pid = int(stream.read().strip())
+        return pid if _owned_pid(pid) else None
+    except (OSError, TypeError, ValueError):
+        return None
+
+
+def _comfy_queue_idle():
+    """Treat an unreadable shared queue as busy, never as permission to stop it."""
+    try:
+        queue = comfy_get("/queue", timeout=5)
+        return not queue.get("queue_running") and not queue.get("queue_pending")
+    except Exception:
+        return False
+
+
+def _stop_video_desk_engine():
+    request = urllib.request.Request(
+        VIDEO_DESK_API + "/api/engine/stop",
+        data=b"{}",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            json.load(response)
+    except Exception:
+        return False
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        if not comfy_up():
+            return True
+        time.sleep(0.5)
+    return False
+
+
 def touch_activity():
     STATE["last_activity"] = time.time()
 
@@ -296,12 +338,12 @@ def engine_start(wait=90):
             return True
         STATE["starting"] = True
         os.makedirs(LOGDIR, exist_ok=True)
-        log = open(os.path.join(LOGDIR, "comfy.log"), "ab")
         env = dict(os.environ, CUDA_DEVICE_ORDER="PCI_BUS_ID")
-        proc = subprocess.Popen(
-            [COMFY_PY, COMFY_MAIN, "--port", str(COMFY_PORT), "--listen", "127.0.0.1"],
-            cwd=COMFY_DIR, stdout=log, stderr=log, stdin=subprocess.DEVNULL,
-            start_new_session=True, env=env)
+        with open(os.path.join(LOGDIR, "comfy.log"), "ab") as log:
+            proc = subprocess.Popen(
+                [COMFY_PY, COMFY_MAIN, "--port", str(COMFY_PORT), "--listen", "127.0.0.1"],
+                cwd=COMFY_DIR, stdout=log, stderr=log, stdin=subprocess.DEVNULL,
+                start_new_session=True, env=env)
         with open(_pidfile(), "w") as f:
             f.write(str(proc.pid))
     deadline = time.time() + wait
@@ -314,6 +356,24 @@ def engine_start(wait=90):
         time.sleep(1.5)
     STATE["starting"] = False
     return False
+
+
+def prepare_music_engine():
+    """Require Music's normal-VRAM engine, handing off only a known idle owner."""
+    with ENGINE_LOCK:
+        if STATE["busy"]:
+            raise RuntimeError("MiniMax Music already has a generation in flight.")
+        if not comfy_up():
+            return engine_start()
+        if not _comfy_queue_idle():
+            raise RuntimeError("ComfyUI is busy with another job; Music did not interrupt it.")
+        if _owned_pid(_read_pid()):
+            return True
+        if _external_pid(VIDEO_DESK_PIDFILE):
+            if not _stop_video_desk_engine():
+                raise RuntimeError("Video Desk did not release its idle ComfyUI engine.")
+            return engine_start()
+        raise RuntimeError("ComfyUI is online but its owner is unknown; Music did not reuse it.")
 
 
 def engine_stop(reason="user"):
@@ -642,7 +702,10 @@ class Handler(LocalRequestHandler):
             engine_stop(reason="user")
             return self._send(200, {"comfy": comfy_up()})
         if u.path == "/api/engine/start":
-            ok = engine_start()
+            try:
+                ok = prepare_music_engine()
+            except RuntimeError as exc:
+                return self._send(409, {"comfy": comfy_up(), "error": str(exc)})
             return self._send(200 if ok else 503, {"comfy": comfy_up(),
                     "error": None if ok else "engine failed to start"})
         if u.path == "/api/delete":
@@ -696,10 +759,11 @@ class Handler(LocalRequestHandler):
         seconds, seed, steps, cfg, top_k, tiled, quality = (
             options[key] for key in ("seconds", "seed", "steps", "cfg", "top_k", "tiled", "quality"))
 
-        if not comfy_up():
-            # transparently cold-start the engine (idle auto-stop or manual kill)
-            if not engine_start():
-                return self._send(503, {"error": "Could not start the ComfyUI engine — see logs/comfy.log."})
+        try:
+            if not prepare_music_engine():
+                return self._send(503, {"error": "Could not start the Music ComfyUI engine — see logs/comfy.log."})
+        except RuntimeError as exc:
+            return self._send(409, {"error": str(exc)})
 
         touch_activity()
         slug = slugify(title)

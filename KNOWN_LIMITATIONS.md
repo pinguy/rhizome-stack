@@ -63,8 +63,9 @@
   needs a separately supplied NCNN/Vulkan executable and matching
   `realesrgan-x4plus` model pair; only Lanczos is self-contained in the profile.
 - Qwen Image Desk, MiniMax Music 3 and WAN Video Desk share one ComfyUI endpoint
-  and therefore serialise practical GPU use. Each app may stop only the exact
-  ComfyUI process it started.
+  and therefore serialise practical GPU use. Music and Video Desk can hand an
+  idle engine across their recognised loopback owner endpoints; active,
+  unreadable and unknown-owner engines are refused.
   Reference editing accepts PNG/JPEG/WebP up to 20 MB; larger presets and all
   clean-machine GPU paths have not received separate quality acceptance.
 - MiniLM retrieval is opt-in, loopback-only and advisory. It can return an
