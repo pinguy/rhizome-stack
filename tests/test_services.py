@@ -77,6 +77,61 @@ class AdapterTest(unittest.TestCase):
 
     payload = json.dumps({'model': 'openclaw/provider/demo', 'stream': True, 'messages': []})
 
+    @staticmethod
+    def sse(content):
+        payload = {'choices': [{'index': 0, 'delta': {'content': content}, 'finish_reason': None}]}
+        return b'data: ' + json.dumps(payload).encode() + b'\n\n'
+
+    def test_leading_raw_tool_markup_filter_is_fragment_safe(self):
+        markup = adapter.LeadingToolMarkupFilter()
+        parts = ['<tool_', 'call>\n<function=exec>bad</function>\n',
+                 '</tool_call>', 'Done — attached.']
+        self.assertEqual(''.join(markup.feed(part) for part in parts) + markup.finish(),
+                         'Done — attached.')
+        prose = adapter.LeadingToolMarkupFilter()
+        self.assertEqual(prose.feed('Explain <tool_call> as XML.') + prose.finish(),
+                         'Explain <tool_call> as XML.')
+
+    def test_gateway_timeout_outlasts_the_agent_deadline(self):
+        request_object = unittest.mock.sentinel.request
+        with patch.object(adapter.urllib.request, 'urlopen') as urlopen:
+            adapter.open_gateway(request_object)
+        urlopen.assert_called_once_with(
+            request_object,
+            timeout=adapter.GATEWAY_TIMEOUT_SECONDS,
+        )
+        self.assertGreater(adapter.GATEWAY_TIMEOUT_SECONDS, 3600)
+
+    def test_sse_drops_rejected_tool_prefix_but_keeps_retry_answer(self):
+        chunks = [self.sse('<tool_'), self.sse('call>\n<function=exec>bad</function>'),
+                  self.sse('</tool_call>'), self.sse('Done — attached.'),
+                  b'data: [DONE]\n\n']
+        upstream = unittest.mock.MagicMock()
+        upstream.__enter__.return_value = upstream
+        upstream.status = 200
+        upstream.headers = {'Content-Type': 'text/event-stream'}
+        upstream.read1.side_effect = chunks + [b'']
+        with patch.object(adapter, 'gateway_token', return_value='synthetic'), \
+             patch.object(adapter, 'open_gateway', return_value=upstream), serve(adapter.Handler) as address:
+            status, _, raw = request(address, 'POST', '/v1/chat/completions', self.payload,
+                                     {'Authorization': 'Bearer synthetic-adapter-secret'})
+        self.assertEqual(status, 200)
+        self.assertNotIn(b'<tool_call>', raw)
+        self.assertNotIn(b'function=exec', raw)
+        visible = ''.join(
+            json.loads(line.removeprefix(b'data: '))['choices'][0]['delta'].get('content', '')
+            for line in raw.splitlines()
+            if line.startswith(b'data: {')
+        )
+        self.assertEqual(visible, 'Done — attached.')
+        self.assertTrue(raw.endswith(b'data: [DONE]\n\n'))
+
+    def test_nonstreaming_json_drops_only_leading_raw_tool_markup(self):
+        raw = json.dumps({'choices': [{'message': {'content':
+            '<tool_call><function=exec>bad</function></tool_call>Done.'}}]}).encode()
+        cleaned = json.loads(adapter.sanitize_json_response(raw))
+        self.assertEqual(cleaned['choices'][0]['message']['content'], 'Done.')
+
     def test_invalid_requests_do_not_call_gateway(self):
         with patch.object(adapter, 'open_gateway') as upstream, serve(adapter.Handler) as address:
             for body in ('[]', 'null', '{', '{"model":123}', '{"model":"openclaw/"}',
@@ -110,7 +165,9 @@ class AdapterTest(unittest.TestCase):
             def log_message(self, *_):
                 pass
             def do_POST(self):
-                seen.append((self.headers['x-openclaw-model'], json.loads(self.rfile.read(int(self.headers['Content-Length'])))))
+                seen.append((self.headers['x-openclaw-model'],
+                             self.headers['x-openclaw-agent-id'],
+                             json.loads(self.rfile.read(int(self.headers['Content-Length'])))))
                 self.send_response(200)
                 self.send_header('Content-Type', 'text/event-stream')
                 self.send_header('Content-Length', str(len(first) + len(last)))
@@ -135,7 +192,8 @@ class AdapterTest(unittest.TestCase):
                 connection.close()
         self.assertEqual(len(seen), 1)
         self.assertEqual(seen[0][0], 'provider/demo')
-        self.assertEqual(seen[0][1]['model'], 'openclaw/default')
+        self.assertEqual(seen[0][1], 'openwebui')
+        self.assertEqual(seen[0][2]['model'], 'openclaw/default')
 
     def test_stream_failure_does_not_append_second_http_response(self):
         upstream = unittest.mock.MagicMock()

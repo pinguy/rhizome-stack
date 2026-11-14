@@ -1,12 +1,34 @@
 # Changelog
 
-## 0.1.0-alpha.18 - 2026-11-04
+## 0.1.0-alpha.19 - 2026-11-14
 
-- Keep MiniMax Music's normal-VRAM ComfyUI profile separate from Video Desk's
-  low-VRAM/dynamic profiles. Transfer only an idle engine through the recognised
-  loopback owner endpoint; refuse busy, unreadable or unknown-owner engines.
-- Apply the same recognised-owner handoff before DiffSynth H3 work, remove
-  parent-side Comfy log descriptor leaks and add cross-profile regressions.
+- Add installer-managed, revision-pinned Strata source with Gyro-S and Gyro-M
+  download/setup paths, lazy loopback services, reciprocal GPU hand-off and
+  sanitised OpenClaw provider entries. No model weights or host tuning records
+  are redistributed.
+- Add the modern COMET-ATOMIC-2020 + WeightSpace bridge in its own environment,
+  preserve the legacy experiment source only as reference, and verify the
+  separately downloaded 1.6 GB checkpoint by exact size and SHA-256.
+- Add a native-Linux-only gpu-unlock stage pinned to v2.0. It requires one full
+  NVIDIA PCI address and an explicit boot-risk acknowledgement, backs up GRUB,
+  never targets every card implicitly and never reboots automatically.
+- Add `--reference-profile` for the portable reference setup while retaining
+  separate consent flags for large weights and the boot-critical gpu-unlock.
+- Carry forward the 13 November adapter timeout and outer tool-envelope fixes,
+  plus the privacy-audited alpha.18 showcase refresh, in one release tree.
+- Keep automatic Strata fallback selections turn-local instead of persisting
+  them as session model overrides, and allow replacement main sessions to read
+  sibling main-session history for recovery after an interrupted turn.
+
+## 0.1.0-alpha.18 - 2026-11-04; documentation refreshed 2026-11-14
+
+- Refresh the saved Open WebUI media showcase with seven descriptive screenshot
+  names covering Qwen generation, reference-conditioned editing, Open WebUI's
+  native MiniMax MP3 Preview and inline MiniMax H3 video through a
+  Strata-backed Gyro-S chat.
+- Document Strata, gpu-unlock and COMET-ATOMIC-2020 with WeightSpace as tested
+  reference-machine companions while keeping their installers, boot changes,
+  model weights and machine-specific bridge configuration outside the release.
 
 - Harden Cutroom render preflight: release the single-flight lock when project
   loading/saving fails, and reject unsupported presets before starting work.

@@ -9,8 +9,45 @@ runtimes and ownership clear.
 | [RhizomeML](https://github.com/pinguy/RhizomeML) | Imports its detailed/compact JSONL and PDF JSON formats with provenance | Training code, dependencies, model weights and existing private indexes stay separate |
 | [Chatterbox TTS add-on](https://github.com/pinguy/chatterbox-tts-addon) | Voice Lab is packaged here; browser extensions remain companion components | Its full installer overlaps this stack's audio service names and ports |
 | [GGUF Converter Studio](https://github.com/pinguy/GGUF-Converter-Studio) | Prepare a GGUF, then select it through the welcome wizard's advanced Ollama route | Conversion/build dependencies stay in the converter environment |
+| [Strata](https://github.com/Niko1221/Strata) | Pinned source installer, Gyro-S/Gyro-M setup, lazy loopback units and OpenClaw providers | No weights, tokens, logs, generated configs or host tuning are copied from the reference machine |
+| [gpu-unlock](https://github.com/Zagitta/gpu-unlock) | Explicit native-Linux v2.0 installer path for one NVIDIA PCI target | Boot-critical; requires GRUB, acknowledgement, reboot and host-specific verification |
+| [COMET-ATOMIC-2020](https://github.com/allenai/comet-atomic-2020) + [WeightSpace](https://pypi.org/project/weightspace/) | Pinned source, isolated modern runtime, bridge and verified checkpoint downloader | No checkpoint, edited variants, credentials or legacy Torch 1.5 environment are bundled |
 | Cutroom | Complete source, optional creative-profile UI build and loopback services | No projects, songs, generated media, logs, browser state or model weights |
 | Rhizome Lifeboat | Reviewed controller source, example config and regression tests | No host policy, privileged install, checkpoints, receipts, Monit config or automatic arming |
+
+## Installer-managed reference integrations
+
+### Strata
+
+The current saved-chat screenshots use Qwen3.8-Flash-Next Gyro-S through
+Strata's local OpenAI-compatible API, the Rhizome Stack adapter and OpenClaw.
+Alpha.19 installs the pinned source and can download both Gyro profiles with
+`--with-strata --download-strata-models`. It stages separate lazy APIs on ports
+47831 and 47832 and adds both providers to OpenClaw. The target's own Strata
+setup chooses hardware placement; no reference-machine tuning is copied. Verify
+the selected model with a real chat and tool call rather than a catalogue response.
+
+### gpu-unlock
+
+gpu-unlock is a separate Linux kernel/initramfs project used on the reference
+RTX 3060 to remove the GeForce tensor-throughput cap before the stock NVIDIA
+driver binds the card. Alpha.19 can install the pinned source for one explicit
+PCI target, back up GRUB and regenerate its configuration. It does not reboot.
+These are boot-critical operations and need exact GPU support checks, matching
+NVIDIA kernel/userspace versions, an independent boot rollback and post-boot
+verification. Its presence does not speed every
+workload; memory-bound decode and quantised paths may see little or no gain.
+
+### COMET-ATOMIC-2020 and WeightSpace
+
+The reference machine keeps AllenAI's COMET-ATOMIC-2020 checkout separate and
+uses a modern Hugging Face-packaged COMET-BART checkpoint with WeightSpace
+instead of installing the upstream experiment repository's old Torch and
+Transformers pins into the shared stack environment. The local bridge supports
+commonsense relation generation, tensor inspection and budgeted WeightSpace
+operations. Alpha.19 packages the bridge and a revision-pinned downloader that
+verifies the main 1.6 GB weight by exact SHA-256. It does not redistribute the
+checkpoint, remote-provider credentials or edited model variants.
 
 ## Lifeboat
 

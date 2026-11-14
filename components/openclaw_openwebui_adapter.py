@@ -25,13 +25,160 @@ PORT = int(os.environ.get("OPENCLAW_WEBUI_ADAPTER_PORT", os.environ.get("ADAPTER
 GATEWAY = "http://127.0.0.1:" + str(int(os.environ.get("OPENCLAW_PORT", "18789")))
 CONFIG = Path(os.environ.get("OPENCLAW_CONFIG_PATH", os.environ.get("OPENCLAW_CONFIG", "~/.openclaw/openclaw.json"))).expanduser()
 MODEL_PREFIX = "openclaw/"
+OPENWEBUI_AGENT_ID = os.environ.get("OPENCLAW_WEBUI_AGENT_ID", "openwebui")
 OPENCLAW_BIN = os.environ.get(
     "OPENCLAW_BIN",
     os.path.expanduser("~/.npm-global/bin/openclaw"),
 )
+GATEWAY_TIMEOUT_SECONDS = int(
+    os.environ.get("OPENCLAW_WEBUI_GATEWAY_TIMEOUT_SECONDS", "3700")
+)
 _cache: tuple[float, list[dict]] = (0.0, [])
 _cache_lock = threading.Lock()
 CACHE_REFRESH_SECONDS = 10
+RAW_TOOL_CALL_OPEN = "<tool_call>"
+RAW_TOOL_CALL_CLOSE = "</tool_call>"
+MAX_RAW_TOOL_CALL_CHARS = 1_000_000
+
+
+class LeadingToolMarkupFilter:
+    """Remove only malformed tool markup leaked at the start of a reply.
+
+    OpenClaw already diagnoses these blocks as unstructured tool calls and can
+    retry for a visible answer.  A streamed client cannot retract the rejected
+    first attempt, so the Open WebUI boundary withholds that exact leading
+    protocol block while allowing ordinary prose to keep streaming.
+    """
+
+    def __init__(self) -> None:
+        self.pending = ""
+        self.suppressing = False
+        self.removed = False
+        self.passthrough = False
+
+    def feed(self, text: str) -> str:
+        if self.passthrough:
+            return text
+        self.pending += text
+        while True:
+            candidate = self.pending.lstrip()
+            if not candidate:
+                return ""
+            if len(self.pending) > MAX_RAW_TOOL_CALL_CHARS:
+                self.passthrough = True
+                output, self.pending = self.pending, ""
+                return output
+            if self.suppressing:
+                close_at = candidate.find(RAW_TOOL_CALL_CLOSE)
+                if close_at < 0:
+                    return ""
+                self.pending = candidate[close_at + len(RAW_TOOL_CALL_CLOSE):]
+                self.suppressing = False
+                self.removed = True
+                continue
+            if RAW_TOOL_CALL_OPEN.startswith(candidate):
+                return ""
+            if candidate.startswith(RAW_TOOL_CALL_OPEN):
+                self.suppressing = True
+                continue
+            output = self.pending.lstrip("\r\n") if self.removed else self.pending
+            self.pending = ""
+            self.passthrough = True
+            return output
+
+    def finish(self) -> str:
+        if self.passthrough:
+            return ""
+        output, self.pending = self.pending, ""
+        self.passthrough = True
+        if self.removed and not output.strip():
+            return ""
+        return output
+
+
+def _sanitize_openai_payload(payload: object, markup: LeadingToolMarkupFilter) -> bool:
+    """Sanitize Chat Completions content in place; return whether it changed."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("choices"), list):
+        return False
+    changed = False
+    for choice in payload["choices"]:
+        if not isinstance(choice, dict):
+            continue
+        container = choice.get("delta")
+        if not isinstance(container, dict):
+            container = choice.get("message")
+        if not isinstance(container, dict) or not isinstance(container.get("content"), str):
+            continue
+        original = container["content"]
+        container["content"] = markup.feed(original)
+        changed = changed or container["content"] != original
+    return changed
+
+
+def _pending_sse_event(text: str) -> bytes:
+    payload = {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
+    return b"data: " + json.dumps(payload, separators=(",", ":")).encode() + b"\n\n"
+
+
+def _sanitize_sse_line(line: bytes, markup: LeadingToolMarkupFilter) -> list[bytes]:
+    ending = b""
+    content = line
+    if content.endswith(b"\r\n"):
+        content, ending = content[:-2], b"\r\n"
+    elif content.endswith(b"\n"):
+        content, ending = content[:-1], b"\n"
+    if not content.startswith(b"data:"):
+        return [line]
+    raw = content[5:].lstrip()
+    if raw == b"[DONE]":
+        pending = markup.finish()
+        return ([_pending_sse_event(pending)] if pending else []) + [line]
+    try:
+        payload = json.loads(raw)
+    except (UnicodeDecodeError, ValueError):
+        return [line]
+    if not _sanitize_openai_payload(payload, markup):
+        return [line]
+    encoded = b"data: " + json.dumps(payload, separators=(",", ":")).encode()
+    return [encoded + ending]
+
+
+def sanitized_sse_chunks(upstream):
+    """Yield complete SSE lines while filtering a fragmented leading tool block."""
+    markup = LeadingToolMarkupFilter()
+    buffered = b""
+    while chunk := upstream.read1(65536):
+        buffered += chunk
+        while b"\n" in buffered:
+            line, buffered = buffered.split(b"\n", 1)
+            for output in _sanitize_sse_line(line + b"\n", markup):
+                yield output
+    if buffered:
+        for output in _sanitize_sse_line(buffered, markup):
+            yield output
+    pending = markup.finish()
+    if pending:
+        yield _pending_sse_event(pending)
+
+
+def sanitize_json_response(raw: bytes) -> bytes:
+    try:
+        payload = json.loads(raw)
+    except (UnicodeDecodeError, ValueError):
+        return raw
+    markup = LeadingToolMarkupFilter()
+    changed = _sanitize_openai_payload(payload, markup)
+    pending = markup.finish()
+    if pending:
+        # A complete JSON response contains the whole message, so pending text
+        # means it was not a complete leading protocol block and must survive.
+        for choice in payload.get("choices", []):
+            container = choice.get("message") if isinstance(choice, dict) else None
+            if isinstance(container, dict) and isinstance(container.get("content"), str):
+                container["content"] += pending
+                changed = True
+                break
+    return json.dumps(payload).encode() if changed else raw
 
 
 def open_gateway(req: urllib.request.Request):
@@ -41,7 +188,7 @@ def open_gateway(req: urllib.request.Request):
     starts a new agent session and duplicates the gateway's own provider
     attempts, so the adapter must never add another retry layer.
     """
-    return urllib.request.urlopen(req, timeout=900)
+    return urllib.request.urlopen(req, timeout=GATEWAY_TIMEOUT_SECONDS)
 
 
 def gateway_token() -> str:
@@ -188,6 +335,7 @@ class Handler(LocalRequestHandler):
                 headers={
                     "Authorization": f"Bearer {gateway_token()}",
                     "Content-Type": "application/json",
+                    "x-openclaw-agent-id": OPENWEBUI_AGENT_ID,
                     "x-openclaw-model": backend_model,
                     "x-openclaw-message-channel": "webchat",
                 },
@@ -200,10 +348,14 @@ class Handler(LocalRequestHandler):
                 self.send_header("Connection", "close")
                 self.end_headers()
                 response_started = True
-                # read(n) can wait for n bytes or EOF and stall small SSE
-                # events. read1 forwards whatever the socket has delivered.
-                while chunk := upstream.read1(65536):
-                    self.wfile.write(chunk)
+                if "text/event-stream" in content_type.lower():
+                    for chunk in sanitized_sse_chunks(upstream):
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                else:
+                    # Non-streaming Chat Completions are small enough to parse
+                    # once, and need the same malformed-prefix protection.
+                    self.wfile.write(sanitize_json_response(upstream.read()))
                     self.wfile.flush()
         except urllib.error.HTTPError as exc:
             with exc:

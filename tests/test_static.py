@@ -136,8 +136,9 @@ def main() -> int:
     media_doc = (ROOT / "docs/OPENWEBUI_MEDIA.md").read_text()
     for required in (
         "qwen_image.create_image", "minimax_music_3.create_song", "wan_video.create_video",
-        "unload every Ollama runner", "attach it to the saved message",
-        "Open WebUI reloads the local chat model",
+        "identify the selected chat model's actual backend",
+        "for Ollama, unload every runner", "for Strata, request /v1/unload",
+        "attach it to the saved message", "continue the selected chat model",
     ):
         check(required in media_doc, f"Open WebUI local-media shipping contract is missing: {required}")
     renderer_manifest = json.loads(
@@ -149,6 +150,18 @@ def main() -> int:
                      'document.createElement("video")', 'Kt.controls = !0',
                      'Kt.preload = "metadata"'):
         check(required in renderer, f"inline MP4 renderer contract is missing: {required}")
+    for required in ('$.split(/\\r?\\n+/)', 'wt.length < 3', 'wt.length === 3'):
+        check(required in renderer, f"three-line Open WebUI TTS buffer contract is missing: {required}")
+    check('wt.length < 2' not in renderer and 'wt.length === 2' not in renderer,
+          "two-line Open WebUI TTS startup buffer survived the patch")
+    audio_item = next(item for item in renderer_manifest["files"]
+                      if item["path"].endswith("BiRapR3q.js"))
+    audio_renderer = (ROOT / "patches/open-webui/0.11.0" /
+                      audio_item["payload"]).read_text()
+    check('Y(P,n(R)?"preview":""),Y(_,!1)' in audio_renderer,
+          "Open WebUI audio files do not default to the native Preview player")
+    check('Y(P,""),Y(_,!1)' not in audio_renderer,
+          "Open WebUI audio modal still defaults every file to empty Content")
     print("PASS Voice Lab and local media registration invariants")
     for manifest_path in sorted((ROOT / "patches").glob("*/*/manifest.json")):
         manifest = json.loads(manifest_path.read_text())
@@ -170,12 +183,23 @@ def main() -> int:
         (ROOT / "patches/openclaw/2026.7.1-2/manifest.json").read_text())
     openclaw_targets = {item["path"] for item in openclaw_manifest["files"]}
     for required in (
+        "agent-runner.runtime-DtdxZiBX.js",
         "control-ui/assets/chat-page-DrPkxqJK.js",
         "model-fallback-BPQMpbqN.js",
         "models-list-result-D6lGV0YW.js",
+        "provider-stream-shared-B4Hm1tKd.js",
         "store-DH33UrUj.js",
     ):
         check(required in openclaw_targets, f"current OpenClaw downstream patch missing: {required}")
+    tool_envelope_patch = (ROOT / "patches/openclaw/2026.7.1-2/provider-stream-shared-B4Hm1tKd.js.patch").read_text()
+    for required in ("readStandaloneToolCallEnvelope", "unwrapped.join", "envelope.invalid"):
+        check(required in tool_envelope_patch,
+              f"OpenClaw outer tool-envelope patch lacks {required}")
+    fallback_session_patch = (ROOT / "patches/openclaw/2026.7.1-2/agent-runner.runtime-DtdxZiBX.js.patch").read_text()
+    for required in ("persistFallbackCandidateSelection", "valid for this turn only",
+                     "never pin its", "+\t\treturn;"):
+        check(required in fallback_session_patch,
+              f"OpenClaw fallback session-unlock patch lacks {required}")
     quota_patch = (ROOT / "patches/openclaw/2026.7.1-2/control-ui__assets__chat-page-DrPkxqJK.js.patch").read_text()
     quota_start = quota_patch.index("+const rhizomeChatEventWithQuotaRefresh=Ng;")
     quota_end = quota_patch.index("+//# sourceMappingURL", quota_start)

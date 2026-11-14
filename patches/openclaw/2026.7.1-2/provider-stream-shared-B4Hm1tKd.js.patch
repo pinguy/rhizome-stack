@@ -1,0 +1,70 @@
+--- a/provider-stream-shared-B4Hm1tKd.js
++++ b/provider-stream-shared-B4Hm1tKd.js
+@@ -144,7 +144,9 @@
+ 	return hasExactSerializedToolCallPrefix(current.trimStart(), matcher) ? "" : current;
+ }
+ function getPlainTextToolCallBufferState(text, matcher) {
+-	const trimmed = text.trimStart();
++	const envelope = readStandaloneToolCallEnvelope(text);
++	if (envelope.invalid) return "impossible";
++	const trimmed = (envelope.matched ? envelope.text : text).trimStart();
+ 	if (trimmed.length === 0) return text.length > TEXT_TOOL_CALL_BUFFER_MAX_CHARS ? "impossible" : "possible";
+ 	if (!(couldStillBeBracketedStandaloneToolCall(trimmed, matcher) || couldStillBeXmlishFunctionToolCall(trimmed, matcher) || couldStillBeHarmonyStandaloneToolCall(trimmed, matcher))) return "impossible";
+ 	if (text.length <= TEXT_TOOL_CALL_BUFFER_MAX_CHARS) return "possible";
+@@ -826,9 +828,54 @@
+ function resolveExactToolName(rawName, allowedToolNames) {
+ 	return allowedToolNames.has(rawName) ? rawName : null;
+ }
++function readStandaloneToolCallEnvelope(text) {
++	const outer = text.trim();
++	const outerLower = outer.toLowerCase();
++	const opening = "<tool_call>";
++	const closing = "</tool_call>";
++	if (!matchesLiteralPrefix(outerLower, opening)) return {
++		matched: false,
++		text
++	};
++	if (outerLower.length < opening.length) return {
++		matched: true,
++		text: ""
++	};
++	const unwrapped = [];
++	let cursor = 0;
++	while (cursor < outer.length) {
++		while (cursor < outer.length && /\s/.test(outer[cursor] ?? "")) cursor += 1;
++		if (cursor >= outer.length) break;
++		const restLower = outer.slice(cursor).toLowerCase();
++		if (restLower.length < opening.length && opening.startsWith(restLower)) return {
++			matched: true,
++			text: unwrapped.join("\n").trim()
++		};
++		if (!restLower.startsWith(opening)) return {
++			invalid: true,
++			matched: true,
++			text
++		};
++		const payloadStart = cursor + opening.length;
++		const closingStart = outerLower.indexOf(closing, payloadStart);
++		if (closingStart === -1) {
++			unwrapped.push(outer.slice(payloadStart));
++			return {
++				matched: true,
++				text: unwrapped.join("\n").trim()
++			};
++		}
++		unwrapped.push(outer.slice(payloadStart, closingStart));
++		cursor = closingStart + closing.length;
++	}
++	return {
++		matched: true,
++		text: unwrapped.join("\n").trim()
++	};
++}
+ function unwrapStandaloneToolCallEnvelope(text) {
+-	const match = /^\s*<tool_call>\s*([\s\S]*?)\s*<\/tool_call>\s*$/i.exec(text);
+-	return match?.[1] ?? text;
++	const envelope = readStandaloneToolCallEnvelope(text);
++	return envelope.matched && !envelope.invalid ? envelope.text : text;
+ }
+ function createPromotedToolCallBlocks(text, options) {
+ 	const parsedBlocks = parseStandalonePlainTextToolCallBlocks(unwrapStandaloneToolCallEnvelope(text));

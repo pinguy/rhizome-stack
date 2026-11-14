@@ -9,7 +9,7 @@ Open WebUI and other open-source projects; upstream authorship is preserved in
 skills and optional speech.** Start with one working model, then add what you
 need. Linux and WSL2 use the same setup wizard.
 
-**Status: 0.1.0-alpha.18 candidate.** Installer and regression checks are automated; complete
+**Status: 0.1.0-alpha.19 candidate.** Installer and regression checks are automated; complete
 native Linux and WSL2 installations still need acceptance testing.
 Read [known limitations](KNOWN_LIMITATIONS.md) before installing on a working machine.
 End-to-end runtime testing so far has been on the author's machine; automated
@@ -31,12 +31,24 @@ regressions also run separately, but clean native Linux and WSL2 acceptance is p
 | MiniMax Music 3 | Local song generation from its desk or directly inside an Open WebUI chat | Optional |
 | Video Desk | WAN 2.2 or MiniMax H3 text/first-frame video, plus Lanczos or Real-ESRGAN 1080p masters | Optional |
 | Cutroom | Music-first planning, generation, timeline editing and deterministic FFmpeg rendering | Optional creative companion |
+| Strata + Gyro-S/Gyro-M | Pinned local MoE runtime, two lazy loopback APIs and OpenClaw providers | Optional; weights are separate downloads |
+| COMET-ATOMIC-2020 + WeightSpace | Modern commonsense generation, tensor inspection and budgeted model work | Optional; checkpoint is a separate verified download |
+| gpu-unlock | Hardware-gated NVIDIA tensor-throughput unlock | Explicit native-Linux boot-critical option only |
 | Rhizome Lifeboat | Independent checkpoint/recovery controller source and tests | Source companion; never armed automatically |
 
 OpenClaw stays pinned to **2026.7.1-2** and Open WebUI to **0.11.0**.
 The pinned versions are compatibility choices, not promises that they are the
 latest releases. Upgrading them requires checking the patches and real request
 path first.
+
+## Reference-machine integrations in alpha.19
+
+Release 19 turns the reference machine's Strata and COMET/WeightSpace paths into
+sanitised installer profiles. Source revisions, service templates, bridge code,
+provider shapes and model checks are included; model weights, tokens, tuning
+records, logs and machine paths are not. `gpu-unlock` is also installer-managed,
+but only behind an explicit PCI target and boot-risk acknowledgement. The
+installer never reboots the target.
 
 ## Images, music and video inside Open WebUI
 
@@ -45,7 +57,8 @@ interfaces. After the creative profile and packaged Open WebUI tools are
 installed, an ordinary saved chat can:
 
 - create a Qwen image and keep the PNG inline in that chat;
-- edit an image uploaded by the signed-in Open WebUI user;
+- edit an image uploaded by the signed-in Open WebUI user or reuse a PNG from
+  the same saved chat as a reference;
 - create a MiniMax song and keep the MP3 as a native playable file card;
 - create or image-condition a WAN or MiniMax H3 video, keep the MP4 inline in the chat and
   retain the take in Video Desk; and
@@ -53,15 +66,17 @@ installed, an ordinary saved chat can:
 
 The packaged `qwen_image`, `minimax_music_3` and `wan_video` tools share
 `components/openwebui_local_media.py`. It serialises media jobs, refuses to
-interrupt active ComfyUI work, unloads Ollama before generation, starts the
-selected local generator, attaches the finished file to Open WebUI, then frees
-and stops the owned ComfyUI engine so the chat model can reload.
+interrupt active ComfyUI work, releases and verifies either Ollama or Strata
+allocations before generation, starts the selected local generator, attaches
+the finished file to Open WebUI, then frees the owned ComfyUI engine and restores
+only the chat allocation that the job released.
 
 See
 [Open WebUI local media](docs/OPENWEBUI_MEDIA.md) for the exact data flow,
 setup, safety boundaries and chat examples. The [browser showcase](docs/SHOWCASE.md)
-contains current screenshots of all three standalone desks and the PNG, MP3 and
-MP4 render paths inside saved Open WebUI chats.
+contains current screenshots of all three standalone desks, Qwen generation and
+reference editing, the native MP3 Preview and the inline MP4 player inside a
+Strata-backed saved Open WebUI chat.
 
 ## Start here
 
@@ -105,8 +120,9 @@ model and send a real message. A model catalogue or healthy HTTP endpoint does
 not prove that inference works. [First-run guide](docs/FIRST_RUN.md) covers
 provider setup, optional modules and packaged Open WebUI tools. The Qwen,
 MiniMax and video tools are opt-in registrations: they safely hand the local GPU from an
-idle Ollama model to ComfyUI, persist the generated file in the saved chat, and
-then release ComfyUI so chat inference can resume.
+idle Ollama or Strata model to ComfyUI, persist the generated file in the saved
+chat, and then release ComfyUI and restore the prior chat allocation so inference
+can resume.
 
 ## Add what you need
 
@@ -118,6 +134,19 @@ then release ComfyUI so chat inference can resume.
 ./install-linux.sh --with-routing
 ./install-linux.sh --with-retrieval
 ./install-linux.sh --with-creative --download-creative-models
+./install-linux.sh --with-strata --download-strata-models
+./install-linux.sh --with-comet --download-comet-model
+
+# Select every portable reference-machine profile. Large weights remain opt-in.
+./install-linux.sh --reference-profile
+
+# Exact full-profile download (large: inspect the dry run and storage first).
+./install-linux.sh --reference-profile --download-models \
+  --download-creative-models --download-strata-models --download-comet-model
+
+# Native Linux/GRUB only. This stages boot changes but deliberately does not reboot.
+./install-linux.sh --with-gpu-unlock --gpu-unlock-target 0000:02:00.0 \
+  --accept-gpu-unlock-boot-risk
 
 # Launch a creative app after installation.
 rhizome-stack creative qwen
@@ -146,7 +175,8 @@ Debian/Ubuntu it runs Ollama's official HTTPS-downloaded installation script
 after the user opts in. Existing installations are never updated by this path.
 Hosted provider credentials are
 entered on the target machine. Memory, chats, credentials, voice references,
-browser profiles and model weights are never seeded from the reference machine.
+browser profiles, model weights and host tuning records are never seeded from
+the reference machine.
 
 ## Guides
 

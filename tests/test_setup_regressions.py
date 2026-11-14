@@ -69,6 +69,15 @@ class SetupRegressions(unittest.TestCase):
         self.assertEqual(config['agents']['defaults']['model']['primary'], 'ollama/fixture:latest')
         self.assertEqual(config['agents']['defaults']['workspace'], '/tmp/synthetic "stack"/workspace')
 
+    def test_openwebui_agent_excludes_conflicting_server_media_tools(self):
+        content = (ROOT / 'config/openclaw.template.json').read_text()
+        config = json.loads(content.replace('${STACK_ROOT}', '/tmp/stack')
+                           .replace('${DEFAULT_OLLAMA_MODEL}', 'fixture')
+                           .replace('${OPENCLAW_GATEWAY_TOKEN}', 'fixture-token'))
+        agent = next(item for item in config['agents']['list'] if item['id'] == 'openwebui')
+        self.assertEqual(set(agent['tools']['deny']),
+                         {'image_generate', 'video_generate', 'music_generate'})
+
     def test_ornith_menu_accepts_exact_library_tags(self):
         for choice, expected in (('1', 'ornith-1.5:9b'), ('2', 'ornith-1.5:35b')):
             with self.subTest(choice=choice):

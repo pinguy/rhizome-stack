@@ -35,6 +35,19 @@
       "cutroom",
       "openwebui-local-media"
     ],
+    "strata": [
+      "strata-source-runtime",
+      "gyro-m-loopback-api",
+      "gyro-s-loopback-api"
+    ],
+    "comet": [
+      "comet-atomic-2020",
+      "weightspace-bridge"
+    ],
+    "gpu_unlock": [
+      "gpu-unlock-dkms",
+      "gpu-unlock-firmware"
+    ],
     "recovery_source": [
       "rhizome-lifeboat"
     ]
@@ -52,6 +65,9 @@
     "backups",
     "checkpoints",
     "recovery-receipts"
+    ,"strata-model-weights"
+    ,"comet-model-weights"
+    ,"gpu-unlock-host-backups"
   ],
   "explicitly_not_packaged": [
     "creative-projects-and-outputs"

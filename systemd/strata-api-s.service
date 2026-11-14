@@ -1,0 +1,16 @@
+[Unit]
+Description=Strata Gyro-S local inference API (lazy, loopback only)
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=exec
+ExecStart=@@STACK_ROOT@@/venvs/components/bin/python @@STACK_ROOT@@/components/run_strata_profile.py --model gyro-gyro-s --port 47832 --peer-port 47831 --stack-root @@STACK_ROOT@@
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONNOUSERSITE=1
+Restart=on-failure
+RestartSec=20
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

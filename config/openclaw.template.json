@@ -8,7 +8,23 @@
       "memorySearch": {
         "provider": "local"
       }
-    }
+    },
+    "list": [
+      {
+        "id": "main"
+      },
+      {
+        "id": "openwebui",
+        "name": "Open WebUI",
+        "tools": {
+          "deny": [
+            "image_generate",
+            "video_generate",
+            "music_generate"
+          ]
+        }
+      }
+    ]
   },
   "gateway": {
     "mode": "local",
@@ -38,6 +54,11 @@
     }
   },
   "channels": {},
+  "tools": {
+    "sessions": {
+      "visibility": "agent"
+    }
+  },
   "plugins": {
     "bundledDiscovery": "compat",
     "slots": {

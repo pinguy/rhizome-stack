@@ -1,8 +1,8 @@
 # Qwen, MiniMax and WAN inside Open WebUI
 
 The creative profile connects Qwen Image Desk, MiniMax Music 3 and WAN Video
-Desk to ordinary saved Open WebUI chats while safely sharing one local GPU with
-Ollama.
+Desk to ordinary saved Open WebUI chats while safely sharing local GPU resources
+with either Ollama or Strata chat models.
 
 ## What the integration does
 
@@ -13,7 +13,8 @@ The local model can call:
 - `wan_video.create_video` to generate a WAN or MiniMax H3 MP4 from text or an
   uploaded first-frame image. H3 adds native stereo audio.
 
-PNGs render inline. MP3s use Open WebUI's native File card and Preview player.
+PNGs render inline. MP3s use Open WebUI's native File card and open directly in
+the native Preview player instead of first showing an empty Content tab.
 MP4s are durable file attachments rendered by the pinned Open WebUI 0.11.0
 frontend patch as an inline HTML5 `<video controls>` player. Every completed WAN
 take also remains in WAN Video Desk with its generation settings and provenance,
@@ -26,16 +27,18 @@ saved Open WebUI chat
   -> packaged Qwen, MiniMax or WAN tool
   -> shared generation lock
   -> refuse if ComfyUI or another media job is busy
-  -> unload every Ollama runner with keep_alive=0
-  -> wait until Ollama /api/ps is empty
+  -> identify the selected chat model's actual backend
+  -> for Ollama, unload every runner with keep_alive=0 and verify /api/ps is empty
+  -> for Strata, request /v1/unload and verify /health reports loaded=false
   -> start the selected packaged generator on demand
   -> submit generation exactly once
   -> retry only read-only status polling
   -> free ComfyUI models and stop the engine owned by that application
   -> wait until the ComfyUI port is closed
+  -> restore only a chat allocation that this job actually released
   -> copy the result into Open WebUI's upload store
   -> create the Open WebUI file row and attach it to the saved message
-  -> return to model continuation; Open WebUI reloads the local chat model
+  -> return a correlated tool result and continue the selected chat model
 ```
 
 The durable receipt under
@@ -68,10 +71,11 @@ python3 ~/.local/share/rhizome-stack/tools/register_openwebui_tools.py \
 The relevant registered IDs are `qwen_image`, `minimax_music_3` and
 `wan_video`. The pinned Open WebUI patch attaches them to default model metadata
 and gives the model explicit routing instructions for image, song and video
-creation. A separate hash-guarded replacement modifies only the pinned generated
-frontend chunk needed to render `video/mp4` attachments inline. Open WebUI
-updates require that replacement and all normal image/file branches to be
-re-derived and browser-tested against the new build.
+creation. Hash-guarded replacements modify only the pinned generated frontend
+chunks needed to open audio attachments directly in the native player and render
+`video/mp4` attachments inline. Open WebUI updates require those replacements
+and all normal image/file branches to be re-derived and browser-tested against
+the new build.
 
 Existing tool IDs are preserved by default. Use `--mode diff` to compare hashes
 or `--mode update` to replace drift only after writing a private source backup.
@@ -107,6 +111,16 @@ contract to fixed 24 FPS, 20 default steps (4–50), up to 15 seconds and native
   cleanup failure; they are not evidence that the engine is idle or stopped.
 - Ollama must return a valid runner list both before unloading and while
   checking that the GPU is free. A missing or malformed list blocks hand-off.
+- A selected Strata chat model is handled independently of Ollama. Strata must
+  return a valid health document, acknowledge `/v1/unload`, and then report
+  `loaded=false`; an empty Ollama runner list is never treated as proof that
+  Strata released its allocation.
+- Strata `409` while inference is active blocks hand-off rather than killing or
+  interrupting the request. Other malformed, timed-out or contradictory Strata
+  lifecycle responses also fail closed.
+- The receipt records which backend and model the job released. Restoration
+  uses that record and does not load a model that was already unloaded before
+  the media request.
 - Generation submission is not automatically retried.
 - A failed or timed-out job is reported as a failure, never as a created file.
 - A generation call must carry Open WebUI's stable message ID or an explicit

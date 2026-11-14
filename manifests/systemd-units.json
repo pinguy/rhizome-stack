@@ -20,6 +20,8 @@
     "qwen-image-desk.service",
     "rhizome-gliner-resident.service",
     "rhizome-workforce-retrieval.service",
+    "strata-api.service",
+    "strata-api-s.service",
     "wan-video-desk.service"
   ]
 }

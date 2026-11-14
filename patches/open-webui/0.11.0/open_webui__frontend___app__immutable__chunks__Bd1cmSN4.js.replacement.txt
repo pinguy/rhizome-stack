@@ -5007,14 +5007,14 @@ ${(De = (Ke = m()) == null ? void 0 : Ke.ui) == null ? void 0 : De.response_wate
             if (Jt && e(ae)) {
               const or = await Jt.blob(),
                 kr = URL.createObjectURL(or);
-              if (wt.length < 2) {
+              if (wt.length < 3) {
                 wt.push(kr);
-                if (wt.length === 2) for (const zr of wt) M().enqueue(zr);
+                if (wt.length === 3) for (const zr of wt) M().enqueue(zr);
               } else M().enqueue(kr);
               x(ue, !1);
             }
           }
-          if (wt.length < 2) for (const Bt of wt) M().enqueue(Bt);
+          if (wt.length < 3) for (const Bt of wt) M().enqueue(Bt);
         }
         M().setProducerActive(!1);
       }

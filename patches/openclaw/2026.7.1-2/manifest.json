@@ -2,6 +2,13 @@
   "schema": 1,
   "files": [
     {
+      "path": "agent-runner.runtime-DtdxZiBX.js",
+      "action": "modify",
+      "clean_sha256": "37e2d3f40651107f5fa9abe76ccc9b2345497f952991dec50a2d18eaf8c35c42",
+      "patched_sha256": "add5dd0f3e35a90a41b19aff4d1f6081e711fe43ae7eedcb51871a8f795574c7",
+      "payload": "agent-runner.runtime-DtdxZiBX.js.patch"
+    },
+    {
       "path": "control-ui/assets/chat-page-DrPkxqJK.js",
       "action": "modify",
       "clean_sha256": "0a3e8d050478b7c24c88bb8091eda1a791f7cfe622fb3ae3827f1b146c230615",
@@ -35,6 +42,13 @@
       "clean_sha256": "b3033200624e1e88597f141ce64bbc33e77db6fc5178fa278bd185717f2d9624",
       "patched_sha256": "572be21365893f0bbcd892dbd2b9d052f2c5dc96a4348ee078223a747db29a5d",
       "payload": "model-fallback-BPQMpbqN.js.patch"
+    },
+    {
+      "path": "provider-stream-shared-B4Hm1tKd.js",
+      "action": "modify",
+      "clean_sha256": "433ca40b271d86c579d09e03a19502d8a387ef7592d5290a0cd976a689832288",
+      "patched_sha256": "38a2148273c49e00bc2535f71b86287d39b727cea2e1db02a8ac2785ec011cbf",
+      "payload": "provider-stream-shared-B4Hm1tKd.js.patch"
     },
     {
       "path": "models-list-result-D6lGV0YW.js",

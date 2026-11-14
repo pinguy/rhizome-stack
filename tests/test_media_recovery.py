@@ -39,6 +39,8 @@ class QueueSafetyTest(unittest.TestCase):
                     replies = [{'models': []}, value] if during_poll else [value]
                     with patch.object(media, 'health', return_value={'busy': False}), \
                          patch.object(media, 'comfy_idle', return_value=True), \
+                         patch.object(media, 'strata_state', return_value={'loaded': False, 'model': 'gyro'}), \
+                         patch.object(media, 'unload_strata', return_value=False), \
                          patch.object(media, 'request', side_effect=replies) as request:
                         with self.assertRaisesRegex(RuntimeError, 'Ollama'):
                             media.hand_over()
@@ -47,9 +49,13 @@ class QueueSafetyTest(unittest.TestCase):
     def test_valid_ollama_runners_are_unloaded_and_checked_again(self):
         with patch.object(media, 'health', return_value={'busy': False}), \
              patch.object(media, 'comfy_idle', return_value=True), \
+             patch.object(media, 'strata_state', return_value={'loaded': False, 'model': 'gyro'}), \
+             patch.object(media, 'unload_strata', return_value=False), \
              patch.object(media, 'request', side_effect=[{'models': [{'model': 'fixture:latest'}]},
                                                        {}, {'models': []}]) as request:
-            self.assertEqual(media.hand_over(), ['fixture:latest'])
+            result = media.hand_over({'model': {'id': 'ollama/fixture:latest'}})
+            self.assertEqual(result['ollama_models'], ['fixture:latest'])
+            self.assertEqual(result['selected_backend'], 'other')
         self.assertEqual(request.call_args_list[1].args[:3],
                          ('POST', media.OLLAMA + '/api/generate',
                           {'model': 'fixture:latest', 'keep_alive': 0}))
@@ -96,6 +102,92 @@ class QueueSafetyTest(unittest.TestCase):
                 media.hand_over()
             self.assertEqual(request.call_args.args[:2], ('GET', media.COMFY + '/queue'))
             request.assert_called_once()
+
+    def test_strata_state_is_required_even_when_ollama_is_empty(self):
+        with patch.object(media, 'health', return_value={'busy': False}), \
+             patch.object(media, 'comfy_idle', return_value=True), \
+             patch.object(media, 'strata_state', side_effect=RuntimeError('unknown Strata state')), \
+             patch.object(media, 'request') as request:
+            with self.assertRaisesRegex(RuntimeError, 'unknown Strata state'):
+                media.hand_over({'model': {'id': 'openclaw/strata/gyro-gyro-m'}})
+            request.assert_not_called()
+
+    def test_strata_state_selects_the_loaded_secondary_profile(self):
+        replies = [
+            {'service': 'strata', 'loaded': False, 'model': 'gyro-m'},
+            {'service': 'strata', 'loaded': True, 'model': 'gyro-s'},
+        ]
+        with patch.object(media, 'request', side_effect=replies):
+            state = media.strata_state()
+        self.assertTrue(state['loaded'])
+        self.assertEqual(state['model'], 'gyro-s')
+        self.assertEqual(state['base'], media.STRATA_ENDPOINTS[1])
+
+    def test_strata_state_refuses_two_loaded_profiles(self):
+        replies = [
+            {'service': 'strata', 'loaded': True, 'model': 'gyro-m'},
+            {'service': 'strata', 'loaded': True, 'model': 'gyro-s'},
+        ]
+        with patch.object(media, 'request', side_effect=replies):
+            with self.assertRaisesRegex(RuntimeError, 'More than one Strata'):
+                media.strata_state()
+
+    def test_loaded_strata_is_unloaded_before_ollama_and_recorded(self):
+        state = {'loaded': True, 'model': 'qwen3.8-flash-next-gyro-gyro-m'}
+        with patch.object(media, 'health', return_value={'busy': False}), \
+             patch.object(media, 'comfy_idle', return_value=True), \
+             patch.object(media, 'strata_state', return_value=state), \
+             patch.object(media, 'unload_strata', return_value=True) as unload, \
+             patch.object(media, 'ollama_runners', return_value=[]) as runners:
+            result = media.hand_over({'model': {'id': 'openclaw/strata/gyro-gyro-m'}})
+        unload.assert_called_once_with(state)
+        self.assertEqual(runners.call_count, 2)
+        self.assertTrue(result['strata_was_loaded'])
+        self.assertEqual(result['selected_backend'], 'strata')
+
+    def test_busy_strata_blocks_handoff_without_touching_ollama(self):
+        state = {'loaded': True, 'model': 'gyro'}
+        with patch.object(media, 'health', return_value={'busy': False}), \
+             patch.object(media, 'comfy_idle', return_value=True), \
+             patch.object(media, 'strata_state', return_value=state), \
+             patch.object(media, 'unload_strata', side_effect=RuntimeError('active inference')), \
+             patch.object(media, 'ollama_runners') as runners:
+            with self.assertRaisesRegex(RuntimeError, 'active inference'):
+                media.hand_over({'model_id': 'openclaw/strata/gyro-gyro-m'})
+            runners.assert_not_called()
+
+    def test_strata_unload_rejects_malformed_acknowledgement(self):
+        with patch.object(media, 'request', return_value={'status': 'mystery'}):
+            with self.assertRaisesRegex(RuntimeError, 'acknowledge'):
+                media.unload_strata({'loaded': True, 'model': 'gyro'})
+
+    def test_strata_unload_targets_the_profile_that_was_loaded(self):
+        base = media.STRATA_ENDPOINTS[1]
+        with patch.object(media, 'request', return_value={'status': 'unloaded'}) as request, \
+             patch.object(media, 'strata_state', return_value={'loaded': False, 'model': '', 'base': media.STRATA}):
+            self.assertTrue(media.unload_strata({'loaded': True, 'model': 'gyro-s', 'base': base}))
+        self.assertEqual(request.call_args.args[1].split('?', 1)[0], base + '/v1/unload')
+
+    def test_strata_restore_only_reloads_a_model_released_by_this_job(self):
+        with patch.object(media, 'strata_state', side_effect=[{'loaded': False, 'model': 'gyro'},
+                                                               {'loaded': True, 'model': 'gyro'}]), \
+             patch.object(media, 'request', return_value={'status': 'loaded'}) as request:
+            media.restore_chat_backend({'strata_was_loaded': True})
+        request.assert_called_once_with('POST', media.STRATA + '/v1/load', {}, timeout=600)
+        with patch.object(media, 'request') as request:
+            media.restore_chat_backend({'strata_was_loaded': False})
+            request.assert_not_called()
+
+    def test_strata_restore_targets_the_released_secondary_profile(self):
+        base = media.STRATA_ENDPOINTS[1]
+        states = [
+            {'loaded': False, 'model': '', 'base': media.STRATA},
+            {'loaded': True, 'model': 'gyro-s', 'base': base},
+        ]
+        with patch.object(media, 'strata_state', side_effect=states), \
+             patch.object(media, 'request', return_value={'status': 'loaded'}) as request:
+            media.restore_chat_backend({'strata_was_loaded': True, 'strata_base': base})
+        request.assert_called_once_with('POST', base + '/v1/load', {}, timeout=600)
 
     def test_release_error_is_not_reported_as_shutdown(self):
         with patch.object(media, 'comfy_idle', return_value=True), \
@@ -159,11 +251,16 @@ class RecoveryTest(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.temporary.cleanup)
         self.state = Path(self.temporary.name)
         for name, value in [('STATE', self.state), ('ensure_app', unittest.mock.Mock()),
-                            ('hand_over', unittest.mock.Mock(return_value=['synthetic-model'])),
+                            ('hand_over', unittest.mock.Mock(return_value={
+                                'selected_backend': 'strata', 'strata_was_loaded': True,
+                                'ollama_models': ['synthetic-model']})),
                             ('release_models', unittest.mock.Mock())]:
             patcher = patch.object(media, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
+        restore = patch.object(media, 'restore_chat_backend', unittest.mock.Mock())
+        restore.start()
+        self.addCleanup(restore.stop)
         sleeper = patch.object(media.asyncio, 'sleep', AsyncMock())
         sleeper.start()
         self.addCleanup(sleeper.stop)

@@ -26,6 +26,11 @@ authorship over OpenClaw, Open WebUI or the other projects it connects.
 | WAN Rapid GGUF and supporting WAN/UMT5 model files | Upstream repository/model terms; weights are not bundled | https://huggingface.co/befox/WAN2.2-14B-Rapid-AllInOne-GGUF and supporting repositories in `manifests/creative-models.json` |
 | MiniMax Music 3 ComfyUI model files | Apache-2.0 repository terms; weights are not bundled | https://huggingface.co/Comfy-Org/MiniMax-Music-3 |
 | sentence-transformers/all-MiniLM-L6-v2 | Apache-2.0; weights are downloaded separately | https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2 |
+| Strata source installed at runtime | MIT | https://github.com/Niko1221/Strata |
+| gpu-unlock source/packages installed at runtime | GPL-2.0-only plus retained NVIDIA/CMP notices | https://github.com/Zagitta/gpu-unlock |
+| COMET-ATOMIC-2020 source installed at runtime | Apache-2.0 | https://github.com/allenai/comet-atomic-2020 |
+| WeightSpace Python package | Apache-2.0 | https://github.com/leofmarciano/weightspace |
+| `mismayil/comet-bart-ai2` checkpoint | AFL-3.0 model-card tag; weights downloaded separately | https://huggingface.co/mismayil/comet-bart-ai2 |
 
 The upstream Skills snapshot is pinned to a full commit and every bundled skill file is
 SHA-256 checked by `manifests/skills.json`. Keep the complete directories and

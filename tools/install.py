@@ -151,7 +151,8 @@ def require_preflight(target: str) -> str:
     return distro_family(read_os_release())
 
 
-def package_command(family: str, *, voice: bool, jupyter: bool, creative: bool) -> list[str]:
+def package_command(family: str, *, voice: bool, jupyter: bool, creative: bool,
+                    gpu_unlock: bool = False) -> list[str]:
     common_arch = [
         "base-devel", "curl", "git", "jq", "nodejs", "npm", "python", "python-pip",
         "python-virtualenv", "rsync", "sqlite", "patch", "xz", "zstd",
@@ -166,6 +167,9 @@ def package_command(family: str, *, voice: bool, jupyter: bool, creative: bool) 
     if jupyter:
         common_arch.append("podman")
         common_debian.append("podman")
+    if gpu_unlock:
+        common_arch.append("dkms")
+        common_debian.extend(["dkms", "debhelper", "devscripts"])
     if family == "arch":
         return ["sudo", "pacman", "-S", "--needed", *common_arch]
     return ["sudo", "apt-get", "install", "-y", *common_debian]
@@ -279,7 +283,7 @@ def parse_env(content: str) -> dict[str, str]:
     return values
 
 
-def render_openclaw(env: dict[str, str]) -> str:
+def render_openclaw(env: dict[str, str], *, with_strata: bool = False) -> str:
     content = (PROJECT / "config/openclaw.template.json").read_text()
     replacements = {
         "${STACK_ROOT}": str(STACK_ROOT),
@@ -290,11 +294,40 @@ def render_openclaw(env: dict[str, str]) -> str:
         # Placeholders live inside JSON strings; shell quoting has already
         # been removed by parse_env. Preserve quotes and backslashes as data.
         content = content.replace(needle, json.dumps(value)[1:-1])
-    json.loads(content)
-    return content
+    config = json.loads(content)
+    if with_strata:
+        providers = config.setdefault("models", {}).setdefault("providers", {})
+        common = {
+            "api": "openai-completions",
+            "apiKey": "strata-local-loopback",
+            "timeoutSeconds": 3500,
+        }
+        models = (
+            ("strata", "http://127.0.0.1:47831/v1", "gyro-gyro-m", "Qwen3.8-Flash-Next Gyro-M (Strata, local)"),
+            ("strata-s", "http://127.0.0.1:47832/v1", "gyro-gyro-s", "Qwen3.8-Flash-Next Gyro-S (Strata, local fast)"),
+        )
+        for provider, base_url, model_id, name in models:
+            providers[provider] = {**common, "baseUrl": base_url, "models": [{
+                "id": model_id, "name": name, "reasoning": True,
+                "input": ["text", "image"], "cost": {"input": 0, "output": 0,
+                    "cacheRead": 0, "cacheWrite": 0},
+                "contextWindow": 131072, "contextTokens": 114688, "maxTokens": 16384,
+                "compat": {"supportsStore": False, "supportsDeveloperRole": False,
+                    "supportsReasoningEffort": True, "supportsUsageInStreaming": True,
+                    "supportsStrictMode": False, "maxTokensField": "max_tokens"},
+            }]}
+        primary = config["agents"]["defaults"]["model"]["primary"]
+        main_agent = next(agent for agent in config["agents"]["list"]
+                          if agent.get("id") == "main")
+        main_agent["model"] = {
+            "primary": primary,
+            "fallbacks": ["strata/gyro-gyro-m"],
+        }
+    return json.dumps(config, indent=2) + "\n"
 
 
-def configure_files(runner: Runner, *, with_jupyter: bool = False) -> None:
+def configure_files(runner: Runner, *, with_jupyter: bool = False,
+                    with_strata: bool = False) -> None:
     env_path = CONFIG_DIR / "stack.env"
     existing = env_path.read_text() if env_path.is_file() else None
     env_content = render_env(existing)
@@ -303,7 +336,7 @@ def configure_files(runner: Runner, *, with_jupyter: bool = False) -> None:
     runner.write(env_path, env_content, 0o600)
     openclaw_config = OPENCLAW_HOME / "openclaw.json"
     if not openclaw_config.exists():
-        runner.write(openclaw_config, render_openclaw(parse_env(env_content)), 0o600)
+        runner.write(openclaw_config, render_openclaw(parse_env(env_content), with_strata=with_strata), 0o600)
     else:
         print(f"+ preserve existing {openclaw_config}")
     runner.copy_tree(PROJECT / "workspace-template", STACK_ROOT / "workspace")
@@ -642,6 +675,128 @@ def install_jupyter(runner: Runner) -> None:
     ])
 
 
+def require_git_revision(runner: Runner, source: Path, revision: str) -> None:
+    print(f"+ verify {source} is pinned to {revision}")
+    if runner.dry_run:
+        return
+    current = subprocess.check_output(
+        ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
+    ).strip()
+    if current != revision:
+        raise InstallError(
+            f"existing checkout {source} is at {current}, expected {revision}; "
+            "preserved it unchanged"
+        )
+
+
+def configure_existing_openclaw_strata(runner: Runner) -> None:
+    """Add the two loopback providers without replacing an existing config."""
+    config_path = OPENCLAW_HOME / "openclaw.json"
+    if runner.dry_run:
+        print(f"+ merge Strata providers into {config_path}")
+        return
+    config = json.loads(config_path.read_text())
+    rendered = render_openclaw(parse_env((CONFIG_DIR / "stack.env").read_text()), with_strata=True)
+    providers = json.loads(rendered)["models"]["providers"]
+    destination = config.setdefault("models", {}).setdefault("providers", {})
+    destination["strata"] = providers["strata"]
+    destination["strata-s"] = providers["strata-s"]
+    backup = config_path.with_suffix(".json.before-strata")
+    if not backup.exists():
+        shutil.copy2(config_path, backup)
+    atomic_write_text(config_path, json.dumps(config, indent=2) + "\n", 0o600)
+
+
+def configure_strata_profiles(source: Path) -> None:
+    helper = STACK_ROOT / "components/strata_peer_unload.py"
+    mapping = {"gyro-gyro-m": (47831, 47832), "gyro-gyro-s": (47832, 47831)}
+    found: set[str] = set()
+    for path in sorted(source.glob("strata-*.json")):
+        try:
+            config = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        identity = " ".join([str(config.get("model_name", "")), *map(str, config.get("aliases") or [])]).lower()
+        profile = next((name for name in mapping if name in identity), None)
+        if not profile:
+            continue
+        port, peer = mapping[profile]
+        config.update(host="127.0.0.1", port=port, open_browser=False,
+                      aliases=[profile], idle_unload_s=600, min_free_vram_mib=512,
+                      before_load=[sys.executable, str(helper), f"http://127.0.0.1:{peer}"],
+                      before_load_timeout_s=180, before_load_strict=True)
+        atomic_write_text(path, json.dumps(config, indent=2) + "\n", 0o600)
+        found.add(profile)
+    missing = sorted(set(mapping) - found)
+    if missing:
+        raise InstallError(f"Strata setup did not create profiles: {', '.join(missing)}")
+
+
+def install_strata(runner: Runner, download_models: bool) -> None:
+    source = STACK_ROOT / "src/Strata"
+    if not source.exists():
+        runner.run(["git", "clone", "--filter=blob:none", "https://github.com/Niko1221/Strata.git", str(source)])
+        runner.run(["git", "-C", str(source), "checkout", "--detach", VERSIONS["strata_git"]])
+    require_git_revision(runner, source, VERSIONS["strata_git"])
+    if not download_models:
+        print("+ Strata source staged; rerun with --download-strata-models for the pinned Gyro-S and Gyro-M weights")
+    else:
+        data = STACK_ROOT / "models/strata"
+        common = ["--family", "gyro", "--context", "131072", "--kv", "int8",
+                  "--vision", "cpu", "--host", "127.0.0.1", "--no-browser",
+                  "--data-dir", str(data), "--no-start", "--yes", "--prebuilt",
+                  f"https://github.com/Niko1221/Strata/releases/download/{VERSIONS['strata_release']}/"]
+        runner.run([str(source / "setup.sh"), "--model", "Gyro-S", "--port", "47832", *common])
+        runner.run([str(source / "setup.sh"), "--setup", "--model", "Gyro-M", "--port", "47831", *common])
+        if not runner.dry_run:
+            configure_strata_profiles(source)
+    configure_existing_openclaw_strata(runner)
+
+
+def install_comet(runner: Runner, download_model: bool) -> None:
+    source = STACK_ROOT / "src/comet-atomic-2020"
+    if not source.exists():
+        runner.run(["git", "clone", "--filter=blob:none", "https://github.com/allenai/comet-atomic-2020.git", str(source)])
+        runner.run(["git", "-C", str(source), "checkout", "--detach", VERSIONS["comet_atomic_git"]])
+    require_git_revision(runner, source, VERSIONS["comet_atomic_git"])
+    venv = STACK_ROOT / "venvs/comet"
+    if runner.dry_run or not venv.exists():
+        runner.run([RUNTIME_PYTHON, "-m", "venv", str(venv)])
+    pip = venv / "bin/pip"
+    runner.run([str(pip), "install", "--index-url", VERSIONS["creative_torch_index"],
+                f"torch=={VERSIONS['creative_torch']}"])
+    runner.run([str(pip), "install", "-r", str(PROJECT / "components/requirements-comet.txt")])
+    bridge = STACK_ROOT / "components/comet_atomic/comet_weightspace.py"
+    launcher = "#!/bin/sh\nexec " + shlex_quote(str(venv / "bin/python")) + " " + shlex_quote(str(bridge)) + ' "$@"\n'
+    runner.write(HOME / ".local/bin/comet-atomic", launcher, 0o755)
+    if download_model:
+        runner.run([str(venv / "bin/python"), str(PROJECT / "tools/fetch_comet_model.py"),
+                    "--output", str(STACK_ROOT / "models/comet-atomic/comet-bart-ai2")])
+
+
+def install_gpu_unlock(runner: Runner, target: str) -> None:
+    if not re.fullmatch(r"0000:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]", target):
+        raise InstallError("--gpu-unlock-target must look like 0000:02:00.0")
+    source = STACK_ROOT / "src/gpu-unlock"
+    if not source.exists():
+        runner.run(["git", "clone", "--filter=blob:none", "https://github.com/Zagitta/gpu-unlock.git", str(source)])
+        runner.run(["git", "-C", str(source), "checkout", "--detach", VERSIONS["gpu_unlock_git"]])
+    require_git_revision(runner, source, VERSIONS["gpu_unlock_git"])
+    runner.run(["make", "-C", str(source), "install"])
+    backup = Path("/var/backups") / f"rhizome-stack-gpu-unlock-{int(time.time())}"
+    runner.run(["sudo", sys.executable, str(PROJECT / "tools/configure_grub_gpu_unlock.py"),
+                "--target", target, "--backup-dir", str(backup)])
+    if shutil.which("grub-mkconfig"):
+        runner.run(["sudo", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
+    elif shutil.which("update-grub"):
+        runner.run(["sudo", "update-grub"])
+    else:
+        raise InstallError("GRUB regeneration command not found; boot configuration was not regenerated")
+    print("gpu-unlock staged; reboot was deliberately not performed")
+    print(f"one-boot rollback: edit the GRUB entry and remove gpu_unlock.targets={target}")
+    print(f"persistent backup: {backup}")
+
+
 def install_components(runner: Runner) -> None:
     source = PROJECT / "components"
     if source.is_dir():
@@ -673,13 +828,33 @@ def main() -> int:
     parser.add_argument("--with-creative", action="store_true", help="install pinned ComfyUI plus Qwen, MiniMax and WAN Desks")
     parser.add_argument("--download-creative-models", action="store_true", help="download hash-verified Qwen, MiniMax and WAN weights; requires --with-creative")
     parser.add_argument("--with-skills", action="store_true", help="install the seven core reliability skills")
+    parser.add_argument("--with-strata", action="store_true", help="install pinned Strata source and dual loopback integration")
+    parser.add_argument("--download-strata-models", action="store_true", help="download pinned Gyro-S and Gyro-M weights; requires --with-strata")
+    parser.add_argument("--with-comet", action="store_true", help="install COMET-ATOMIC-2020 plus the WeightSpace bridge")
+    parser.add_argument("--download-comet-model", action="store_true", help="download and verify the 1.6 GB COMET checkpoint; requires --with-comet")
+    parser.add_argument("--with-gpu-unlock", action="store_true", help="install gpu-unlock and stage one explicit GRUB target (native Linux only)")
+    parser.add_argument("--gpu-unlock-target", help="full PCI address, for example 0000:02:00.0")
+    parser.add_argument("--accept-gpu-unlock-boot-risk", action="store_true", help="required acknowledgement for the boot-critical gpu-unlock stage")
+    parser.add_argument("--reference-profile", action="store_true", help="select the reference stack profiles, including Strata and COMET but not gpu-unlock or model downloads")
     args = parser.parse_args()
     runner = Runner(args.dry_run)
     try:
+        if args.reference_profile:
+            args.with_voice = args.with_memory = args.with_jupyter = True
+            args.with_routing = args.with_retrieval = args.with_creative = True
+            args.with_skills = args.with_strata = args.with_comet = True
+            args.with_ollama = True
         if args.download_models and not args.with_voice:
             raise InstallError("--download-models requires --with-voice")
         if args.download_creative_models and not args.with_creative:
             raise InstallError("--download-creative-models requires --with-creative")
+        if args.download_strata_models and not args.with_strata:
+            raise InstallError("--download-strata-models requires --with-strata")
+        if args.download_comet_model and not args.with_comet:
+            raise InstallError("--download-comet-model requires --with-comet")
+        if args.with_gpu_unlock and (args.target != "linux" or not args.gpu_unlock_target
+                                    or not args.accept_gpu_unlock_boot_risk):
+            raise InstallError("gpu-unlock requires native Linux, --gpu-unlock-target and --accept-gpu-unlock-boot-risk")
         family = require_preflight(args.target)
         if not args.skip_runtime:
             RUNTIME_PYTHON = select_runtime_python(args.python)
@@ -690,10 +865,10 @@ def main() -> int:
             if family == "debian":
                 runner.run(["sudo", "apt-get", "update"])
             runner.run(package_command(family, voice=args.with_voice, jupyter=args.with_jupyter,
-                                       creative=args.with_creative))
+                                       creative=args.with_creative, gpu_unlock=args.with_gpu_unlock))
         if args.with_ollama:
             install_ollama(runner, family)
-        configure_files(runner, with_jupyter=args.with_jupyter)
+        configure_files(runner, with_jupyter=args.with_jupyter, with_strata=args.with_strata)
         install_components(runner)
         if args.with_skills:
             # Use the source copy in dry runs, without writing installed state.
@@ -715,6 +890,12 @@ def main() -> int:
                 install_retrieval(runner)
             if args.with_creative:
                 install_creative(runner, args.download_creative_models)
+            if args.with_strata:
+                install_strata(runner, args.download_strata_models)
+            if args.with_comet:
+                install_comet(runner, args.download_comet_model)
+        if args.with_gpu_unlock:
+            install_gpu_unlock(runner, args.gpu_unlock_target)
         if not args.dry_run:
             runner.run(["systemctl", "--user", "daemon-reload"])
         print("installation staged successfully")

@@ -70,6 +70,18 @@ reference and roll back if verification fails. Voice media stays on the target.
 The Skills profile installs into the workspace configured by OpenClaw, preserving
 differing existing skill directories. See [integrations](INTEGRATIONS.md).
 
+The reference-machine integrations are also explicit profiles:
+
+```bash
+./install-linux.sh --with-strata --download-strata-models
+./install-linux.sh --with-comet --download-comet-model
+comet-atomic doctor --checksum --deep --device cpu
+```
+
+`--reference-profile` selects the portable optional stack, Strata and COMET but
+does not imply any large model download. gpu-unlock is never selected by that
+profile; see [integrations](INTEGRATIONS.md) and run its dry-run separately.
+
 ## 3. Start and test
 
 ```bash

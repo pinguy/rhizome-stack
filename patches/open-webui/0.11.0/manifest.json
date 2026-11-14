@@ -90,8 +90,15 @@
       "path": "open_webui/frontend/_app/immutable/chunks/Bd1cmSN4.js",
       "action": "replace",
       "clean_sha256": "649b3edff6258b0ace9caf18e4f7f90cdef4a338f80f05e18fe459b764e12760",
-      "patched_sha256": "08d089be733d63647ce91c2c615dba574702725cdabdacbbb1dc61efa0f0accf",
+      "patched_sha256": "28f7c70b2f39297ec060d5b44d31b8e542e3a2c50be5b0e04543e43bb8fc8cf7",
       "payload": "open_webui__frontend___app__immutable__chunks__Bd1cmSN4.js.replacement.txt"
+    },
+    {
+      "path": "open_webui/frontend/_app/immutable/chunks/BiRapR3q.js",
+      "action": "replace",
+      "clean_sha256": "a464fafbb381566b77e771d534ea9d4db89e87f6314cfbffc33ebd1be8099a54",
+      "patched_sha256": "c29aa5b2b41cda630182f062a0876614b0708cf588f08c652854e8e90ed2962c",
+      "payload": "open_webui__frontend___app__immutable__chunks__BiRapR3q.js.replacement.txt"
     },
     {
       "path": "open_webui/frontend/_app/immutable/chunks/ci5FwYEI.js",

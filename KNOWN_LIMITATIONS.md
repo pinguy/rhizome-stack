@@ -1,16 +1,39 @@
-# Known limitations — 0.1.0-alpha.18 candidate
+# Known limitations — 0.1.0-alpha.19 candidate
 
 - Full installation and browser acceptance still need testing in disposable
   native Linux and actual WSL2 environments. Static and mocked-provider tests
   do not establish that the complete stack works on those targets.
 - OpenClaw 2026.7.1-2 and Open WebUI 0.11.0 remain compatibility pins. Newer
   releases need patch checks and end-to-end testing before adoption.
+- The turn-local fallback/session-recovery behaviour is a hash-guarded downstream
+  patch for OpenClaw 2026.7.1-2. An OpenClaw update must re-derive and repeat the
+  forced-primary-failure canary before Strata is trusted as an automatic fallback.
+- The new Strata, COMET and gpu-unlock paths have deterministic dry-run/static
+  coverage but still need a disposable clean-machine installation. Strata's two
+  model downloads total roughly 150 GB before prepared packs and caches.
+- Strata hardware placement is selected by its pinned upstream setup on the
+  target. The installer does not transplant the reference machine's GPU indexes,
+  native tuning files or absolute paths.
+- gpu-unlock v2.0 is native-Linux/GRUB only in this release. It changes DKMS,
+  initramfs and the kernel command line, supports only an explicit NVIDIA PCI
+  target, and requires a reboot plus post-boot verification to take effect. The
+  installer creates a GRUB backup and never reboots automatically.
+- The COMET checkpoint is third-party Hugging Face packaging of the original
+  authors' model. The installer pins its revision and verifies the 1.6 GB weight
+  exactly; WeightSpace remote-provider work still needs credentials entered on
+  the target.
 - This is an owner-operated, loopback-only stack, not an isolation boundary for
   mutually untrusted Open WebUI users. The agent runtime, creative services and
   one Jupyter container are shared. Jupyter mounts the Open WebUI upload store
   read-only so attached files work, which also means a notebook can enumerate
   that store. Do not expose this deployment as a hostile multi-user service.
 - WSL GPU acceleration is not configured; the voice profile defaults to CPU.
+- Strata and the COMET-ATOMIC-2020/WeightSpace bridge are installer-managed in
+  alpha.19, while model weights remain separate downloads. Their reference-machine
+  screenshots do not establish clean-target support. gpu-unlock is a separately
+  gated native-Linux installer option that changes the boot path and requires its
+  own hardware, kernel/driver and recovery checks; the COMET checkpoint is not
+  redistributed.
 - Ollama installation is opt-in (`--with-ollama` or the welcome wizard).
   Model weights are not bundled; Ornith downloads need separate confirmation,
   and other models must be pulled or imported explicitly.
@@ -35,15 +58,17 @@
 - Existing RhizomeML L12 indexes cannot be queried with L6 just because both are
   384-dimensional. Import text outputs or explicitly configure the matching model.
 - Open WebUI tool registration needs a locally created admin and token.
-- The packaged Qwen/MiniMax/WAN chat tools coordinate the local Ollama and ComfyUI
-  runtimes. Their saved-chat persistence and VRAM hand-off were accepted on the
-  reference machine, but still require clean native-Linux and WSL2 acceptance.
+- The packaged Qwen/MiniMax/WAN chat tools coordinate local Ollama or Strata chat
+  allocations with ComfyUI. Their saved-chat persistence and backend-aware VRAM
+  hand-off were accepted on the reference machine, but still require clean
+  native-Linux and WSL2 acceptance.
 - Voice Lab is loopback-only but intentionally writes Chatterbox systemd
   drop-ins when the user selects a default. It verifies and rolls back the
   switch; combining it with another Chatterbox backend owner remains unsupported.
-- Three minified Open WebUI frontend changes use exact hash-guarded replacements.
-  The MP4 renderer is tied to Open WebUI 0.11.0's generated frontend chunk and
-  must be re-derived and browser-tested before any Open WebUI update.
+- Four minified Open WebUI frontend changes use exact hash-guarded replacements.
+  The MP3 direct-Preview and MP4 renderer changes are tied to Open WebUI 0.11.0's
+  generated frontend chunks and must be re-derived and browser-tested before any
+  Open WebUI update.
 - The source privacy audit checks paths, file contents, common secret patterns
   and PNG metadata. It cannot prove that screenshot pixels contain no personal
   information; release screenshots still require human visual review.

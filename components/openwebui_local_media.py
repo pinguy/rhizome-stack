@@ -25,6 +25,15 @@ VIDEO = os.environ.get("WAN_VIDEO_DESK_API_URL", "http://127.0.0.1:8840").rstrip
 VIDEO_DESK = os.environ.get("WAN_VIDEO_DESK_URL", VIDEO + "/video-studio/").rstrip("/") + "/"
 COMFY = os.environ.get("COMFY_URL", "http://127.0.0.1:8188").rstrip("/")
 OLLAMA = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+STRATA = os.environ.get("STRATA_BASE_URL", "http://127.0.0.1:47831").rstrip("/")
+STRATA_ENDPOINTS = tuple(dict.fromkeys(
+    endpoint.strip().rstrip("/")
+    for endpoint in os.environ.get(
+        "STRATA_BASE_URLS", STRATA + ",http://127.0.0.1:47832"
+    ).split(",")
+    if endpoint.strip()
+))
+STRATA_UNLOAD_WAIT = int(os.environ.get("STRATA_MEDIA_UNLOAD_WAIT", "120"))
 OPENWEBUI_PUBLIC = os.environ.get("OPENWEBUI_PUBLIC_URL", "http://127.0.0.1:8080").rstrip("/")
 COMFY_OUTPUT = Path(os.environ.get("COMFY_OUTPUT", STACK_ROOT / "creative/ComfyUI/output"))
 WAN_PROJECT = (Path(os.environ.get("WAN_DESK_STATE", STACK_ROOT / "creative/state/wan-video-desk"))
@@ -112,7 +121,91 @@ def ollama_runners():
     return names
 
 
-def hand_over():
+def selected_model_id(metadata):
+    """Return Open WebUI's selected model without trusting a display label."""
+    metadata = metadata or {}
+    model = metadata.get("model")
+    if isinstance(model, dict):
+        model = model.get("id") or model.get("model")
+    if not isinstance(model, str) or not model.strip():
+        model = metadata.get("model_id")
+    return model.strip() if isinstance(model, str) else ""
+
+
+def strata_state():
+    """Read and validate all Strata allocations, returning the loaded one.
+
+    Ollama's runner list says nothing about Strata, so an unknown Strata state is
+    a hard stop rather than permission to start another GPU workload. The two
+    local profiles are mutually exclusive; seeing both loaded is also unsafe.
+    """
+    states = []
+    for base in STRATA_ENDPOINTS:
+        value = request("GET", base + "/health", timeout=8)
+        if (not isinstance(value, dict) or value.get("service") != "strata" or
+                not isinstance(value.get("loaded"), bool)):
+            raise RuntimeError("Could not establish Strata model state; GPU hand-over stopped")
+        model = value.get("model")
+        if model is not None and not isinstance(model, str):
+            raise RuntimeError("Strata returned an invalid model identity; GPU hand-over stopped")
+        states.append({"loaded": value["loaded"], "model": model or "", "base": base})
+    loaded = [state for state in states if state["loaded"]]
+    if len(loaded) > 1:
+        raise RuntimeError("More than one Strata model is loaded; GPU hand-over stopped")
+    return loaded[0] if loaded else {"loaded": False, "model": "", "base": STRATA}
+
+
+def unload_strata(state):
+    if not state["loaded"]:
+        return False
+    base = state.get("base", STRATA)
+    try:
+        result = request(
+            "POST", base + "/v1/unload?" + urllib.parse.urlencode({"wait": STRATA_UNLOAD_WAIT}),
+            {}, timeout=STRATA_UNLOAD_WAIT + 15,
+        )
+    except urllib.error.HTTPError as exc:
+        if exc.code == 409:
+            raise RuntimeError(
+                "Strata still has an active or queued inference request; no GPU work was interrupted"
+            ) from exc
+        raise
+    if not isinstance(result, dict) or result.get("status") not in ("unloaded", "already unloaded"):
+        raise RuntimeError("Strata did not acknowledge model unloading; GPU hand-over stopped")
+    deadline = time.monotonic() + 45
+    while time.monotonic() < deadline:
+        if not strata_state()["loaded"]:
+            return True
+        time.sleep(0.5)
+    raise RuntimeError("Strata acknowledged unloading but still reports the model loaded")
+
+
+def restore_chat_backend(handoff):
+    """Restore only the chat allocation that this request actually released."""
+    if not isinstance(handoff, dict) or not handoff.get("strata_was_loaded"):
+        return
+    current = strata_state()
+    if current["loaded"]:
+        return
+    base = handoff.get("strata_base", STRATA)
+    try:
+        result = request("POST", base + "/v1/load", {}, timeout=600)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 409:
+            raise RuntimeError("Strata could not restore the chat model because another request is active") from exc
+        raise
+    if not isinstance(result, dict) or result.get("status") != "loaded":
+        raise RuntimeError("Strata did not acknowledge chat-model restoration")
+    deadline = time.monotonic() + 600
+    while time.monotonic() < deadline:
+        state = strata_state()
+        if state["loaded"] and state.get("base", STRATA) == base:
+            return
+        time.sleep(0.5)
+    raise RuntimeError("Strata acknowledged loading but never reported the chat model ready")
+
+
+def hand_over(metadata=None):
     for kind in ("music", "image", "video"):
         try:
             value = health(kind)
@@ -126,18 +219,41 @@ def hand_over():
             raise RuntimeError("A local media job is already running. Let it finish before requesting another.")
     if not comfy_idle():
         raise RuntimeError("ComfyUI is busy with another job; no work was interrupted.")
+    model_id = selected_model_id(metadata)
+    strata = strata_state()
+    handoff = {
+        "selected_model": model_id,
+        "selected_backend": "strata" if model_id.startswith(
+            ("openclaw/strata/", "strata/", "openclaw/strata-s/", "strata-s/")
+        ) else "other",
+        "strata_model": strata["model"],
+        "strata_base": strata.get("base", STRATA),
+        "strata_was_loaded": strata["loaded"],
+        "ollama_models": [],
+    }
+    try:
+        unload_strata(strata)
+    except Exception:
+        raise
     loaded = ollama_runners()
     names = []
-    for name in loaded:
-        request("POST", OLLAMA + "/api/generate", {"model": name, "keep_alive": 0}, timeout=60)
-        names.append(name)
-    deadline = time.monotonic() + 30
-    while time.monotonic() < deadline:
-        remaining = ollama_runners()
-        if not remaining:
-            return names
-        time.sleep(0.5)
-    raise RuntimeError(f"Could not free the local GPU: Ollama still has models loaded: {remaining}")
+    try:
+        for name in loaded:
+            request("POST", OLLAMA + "/api/generate", {"model": name, "keep_alive": 0}, timeout=60)
+            names.append(name)
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            remaining = ollama_runners()
+            if not remaining:
+                handoff["ollama_models"] = names
+                return handoff
+            time.sleep(0.5)
+        raise RuntimeError(f"Could not free the local GPU: Ollama still has models loaded: {remaining}")
+    except Exception:
+        # If Ollama verification fails after Strata was released, put the chat
+        # model back before propagating the error. No media engine has started.
+        restore_chat_backend(handoff)
+        raise
 
 
 def release_models(kind):
@@ -311,12 +427,13 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
             await asyncio.to_thread(ensure_app, kind)
             if not record:
                 await status(f"Preparing {label} locally…")
-                unloaded = await asyncio.to_thread(hand_over)
+                handoff = await asyncio.to_thread(hand_over, metadata)
                 if reference_file_id:
                     reference = await import_reference(kind, reference_file_id, user)
                     payload["reference_image_id"] = reference["id"]
                 record = {"status": "submitting", "kind": kind, "created_at": time.time(),
-                          "unloaded_chat_models": unloaded}
+                          "chat_handoff": handoff,
+                          "unloaded_chat_models": handoff.get("ollama_models", [])}
                 save_job(receipt, record)
                 if kind == "music":
                     submitted = await asyncio.to_thread(request, "POST", MUSIC + "/api/generate", payload, 150)
@@ -374,6 +491,7 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
                     record.update(status="failed", error=result.get("error") or "Generation failed", finished_at=time.time())
                     save_job(receipt, record)
                     await asyncio.to_thread(release_models, kind)
+                    await asyncio.to_thread(restore_chat_backend, record.get("chat_handoff"))
                     raise RuntimeError(record["error"])
                 if done:
                     if not source:
@@ -389,6 +507,7 @@ async def generate(kind, payload, user, metadata=None, emitter=None, reference_f
                 limit = "six hours" if h3_video else "30 minutes"
                 raise TimeoutError(f"Generation is still pending after {limit}. Check the local app; no duplicate was started.")
             await asyncio.to_thread(release_models, kind)
+            await asyncio.to_thread(restore_chat_backend, record.get("chat_handoff"))
             media = await attach_result(kind, source, user, metadata, emitter, label)
             await asyncio.sleep(1)
             answer = {"status": "success", "generator": label, **media,
