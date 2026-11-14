@@ -27,6 +27,25 @@ def local_authority(value: str):
         return None
 
 
+def flask_loopback_guard(*, allow_browser_origin: bool = True):
+    """Flask browser boundary: loopback Host, exact Origin, no cross-site fetches.
+
+    Call in an app.before_request hook. This protects against browser CSRF and
+    DNS rebinding, not against another process already running as the same user.
+    """
+    from flask import request
+
+    hosts = request.headers.getlist("Host")
+    if len(hosts) != 1 or local_authority(hosts[0]) is None:
+        return {"error": "Loopback Host required"}, 403
+    origins = request.headers.getlist("Origin")
+    if origins and (not allow_browser_origin or len(origins) != 1
+                    or origins[0] != "http://" + hosts[0]):
+        return {"error": "Origin is not allowed"}, 403
+    if request.headers.get("Sec-Fetch-Site", "").lower() == "cross-site":
+        return {"error": "Cross-site requests are not allowed"}, 403
+    return None
+
 class LocalRequestHandler(BaseHTTPRequestHandler):
     """Reject rebinding hosts and cross-site requests before dispatch/body reads."""
     allow_browser_origin = True

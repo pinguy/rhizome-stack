@@ -15,7 +15,7 @@
 
 Command hints: `rhizome-stack creative status`, `rhizome-stack creative stop`. These are **not instructions to stop an unrelated running engine**. Check ownership and active jobs first. The `creative wan` command starts Video Desk despite its historical name; **H3 is selected within Video Desk or by passing the appropriate model to its registered tool**.
 
-**Packaged workspace:** `$RHIZOME_STACK_ROOT/creative/ComfyUI`; Cutroom defaults to `$RHIZOME_STACK_ROOT/creative/state/cutroom`, and Video Desk retains files under `$RHIZOME_STACK_ROOT/creative/state/wan-video-desk/projects/wan-video-studio/generated/` unless `WAN_DESK_STATE` overrides it. Do not assume `/home/ComfyUI/` or older `/home/pinguy/AI-Music-Video-Studio/` paths still exist: they belong to a different installation vintage.
+**Packaged workspace:** `$RHIZOME_STACK_ROOT/creative/ComfyUI`; Cutroom defaults to `$RHIZOME_STACK_ROOT/creative/state/cutroom`, and Video Desk retains files under `$RHIZOME_STACK_ROOT/creative/state/wan-video-desk/projects/wan-video-studio/generated/` unless `WAN_DESK_STATE` overrides it. Do not assume `/home/ComfyUI/` or older `$HOME/AI-Music-Video-Studio/` paths still exist: they belong to a different installation vintage.
 
 ## Tool and model contracts
 

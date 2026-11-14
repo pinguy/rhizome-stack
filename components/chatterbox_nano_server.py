@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import os
+import sys
 import site
 import time
 from pathlib import Path
@@ -12,6 +13,9 @@ from threading import Lock, Thread
 import soundfile as sf
 import torch
 from flask import Flask, Response, jsonify, request
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from local_http_security import flask_loopback_guard
 
 EXTRA_SITE_PACKAGES = os.environ.get("CHATTERBOX_EXTRA_SITE_PACKAGES", "")
 if EXTRA_SITE_PACKAGES:
@@ -40,6 +44,11 @@ if REFERENCE_WAV is not None and not REFERENCE_WAV.is_file():
     raise SystemExit(f"Chatterbox reference audio missing: {REFERENCE_WAV}")
 
 app = Flask(__name__)
+
+
+@app.before_request
+def _enforce_local_browser_boundary():
+    return flask_loopback_guard(allow_browser_origin=False)
 generate_lock = Lock()
 started_at = time.time()
 torch.set_num_interop_threads(TORCH_INTEROP_THREADS)

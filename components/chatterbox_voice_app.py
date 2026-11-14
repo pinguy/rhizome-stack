@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import re
 import shlex
 import shutil
@@ -18,6 +19,9 @@ from threading import Lock
 import requests
 from flask import Flask, jsonify, render_template, request, send_file
 from werkzeug.utils import secure_filename
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from local_http_security import flask_loopback_guard
 
 BASE = Path(os.environ.get("CHATTERBOX_INSTALL_ROOT", str(Path(__file__).resolve().parent))).expanduser()
 VOICE_ROOT = Path(os.environ.get("CHATTERBOX_REFERENCE_ROOT", str(BASE / "chatterbox-voices"))).expanduser()
@@ -42,6 +46,11 @@ LEGACY_ACCELERATOR_SERVICES = (
 )
 
 app = Flask(__name__)
+
+
+@app.before_request
+def _enforce_local_browser_boundary():
+    return flask_loopback_guard(allow_browser_origin=True)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD
 VOICE_ROOT.mkdir(parents=True, exist_ok=True)
 BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
