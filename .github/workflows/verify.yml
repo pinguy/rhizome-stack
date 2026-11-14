@@ -20,6 +20,8 @@ jobs:
           node-version: '22.22.0'
       - name: Install regression test dependencies
         run: python3 -m pip install -r tests/requirements.txt
+      - name: Audit the public checkout (not only the release archive)
+        run: python3 tools/privacy_audit.py .
       - name: Run every bundled regression suite
         run: python3 tools/check.py
       - name: Check whitespace

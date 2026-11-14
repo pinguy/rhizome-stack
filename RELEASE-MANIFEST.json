@@ -8,8 +8,8 @@
       "bytes": 130
     },
     ".github/workflows/verify.yml": {
-      "sha256": "05483eea185f9c4969efc19058d5d83d0bcdb6034d8f2f082fa95bf5f01e69c3",
-      "bytes": 1275
+      "sha256": "276a426b75287bf61c064d03e9c20d5cae9fd7910d08633f55a643bd8de6b791",
+      "bytes": 1392
     },
     ".gitignore": {
       "sha256": "d0392c2b783403abe4a26f9bca220bf06dcd582ecdedebef35cfe7d8b6686c49",
@@ -56,16 +56,16 @@
       "bytes": 5839
     },
     "components/chatterbox_nano_server.py": {
-      "sha256": "db44ba9fc74bf0bd31ec8932fcf4a0c502b9929e3b53313d7efdd343ada700a9",
-      "bytes": 8348
+      "sha256": "549cc62de487cd8ee46279a8b36f08de712cb223f3569fd84ebb57a9ebefb89f",
+      "bytes": 8591
     },
     "components/chatterbox_tts_cli.py": {
       "sha256": "33d8158277a135f317b48f7f543b6bb25227b841c2577bf91231d7311cd974e3",
       "bytes": 2375
     },
     "components/chatterbox_voice_app.py": {
-      "sha256": "e520b5efcb6926b54407e37c50ed2c97a430e4a6d2e2276e17be91a187407639",
-      "bytes": 17664
+      "sha256": "4a48c6b8ec350d99b24d504b73c4919935fe912700ab208027ca3028f48a19e0",
+      "bytes": 17906
     },
     "components/comet_atomic/comet_weightspace.py": {
       "sha256": "bd60f17d8c976358cd2e4980f0004e57c62fd240b4d79d6d76343c10741a6c37",
@@ -416,8 +416,8 @@
       "bytes": 11893
     },
     "components/local_http_security.py": {
-      "sha256": "3b34b0d2459096c4d79d2b95da2b956ff1002a9bc1a1fe7533fa9f78bc301bc2",
-      "bytes": 3308
+      "sha256": "9267d9aeb79527a8eb2934382ee022e64485b960a94f1c7be79438340f916095",
+      "bytes": 4205
     },
     "components/memory-rhizome/README.md": {
       "sha256": "55d3e73d41f3e181a325eff1c64b06c75d87c4fc8cb338cfd0c85b0087fb1559",
@@ -480,8 +480,8 @@
       "bytes": 106625
     },
     "components/openwebui_audio_bridge.py": {
-      "sha256": "2cae591882f46fb6785a1182fbe487057e25457a8fa5c331398d89a8a5860e05",
-      "bytes": 18991
+      "sha256": "07ac850c4332fad07a97d80097b86258be8d0b285b7571530114fab73778ea85",
+      "bytes": 19234
     },
     "components/openwebui_jupyter_idle_guard.sh": {
       "sha256": "dadb4fe1934d9b3ad837947cba4d09352cbc890c08ce4769865d21b31d251db7",
@@ -1092,8 +1092,8 @@
       "bytes": 4087
     },
     "tests/test_security_boundaries.py": {
-      "sha256": "084252e70b82da3ad1278e37a6de5c3091c70f46d20e2a72c582bbf4b9a64641",
-      "bytes": 9319
+      "sha256": "9e1e7a8502ed106f90a8b0b4a84534d1af614f85dbc2ea06baafb620e24524e8",
+      "bytes": 10877
     },
     "tests/test_services.py": {
       "sha256": "c6db72d904f611f7e4535bd5bbd2d97c3fedd12e082da28d858db106ceba2fd9",

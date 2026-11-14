@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT / 'tools'), str(ROOT / 'tests')]
+sys.path[:0] = [str(ROOT / 'tools'), str(ROOT / 'tests'), str(ROOT / 'components')]
 import install
 import privacy_audit
 from test_services import adapter, music, qwen, serve, request
@@ -74,6 +74,37 @@ class HTTPBoundaryTest(unittest.TestCase):
                 origin = f'http://{address[0]}:{address[1]}'
                 self.assertEqual(request(address, 'POST', path, body, {'Origin': origin})[0], 200)
                 helper.assert_called_once()
+
+
+class FlaskBoundaryTest(unittest.TestCase):
+    """Exercise Flask guards without loading speech models or starting services."""
+
+    def make_client(self, allow_browser_origin):
+        from flask import Flask
+        from local_http_security import flask_loopback_guard
+
+        app = Flask('flask-boundary-fixture')
+        app.before_request(lambda: flask_loopback_guard(allow_browser_origin=allow_browser_origin))
+        app.add_url_rule('/mutate', 'mutate', lambda: {'ok': True}, methods=['POST'])
+        return app.test_client()
+
+    def test_voice_lab_rejects_foreign_origins_and_rebinding_hosts(self):
+        client = self.make_client(True)
+        for headers in (
+            {'Host': 'attacker.invalid'},
+            {'Host': '127.0.0.1.attacker.invalid'},
+            {'Origin': 'https://attacker.invalid'},
+            {'Origin': 'null'},
+            {'Sec-Fetch-Site': 'cross-site'},
+        ):
+            with self.subTest(headers=headers):
+                self.assertEqual(client.post('/mutate', headers=headers).status_code, 403)
+        self.assertEqual(client.post('/mutate', headers={'Host': 'localhost:8030', 'Origin': 'http://localhost:8030'}).status_code, 200)
+
+    def test_audio_services_reject_any_browser_origin(self):
+        client = self.make_client(False)
+        self.assertEqual(client.post('/mutate', headers={'Host': '127.0.0.1:8010'}).status_code, 200)
+        self.assertEqual(client.post('/mutate', headers={'Host': '127.0.0.1:8010', 'Origin': 'http://127.0.0.1:8010'}).status_code, 403)
 
 
 class SecurityConfigurationTest(unittest.TestCase):

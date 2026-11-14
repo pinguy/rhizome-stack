@@ -1,7 +1,6 @@
 # BLISS production lessons (distilled)
 
-Source kept at:
-`/home/pinguy/.openclaw/workspace/how-bliss-was-made.pdf`
+Source: owner's private OpenClaw workspace archive (not distributed with this skill).
 
 SHA-256:
 `2ddf6bd3146461a37e4b830ff14e6b68957b9fc2a93509a6335891ee1de4379d`

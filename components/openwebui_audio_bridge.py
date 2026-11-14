@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import sys
 import re
 import selectors
 import subprocess
@@ -16,7 +17,15 @@ from threading import Lock, Timer
 import requests
 from flask import Flask, Response, jsonify, request
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from local_http_security import flask_loopback_guard
+
 app = Flask(__name__)
+
+
+@app.before_request
+def _enforce_local_browser_boundary():
+    return flask_loopback_guard(allow_browser_origin=False)
 
 CHATTERBOX_BASE = os.environ.get('CHATTERBOX_BASE', 'http://127.0.0.1:8020')
 TTS_SST_DIR = Path(os.environ.get("VOICE_COMPONENT_DIR", str(Path.home() / ".local/share/rhizome-stack/components")))
